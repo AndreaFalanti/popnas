@@ -28,7 +28,7 @@ class NetworkManager:
     '''
     Helper class to manage the generation of subnetwork training given a dataset
     '''
-    def __init__(self, dataset, timestr, data_num=1, epochs=5, batchsize=64, learning_rate=0.002):
+    def __init__(self, dataset, timestr, data_num=1, epochs=5, batchsize=64, learning_rate=0.002, cpu=False):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -45,6 +45,7 @@ class NetworkManager:
         self.epochs = epochs
         self.batchsize = batchsize
         self.lr = learning_rate
+        self.cpu = cpu
 
         self.num_child = 0 # SUMMARY
 
@@ -83,7 +84,7 @@ class NetworkManager:
         else:
             device = '/cpu:0'
         '''
-        device = '/gpu:0'
+        device = '/cpu:0' if self.cpu else '/gpu:0'
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard

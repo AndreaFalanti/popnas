@@ -32,11 +32,23 @@ import sys
 import argparse
 import pandas
 
+# should make only CPU visible
+#os.environ['CUDA_VISIBLE_DEVICES'] = ''    
+
+if tf.test.gpu_device_name():
+    print('GPU found')
+else:
+    print("No GPU found")
+
+device_list = tf.config.experimental.get_visible_devices()
+print(device_list)
+
+
 class Train:
 
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
-                 learning_rate, restore, timestr):
+                 learning_rate, restore, timestr, cpu):
 
         self.blocks = blocks
         self.checkpoint = checkpoint
@@ -48,6 +60,7 @@ class Train:
         self.learning_rate = learning_rate
         self.restore = restore
         self.timestr = timestr
+        self.cpu = cpu
 
     def process(self):
     
@@ -149,7 +162,8 @@ class Train:
                                        restore_controller=self.restore)
 
         # create the Network Manager
-        manager = NetworkManager(dataset, timestr, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize, learning_rate=self.learning_rate)
+        manager = NetworkManager(dataset, timestr, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
+                                 learning_rate=self.learning_rate, cpu=self.cpu)
         print()
 
         block_times = []

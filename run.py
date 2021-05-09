@@ -17,13 +17,14 @@ def main():
     parser.add_argument('-l', metavar=('LEARNING_RATE'), type=float, help = "learning rate of the child networks", default = 0.01) #
     parser.add_argument('-r', '--restore', help = "restore a previous run", action = "store_true") #
     parser.add_argument('-t', metavar=('FOLDER'), type=str, help = "log folder to restore", default = "") #
+    parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     args = parser.parse_args()
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    #os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     run = train.Train(args.b, args.k, checkpoint=args.c,
                       dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
-                      learning_rate=args.l, restore=args.restore, timestr=args.t)
+                      learning_rate=args.l, restore=args.restore, timestr=args.t, cpu=args.cpu)
 
     run.process()
 
