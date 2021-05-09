@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# IDEA project
+.idea
+
+# POPNAS outputs
+logs
+temp_weights
