@@ -78,12 +78,7 @@ class NetworkManager:
         # Returns:
             a reward for training a model with the given actions
         '''
-        '''
-        if tf.test.is_gpu_available():
-            device = '/gpu:0'
-        else:
-            device = '/cpu:0'
-        '''
+
         device = '/cpu:0' if self.cpu else '/gpu:0'
         tf.keras.backend.reset_uids()
 

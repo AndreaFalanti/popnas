@@ -104,7 +104,9 @@ class Train:
         # initialize use_columns string for the configuration file
         use_columns = '\"blocks\",'
 
-        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        # TODO: restore search space
+        #operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        operators = ['identity']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
@@ -140,6 +142,9 @@ class Train:
         for i in range(self.sets):
             # create a validation set for evaluation of the child models
             x_train, x_test, y_train, y_test = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
+            # TODO: take only 400 images for really fast training, delete this in future
+            x_train = x_train[:400]
+            y_train = y_train[:400]
 
             if self.dataset == "cifar10":
                 # cifar10
@@ -211,7 +216,7 @@ class Train:
                     if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1) :
                         with open('logs/%s/csv/timers.csv' % timestr, mode='a+', newline='') as f:
                             writer = csv.writer(f)
-                            writer.writerow(timer)
+                            writer.writerow([timer])
                             index_list.append(timer)
                             if timer >= t_max:
                                 t_max = timer

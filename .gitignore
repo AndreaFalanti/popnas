@@ -131,6 +131,9 @@ dmypy.json
 # IDEA project
 .idea
 
+# VSCODE project
+.vscode
+
 # POPNAS outputs
 logs
 temp_weights

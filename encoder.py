@@ -16,10 +16,13 @@ import configparser
 if not os.path.exists('logs/'):
     os.makedirs('logs/')
 
+# TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to 
+# import them directly to enable intellisense
 import sys
-sys.path.insert(1, 'a-MLLibrary')
-import sequence_data_processing
-import results
+sys.path.insert(1, 'aMLLibrary')
+
+from aMLLibrary import sequence_data_processing
+from aMLLibrary import results
 import argparse
 import pandas
 
