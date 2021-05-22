@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "popnas"
+version = "0.1.0"
+description = "POPNAS algorithm"
+authors = ["AndreaFalanti <a.falanti@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.7.1,<4.0"
+sklearn = "^0.0"
+pandas = "^1.2.4"
+mlxtend = "^0.18.0"
+xgboost = "^1.4.2"
+pylint = "^2.8.2"
+matplotlib = "^3.4.2"
+flake8 = "^3.9.2"
+eli5 = "^0.11.0"
+mypy = "^0.812"
+tqdm = "^4.60.0"
+tensorflow = "1.14.0"
+keras = "2.2.4"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
