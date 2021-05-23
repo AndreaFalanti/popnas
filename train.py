@@ -15,7 +15,8 @@ from tensorflow.python.keras.datasets import cifar10
 from tensorflow.python.keras.datasets import cifar100
 from tensorflow.python.keras.utils import to_categorical
 
-from encoder import ControllerManager, StateSpace
+from encoder import StateSpace
+from controller import ControllerManager
 from manager import NetworkManager
 from model import ModelGenerator
 
@@ -91,9 +92,6 @@ class Train:
                 writer = csv.writer(f)
                 writer.writerow(headers)
 
-        # initialize use_columns string for the configuration file
-        use_columns = '\"blocks\",'
-
         # TODO: restore search space
         #operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
         operators = ['identity']
@@ -105,13 +103,6 @@ class Train:
         state_space.print_state_space()
         NUM_TRAILS = state_space.print_total_models(self.children)
 
-        # reduce the dataset dimension
-        '''
-        cifar = inspect.getsource(cifar10)
-        new_cifar = cifar.replace('50000', '10000')
-        new_new_cifar = new_cifar.replace('range(1, 6)', 'range(1, 2)')
-        exec(new_new_cifar, cifar10.__dict__)
-        '''
             
         if self.dataset == "cifar10":
             (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar10.load_data()
@@ -184,7 +175,6 @@ class Train:
             actions = controller.get_actions(top_k=k)  # get all actions for the previous state
             rewards = []
             timers = []
-            encoded_actions = []
             
             for t, action in enumerate(actions):
                 # print the action probabilities
