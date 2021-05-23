@@ -78,18 +78,18 @@ class Train:
             os.makedirs('logs/%s/csv' % timestr) # create .csv path
             os.mkdir('logs/%s/ini' % timestr) # create .ini folder
             starting_B = 0
+
+            # create headers for csv files
+            for b in range(1, self.blocks+1):
+                a = b*2
+                c = a-1
+                new_block = ["input_%d" % c , "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
+                headers.extend(new_block)
             
             # add headers to training_time.csv
             with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-
-        # create headers for csv files
-        for b in range(1, self.blocks+1):
-            a = b*2
-            c = a-1
-            new_block = ["input_%d" % c , "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
-            headers.extend(new_block)
 
         # initialize use_columns string for the configuration file
         use_columns = '\"blocks\",'
