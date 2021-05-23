@@ -56,6 +56,13 @@ class Train:
         index_list = [0]
         t_max = 0
 
+        # create headers for csv files
+        for b in range(1, self.blocks + 1):
+            a = b * 2
+            c = a - 1
+            new_block = ["input_%d" % c, "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
+            headers.extend(new_block)
+
         if self.restore == True:
             timestr = self.timestr 
             starting_B = self.checkpoint - 1 # change the starting point of B
@@ -80,13 +87,6 @@ class Train:
             with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-
-        # create headers for csv files
-        for b in range(1, self.blocks+1):
-            a = b*2
-            c = a-1
-            new_block = ["input_%d" % c , "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
-            headers.extend(new_block)
 
         # initialize use_columns string for the configuration file
         use_columns = '\"blocks\",'

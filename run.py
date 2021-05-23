@@ -19,8 +19,6 @@ def main():
     parser.add_argument('-t', metavar=('FOLDER'), type=str, help = "log folder to restore", default = "") #
     args = parser.parse_args()
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
     run = train.Train(args.b, args.k, checkpoint=args.c,
                       dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
                       learning_rate=args.l, restore=args.restore, timestr=args.t)
