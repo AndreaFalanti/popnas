@@ -8,8 +8,8 @@ from ops import Convolution
 from ops import StackedConvolution
 from ops import SeperableConvolution
 from ops import Pooling
-from ops import GlobalAveragePooling2D
-from ops import Dense
+
+from tensorflow.python.keras.layers import Dense, GlobalAveragePooling2D
 
 
 class ModelGenerator(Model):

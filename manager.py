@@ -11,7 +11,6 @@ from tensorflow.contrib.eager.python import tfe
 tfe.enable_eager_execution(device_policy=tfe.DEVICE_PLACEMENT_SILENT)
 
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.callbacks import ModelCheckpoint
 
 from keras.utils.vis_utils import plot_model # per stampare modello
 

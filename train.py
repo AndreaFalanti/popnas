@@ -10,7 +10,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # disable GPU debugging info
 import time
 
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
 
 from tensorflow.python.keras.datasets import cifar10
 from tensorflow.python.keras.datasets import cifar100

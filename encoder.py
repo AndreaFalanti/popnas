@@ -1,5 +1,4 @@
 import numpy as np
-import time
 import pprint
 import csv
 from collections import OrderedDict
@@ -9,6 +8,9 @@ import tensorflow as tf
 
 import os
 import configparser
+
+import log_service
+_logger = log_service.getLogger(__name__)
 
 #if not os.path.exists('weights/'):
 #    os.makedirs('weights/')
@@ -22,8 +24,6 @@ import sys
 sys.path.insert(1, 'aMLLibrary')
 
 from aMLLibrary import sequence_data_processing
-from aMLLibrary import results
-import argparse
 import pandas
 
 class StateSpace:
@@ -231,9 +231,8 @@ class StateSpace:
         if len(inputs) == 0:
             inputs = [0]
 
-        print()
-        print("Obtaining search space for b = 1")
-        print("Search space size : ", (len(inputs) * (len(self.operators) ** 2)))
+        _logger.info("Obtaining search space for b = 1")
+        print("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
 
         search_space = [inputs, ops, inputs, ops]
         self.children = list(self._construct_permutations(search_space))
@@ -264,13 +263,10 @@ class StateSpace:
             new_ip_values = [0]
 
         new_child_count = ((len(new_ip_values)) ** 2) * (len(self.operators) ** 2)
-        print()
-        print("Obtaining search space for b = %d" % new_b)
-        print("Search space size : ", new_child_count)
+        _logger.info("Obtaining search space for b = %d", new_b)
+        _logger.info("Search space size: %d", new_child_count)
 
-        print()
-        print("Total models to evaluate : ", (len(self.children) * new_child_count))
-        print()
+        _logger.info("Total models to evaluate: %d", (len(self.children) * new_child_count))
 
         search_space = [new_ip_values, ops, new_ip_values, ops]
         new_search_space = list(self._construct_permutations(search_space))
@@ -293,23 +289,21 @@ class StateSpace:
 
     def print_state_space(self):
         ''' Pretty print the state space '''
-        print('*' * 40, 'STATE SPACE', '*' * 40)
+        _logger.info('%s', '*' * 40 + 'STATE SPACE' + '*' * 40)
 
         pp = pprint.PrettyPrinter(indent=2, width=100)
         for id, state in self.states.items():
-            pp.pprint(state)
-            print()
+            _logger.info(pp.pformat(state))
 
     def print_actions(self, actions):
         ''' Print the action space properly '''
-        print('Actions :')
+        _logger.info('Actions :')
 
         for id, action in enumerate(actions):
             state = self[id]
             name = state['name']
             vals = [(self.get_state_value(id % 2, p), p) for n, p in zip(state['values'], *action)]
-            print("%s : " % name, vals)
-        print()
+            _logger.info("%s : %s", name, vals)
 
     def update_children(self, children):
         self.children = children
@@ -464,7 +458,7 @@ class ControllerManager:
         # restore controller
         if self.restore_controller == True:
             self.b_ = checkpoint_B
-            print("Loading controller history !")
+            _logger.info("Loading controller history !")
 
             next_children = []
             
@@ -592,7 +586,7 @@ class ControllerManager:
             path = tf.train.latest_checkpoint('logs/%s/weights' % self.timestr)
 
             if path is not None and tf.train.checkpoint_exists(path):
-                print("Loading controller checkpoint !")
+                _logger.info("Loading controller checkpoint!")
                 self.saver.restore(path)
 
     def loss(self, real_acc, rnn_scores):
@@ -631,7 +625,7 @@ class ControllerManager:
         '''
         children = np.array(self.state_space.children, dtype=np.object)  # take all the children
         rewards = np.array(rewards, dtype=np.float32)
-        print("Rewards : ", rewards)
+        _logger.info("Rewards : %s", rewards)
         loss = 0
 
         if self.children_history is None:
@@ -644,8 +638,7 @@ class ControllerManager:
             batchsize = sum([data.shape[0] for data in self.score_history])
             
         train_size = batchsize * self.train_iterations
-        print("Controller: Number of training steps required for this stage : %d" % (train_size))
-        print()
+        _logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
         #logs
         self.logdir = 'logs/%s/controller' % self.timestr
@@ -653,8 +646,7 @@ class ControllerManager:
         summary_writer.set_as_default()
 
         for current_epoch in range(self.train_iterations):
-            print("Controller: Begin training epoch %d" % (current_epoch + 1))
-            print()
+            _logger.info("Controller: Begin training epoch %d", current_epoch + 1)
 
             self.global_epoch = self.global_epoch + 1
 
@@ -664,7 +656,7 @@ class ControllerManager:
                 ids = np.array(list(range(len(scores))))
                 np.random.shuffle(ids)
 
-                print("Controller: Begin training - B = %d" % (dataset_id + 1))
+                _logger.info("Controller: Begin training - B = %d", dataset_id + 1)
 
                 for id, (child, score) in enumerate(zip(children[ids], scores[ids])):
                     child = child.tolist()
@@ -687,7 +679,7 @@ class ControllerManager:
 
                     loss += total_loss.numpy().sum()
 
-                print("Controller: Finished training epoch %d / %d of B = %d / %d" % (current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_))
+                _logger.info("Controller: Finished training epoch %d / %d of B = %d / %d", current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
 
             # add accuracy to Tensorboard
             with tf.contrib.summary.always_record_summaries():
@@ -793,7 +785,7 @@ class ControllerManager:
                     writer.writerow(data)
 
                 if (i + 1) % 500 == 0:
-                    print("Scored %d models. Current model score = %0.4f" % (i + 1, score))
+                    _logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
 
             # sort the children according to their score
             models_scores = sorted(models_scores, key=lambda x: x[1], reverse=True)
@@ -826,5 +818,4 @@ class ControllerManager:
             # save these children for next round
             self.state_space.update_children(children)
         else:
-            print()
-            print("No more updates necessary as max B has been reached !")
+            _logger.info("No more updates necessary as max B has been reached!")

@@ -1,10 +1,6 @@
-import numpy as np
-
-import datetime
 import tensorflow as tf
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Conv2D, SeparableConv2D, MaxPool2D, AveragePooling2D
-from tensorflow.python.keras.layers import BatchNormalization, GlobalAveragePooling2D
+from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPool2D, AveragePooling2D, BatchNormalization
 
 
 class Identity(Model):
