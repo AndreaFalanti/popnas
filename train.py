@@ -1,19 +1,11 @@
 import numpy as np
 import csv
 from sklearn.model_selection import train_test_split
-# from sklearn.cross_validation import train_test_split
-
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
 import importlib.util
 
-import inspect
-
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # disable GPU debugging info
-
-import configparser
 
 import time
 
@@ -28,20 +20,19 @@ from encoder import ControllerManager, StateSpace
 from manager import NetworkManager
 from model import ModelGenerator
 
-import sys
-import argparse
-import pandas
+import log_service
+_logger = log_service.getLogger(__name__)
 
 # should make only CPU visible
 #os.environ['CUDA_VISIBLE_DEVICES'] = ''    
 
 if tf.test.gpu_device_name():
-    print('GPU found')
+    _logger.info('GPU found')
 else:
-    print("No GPU found")
+    _logger.info("No GPU found")
 
 device_list = tf.config.experimental.get_visible_devices()
-print(device_list)
+_logger.info(device_list)
 
 
 class Train:
@@ -73,7 +64,7 @@ class Train:
             timestr = self.timestr 
             starting_B = self.checkpoint - 1 # change the starting point of B
 
-            print("Loading operator indeces !")
+            _logger.info("Loading operator indeces!")
             with open('logs/%s/csv/timers.csv' % timestr) as f:
                 reader = csv.reader(f)
                 for row in reader:
@@ -81,7 +72,7 @@ class Train:
                     index_list.append(elem)
                     if elem >= t_max :
                         t_max = elem
-            print(index_list, t_max)
+            _logger.info(index_list, t_max)
                          
         else:
             timestr = time.strftime('%Y-%m-%d-%H-%M-%S') # get time for logs folder
@@ -169,7 +160,6 @@ class Train:
         # create the Network Manager
         manager = NetworkManager(dataset, timestr, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
                                  learning_rate=self.learning_rate, cpu=self.cpu)
-        print()
 
         block_times = []
             
@@ -178,11 +168,11 @@ class Train:
             if trial == 0:
                 k = None
                 # build a starting point model with 0 blocks to evaluate the offset
-                print("Model #1 / #1")
-                print(" ", state_space.parse_state_space_list([]))
+                _logger.info("Model #1 / #1")
+                _logger.info("\t%s", state_space.parse_state_space_list([]))
                 reward, timer = manager.get_rewards(ModelGenerator, state_space.parse_state_space_list([]), timestr)
-                print("Final Accuracy : ", reward)
-                print("Training time : ", timer)
+                _logger.info("Final Accuracy: %0.6f", reward)
+                _logger.info("Training time: %0.6f", timer)
                 with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
                     data = [timer, 0]
                     for i in range(self.blocks):
@@ -201,13 +191,13 @@ class Train:
                 # print the action probabilities
                 state_space.print_actions(action)
                 listed_space = state_space.parse_state_space_list(action)
-                print("Model #%d / #%d" % (t + 1, len(actions)))
-                print(" ", listed_space)
+                _logger.info("Model #%d / #%d" % (t + 1, len(actions)))
+                _logger.info("\t%s", listed_space)
 
                 # build a model, train and get reward and accuracy from the network manager
                 reward, timer = manager.get_rewards(ModelGenerator, listed_space)
-                print("Final Accuracy : ", reward)
-                print("Training time : ", timer)
+                _logger.info("Final Accuracy : %0.6f", reward)
+                _logger.info("Training time : %0.6f", timer)
 
                 rewards.append(reward)
                 timers.append(timer)
@@ -220,7 +210,7 @@ class Train:
                             index_list.append(timer)
                             if timer >= t_max:
                                 t_max = timer
-                print("\nFinished %d out of %d models ! \n" % (t + 1, len(actions)))
+                _logger.info("Finished %d out of %d models!" % (t + 1, len(actions)))
 
                 # write the results of this trial into a file
                 with open('logs/%s/csv/real_accuracy.csv' % timestr, mode='a+', newline='') as f:
@@ -274,10 +264,9 @@ class Train:
                             writer.writerow(data)    
             
             loss = controller.train_step(rewards)
-            print("Trial %d: ControllerManager loss : %0.6f" % (trial + 1, loss))
+            _logger.info("Trial %d: ControllerManager loss : %0.6f" % (trial + 1, loss))
 
             controller.update_step(headers, t_max, len(operators), index_list, timers, lookback=-2)
-            print()
             
-        print("Finished !")
+        _logger.info("Finished!")
 

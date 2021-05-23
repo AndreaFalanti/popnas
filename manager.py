@@ -1,10 +1,8 @@
-import numpy as np
 import shutil
 import os
 from tqdm import tqdm
 
 import time
-import csv
 
 import tensorflow as tf
 from tensorflow.python.util import deprecation
@@ -16,6 +14,9 @@ from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.callbacks import ModelCheckpoint
 
 from keras.utils.vis_utils import plot_model # per stampare modello
+
+import log_service
+_logger = log_service.getLogger(__name__)
 
 if not os.path.exists('temp_weights/'):
     os.makedirs('temp_weights/')
@@ -94,7 +95,7 @@ class NetworkManager:
         with tf.device(device):
             for index in range(self.data_num):
                 if self.data_num > 1:
-                    print("\nTraining dataset #%d / #%d" % (index + 1, self.data_num))
+                    _logger.info("Training dataset #%d / #%d", (index + 1, self.data_num))
                 model = model_fn(actions)  # type: Model
                 
                 # build model shapes
@@ -124,8 +125,6 @@ class NetworkManager:
 
                 best_val_acc = 0.0
                 timer = 0 # inizialize timer to evaluate training time
-
-                print()
                 
                 for epoch in range(self.epochs):
                     # train child model
@@ -156,8 +155,6 @@ class NetworkManager:
                             
                             if (i + 1) >= num_train_batches:
                                 break
-                                          
-                    print()
 
                     # evaluate child model
                     acc = tfe.metrics.CategoricalAccuracy()
@@ -176,18 +173,15 @@ class NetworkManager:
                             summary_acc = best_val_acc
                         tf.contrib.summary.scalar("child_accuracy", summary_acc, family="children", step=epoch+1)
 
-                    print("\tEpoch %d: Training time = %0.6f" % (epoch + 1, timer))
-                    print("\tEpoch %d: Val accuracy = %0.6f" % (epoch + 1, acc))
+                    _logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
+                    _logger.info("\tEpoch %d: Val accuracy = %0.6f" , epoch + 1, acc)
 
                     # if acc improved, save the weights
                     if acc > best_val_acc:
-                        print("\tVal accuracy improved from %0.6f to %0.6f. Saving weights !" % (
-                            best_val_acc, acc))
+                        _logger.info("\tVal accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
                         
                         best_val_acc = acc
                         saver.save('temp_weights/temp_network')
-                        
-                    print()
 
                 #test_writer.close()
 
@@ -213,8 +207,7 @@ class NetworkManager:
             # compute the reward (validation accuracy)
             reward = acc
 
-            print()
-            print("Manager: Accuracy = ", reward)
+            _logger.info("Manager: Accuracy = %0.6f", reward)
         
         # clean up resources and GPU memory
         del model

@@ -3,6 +3,11 @@ import os
 
 import train
 
+# Handle uncaught exception in a special log file
+import log_service
+import sys
+sys.excepthook = log_service.handle_exception
+
 
 def main():
 
