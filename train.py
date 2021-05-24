@@ -1,3 +1,4 @@
+from types import prepare_class
 import numpy as np
 import csv
 from sklearn.model_selection import train_test_split
@@ -51,6 +52,66 @@ class Train:
         self.restore = restore
         self.cpu = cpu
 
+
+    def load_dataset(self):
+        if self.dataset == "cifar10":
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar10.load_data()
+        elif self.dataset == "cifar100":
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar100.load_data()
+        else:
+            spec = importlib.util.spec_from_file_location("dataset", self.dataset)
+            set = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(set)
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = set.load_data()
+
+        return (x_train_init, y_train_init), (x_test_init, y_test_init)
+
+
+    def prepare_dataset(self, x_train_init, y_train_init, x_test, y_test):
+        """Build a validation set from training set and do some preprocessing
+
+        Args:
+            x_train_init (ndarray): x training
+            y_train_init (ndarray): y training
+            x_test (ndarray): x test
+            y_test (ndarray): y test
+
+        Returns:
+            list:
+        """
+        # normalize image RGB values into [0, 1] domain
+        x_train_init = x_train_init.astype('float32') / 255.
+        x_test = x_test.astype('float32') / 255.
+
+        dataset = []
+        # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or its possible to deprecate this feature?
+        for i in range(0, self.sets):
+            # create a validation set for evaluation of the child models
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
+            
+            # TODO: take only 400 images for really fast training, delete this in future
+            x_train = x_train[:400]
+            y_train = y_train[:400]
+
+            # TODO: missing y_test to categorical or done somewhere else?
+            if self.dataset == "cifar10":
+                # cifar10
+                y_train = to_categorical(y_train, 10)
+                y_validation = to_categorical(y_validation, 10)
+
+            elif self.dataset == "cifar100":
+                # cifar100
+                y_train = to_categorical(y_train, 100)
+                y_validation = to_categorical(y_validation, 100)
+
+            # TODO: if custom dataset is used, all works fine or some logic is missing?
+            
+            # pack the dataset for the NetworkManager
+            dataset.append([x_train, y_train, x_validation, y_validation])
+
+        return dataset
+
+
     def process(self):
     
         # create the complete headers row of the CSV files
@@ -97,41 +158,10 @@ class Train:
         state_space.print_state_space()
         NUM_TRAILS = state_space.print_total_models(self.children)
 
+        # load correct dataset (based on self.dataset)   
+        (x_train_init, y_train_init), (x_test_init, y_test_init) = self.load_dataset()
             
-        if self.dataset == "cifar10":
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar10.load_data()
-
-        elif self.dataset == "cifar100":
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar100.load_data()
-
-        else:
-            spec = importlib.util.spec_from_file_location("dataset", self.dataset)
-            set = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(set)
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = set.load_data()
-            
-        x_train_init = x_train_init.astype('float32') / 255.
-        x_test_init = x_test_init.astype('float32') / 255.
-
-        dataset = []
-        for i in range(self.sets):
-            # create a validation set for evaluation of the child models
-            x_train, x_test, y_train, y_test = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
-            # TODO: take only 400 images for really fast training, delete this in future
-            x_train = x_train[:400]
-            y_train = y_train[:400]
-
-            if self.dataset == "cifar10":
-                # cifar10
-                y_train = to_categorical(y_train, 10)
-                y_test = to_categorical(y_test, 10)
-
-            elif self.dataset == "cifar100":
-                # cifar100
-                y_train = to_categorical(y_train, 100)
-                y_test = to_categorical(y_test, 100)
-            
-            dataset.append([x_train, y_train, x_test, y_test])  # pack the dataset for the NetworkManager
+        dataset = self.prepare_dataset(x_train_init, y_train_init, x_test_init, y_test_init)
 
 
         # create the ControllerManager and build the internal policy network
