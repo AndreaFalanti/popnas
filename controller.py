@@ -4,15 +4,12 @@ import csv
 
 import tensorflow as tf
 
-import os
 import configparser
 
 from encoder import StateSpace
 from aMLLibrary import sequence_data_processing
 
 import log_service
-_logger = log_service.getLogger(__name__)
-
 
 class Controller(tf.keras.Model):
     
@@ -96,7 +93,7 @@ class ControllerManager:
     cull non-optimal children model configurations and resume
     training.
     '''
-    def __init__(self, state_space, timestr,
+    def __init__(self, state_space,
                  checkpoint_B,
                  B=5, K=256, T=np.inf,
                  train_iterations=10,
@@ -127,10 +124,10 @@ class ControllerManager:
             restore_controller: flag whether to restore a pre-trained RNN controller
                 upon construction.
         '''
-        
+        self._logger = log_service.get_logger(__name__)
+
         self.state_space = state_space  # type: StateSpace
         self.state_size = self.state_space.size
-        self.timestr = timestr
 
         self.global_epoch = 0
 
@@ -148,12 +145,12 @@ class ControllerManager:
         # restore controller
         if self.restore_controller == True:
             self.b_ = checkpoint_B
-            _logger.info("Loading controller history !")
+            self._logger.info("Loading controller history!")
 
             next_children = []
             
             #read next_children from .csv file
-            with open('logs/%s/csv/next_children.csv' % self.timestr, newline='') as f:
+            with open(log_service.build_path('csv', 'next_children.csv'), newline='') as f:
                 reader = csv.reader(f, delimiter = ',')
                 for row in reader:
                     encoded_row = []
@@ -166,7 +163,7 @@ class ControllerManager:
 
             for i in range(1, self.b_):
                 #read children from .csv file
-                with open('logs/%s/csv/children_%s.csv' % (self.timestr, i), newline='') as f:
+                with open(log_service.build_path('csv', f'children_{i}.csv'), newline='') as f:
                     reader = csv.reader(f, delimiter = ',')
                     j = 0
                     for row in reader:
@@ -184,7 +181,7 @@ class ControllerManager:
                         j = j + 1
 
                 # read old rewards from .csv file
-                with open('logs/%s/csv/rewards_%s.csv' % (self.timestr, i), newline='') as f:
+                with open(log_service.build_path('csv', f'rewards_{i}.csv'), newline='') as f:
                     reader = csv.reader(f, delimiter = ',')
                     j = 0
                     for row in reader:
@@ -273,10 +270,10 @@ class ControllerManager:
                                          global_step=self.global_step)
 
         if self.restore_controller:
-            path = tf.train.latest_checkpoint('logs/%s/weights' % self.timestr)
+            path = tf.train.latest_checkpoint(log_service.build_path('weights'))
 
             if path is not None and tf.train.checkpoint_exists(path):
-                _logger.info("Loading controller checkpoint!")
+                self._logger.info("Loading controller checkpoint!")
                 self.saver.restore(path)
 
     def loss(self, real_acc, rnn_scores):
@@ -315,7 +312,7 @@ class ControllerManager:
         '''
         children = np.array(self.state_space.children, dtype=np.object)  # take all the children
         rewards = np.array(rewards, dtype=np.float32)
-        _logger.info("Rewards : %s", rewards)
+        self._logger.info("Rewards : %s", rewards)
         loss = 0
 
         if self.children_history is None:
@@ -328,15 +325,15 @@ class ControllerManager:
             batchsize = sum([data.shape[0] for data in self.score_history])
             
         train_size = batchsize * self.train_iterations
-        _logger.info("Controller: Number of training steps required for this stage : %d", train_size)
+        self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
         #logs
-        self.logdir = 'logs/%s/controller' % self.timestr
+        self.logdir = log_service.build_path('controller')
         summary_writer = tf.contrib.summary.create_file_writer(self.logdir)
         summary_writer.set_as_default()
 
         for current_epoch in range(self.train_iterations):
-            _logger.info("Controller: Begin training epoch %d", current_epoch + 1)
+            self._logger.info("Controller: Begin training epoch %d", current_epoch + 1)
 
             self.global_epoch = self.global_epoch + 1
 
@@ -346,7 +343,7 @@ class ControllerManager:
                 ids = np.array(list(range(len(scores))))
                 np.random.shuffle(ids)
 
-                _logger.info("Controller: Begin training - B = %d", dataset_id + 1)
+                self._logger.info("Controller: Begin training - B = %d", dataset_id + 1)
 
                 for id, (child, score) in enumerate(zip(children[ids], scores[ids])):
                     child = child.tolist()
@@ -369,21 +366,19 @@ class ControllerManager:
 
                     loss += total_loss.numpy().sum()
 
-                _logger.info("Controller: Finished training epoch %d / %d of B = %d / %d", current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
+                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d", current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
 
             # add accuracy to Tensorboard
             with tf.contrib.summary.always_record_summaries():
                 tf.contrib.summary.scalar("average_accuracy", rewards.mean(), family="controller", step=self.global_epoch)
                 tf.contrib.summary.scalar("average_loss", loss.mean(), family="controller", step=self.global_epoch)
 
-        with open('logs/%s/csv/rewards.csv' % self.timestr, mode='a+', newline='') as f:
+        with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(map(lambda x: [x], rewards))
             
         # save weights
-        if not os.path.exists('logs/%s/weights' % self.timestr):
-            os.makedirs('logs/%s/weights' % self.timestr) # create weights folder
-        self.saver.save('logs/%s/weights/controller.ckpt' % self.timestr)
+        self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
 
         return loss.mean()
 
@@ -397,11 +392,11 @@ class ControllerManager:
         # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
         
         if self.b_ == 2:
-            df = pandas.read_csv('logs/%s/csv/training_time.csv' % self.timestr, skiprows=[1])
+            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'), skiprows=[1])
         else:
-            df = pandas.read_csv('logs/%s/csv/training_time.csv' % self.timestr)
+            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'))
         
-        df.to_csv('logs/%s/csv/training_time.csv' % self.timestr, na_rep=0, index=False)
+        df.to_csv(log_service.build_path('csv', 'training_time.csv'), na_rep=0, index=False)
 
         inputs = []
         for b in range(1, (self.B+1)):
@@ -418,15 +413,17 @@ class ControllerManager:
                              'validation' : 'All',
                              'y' : '"time"',
                              'generate_plots' : 'True'}
-        config['DataPreparation'] = {'input_path' : 'logs/%s/csv/training_time.csv' % self.timestr,
+        config['DataPreparation'] = {'input_path' : log_service.build_path('csv', 'training_time.csv'),
                                      'skip_columns' : inputs}
         config['NNLS'] = {'fit_intercept' : [True, False]}
     
-        with open('logs/%s/ini/training_time_NNLS_%d.ini' % (self.timestr, self.b_), 'w') as f:
+        with open(log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 'w') as f:
             config.write(f)
         
         # a-MLLibrary
-        sequence_data_processor_NNLS = sequence_data_processing.SequenceDataProcessing('logs/%s/ini/training_time_NNLS_%d.ini' % (self.timestr, self.b_), output='logs/%s/output_NNLS_%d' % (self.timestr, self.b_))
+        sequence_data_processor_NNLS = sequence_data_processing.SequenceDataProcessing(
+            log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 
+            output=log_service.build_path(f'output_NNLS_{self.b_}'))
         regressor_NNLS = sequence_data_processor_NNLS.process()
         if self.b_ + 1 <= self.B:
             self.b_ += 1
@@ -439,7 +436,7 @@ class ControllerManager:
                 state_list = tf.convert_to_tensor(state_list)
 
                 # save predicted times on a .csv file
-                with open('logs/%s/csv/predicted_time_%d.csv' % (self.timestr, self.b_), mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     encoded_child = self.state_space.entity_encode_child(intermediate_child)
                     concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
@@ -468,14 +465,14 @@ class ControllerManager:
                     models_scores.append([intermediate_child, score, regressor_NNLS.predict(df_row)[0]])
 
                 # save predicted scores on a .csv file
-                with open('logs/%s/csv/predicted_accuracy_%d.csv' % (self.timestr, self.b_), mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', f'predicted_accuracy_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     data = [score]
                     data.extend(intermediate_child)
                     writer.writerow(data)
 
                 if (i + 1) % 500 == 0:
-                    _logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
+                    self._logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
 
             # sort the children according to their score
             models_scores = sorted(models_scores, key=lambda x: x[1], reverse=True)
@@ -485,7 +482,7 @@ class ControllerManager:
                 if pair[2] <= pareto_front[-1][2] :
                     pareto_front.append(pair)
             for row in pareto_front :
-                with open('logs/%s/csv/pareto_front_%d.csv' % (self.timestr, self.b_), mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     data = [row[2], row[1]]
                     data.extend(row[0])
@@ -501,11 +498,11 @@ class ControllerManager:
             children = []
             for i in range(children_count):
                 children.append(pareto_front[i][0])
-                with open('logs/%s/csv/children.csv' % self.timestr, mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(pareto_front[i][0])
 
             # save these children for next round
             self.state_space.update_children(children)
         else:
-            _logger.info("No more updates necessary as max B has been reached!")
+            self._logger.info("No more updates necessary as max B has been reached!")

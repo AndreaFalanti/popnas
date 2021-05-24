@@ -2,14 +2,7 @@ import numpy as np
 import pprint
 from collections import OrderedDict
 
-import os
-
 import log_service
-_logger = log_service.getLogger(__name__)
-
-
-if not os.path.exists('logs/'):
-    os.makedirs('logs/')
 
 # TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to 
 # import them directly to enable intellisense
@@ -71,6 +64,8 @@ class StateSpace:
                 The default searches over cells which can have inter-connections.
                 Setting it to 0 limits this to just the current input for that cell (flat cells).
         '''
+        self._logger = log_service.get_logger(__name__)
+
         self.states = OrderedDict()
         self.state_count_ = 0
         
@@ -221,7 +216,7 @@ class StateSpace:
         if len(inputs) == 0:
             inputs = [0]
 
-        _logger.info("Obtaining search space for b = 1")
+        self._logger.info("Obtaining search space for b = 1")
         print("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
 
         search_space = [inputs, ops, inputs, ops]
@@ -253,10 +248,10 @@ class StateSpace:
             new_ip_values = [0]
 
         new_child_count = ((len(new_ip_values)) ** 2) * (len(self.operators) ** 2)
-        _logger.info("Obtaining search space for b = %d", new_b)
-        _logger.info("Search space size: %d", new_child_count)
+        self._logger.info("Obtaining search space for b = %d", new_b)
+        self._logger.info("Search space size: %d", new_child_count)
 
-        _logger.info("Total models to evaluate: %d", (len(self.children) * new_child_count))
+        self._logger.info("Total models to evaluate: %d", (len(self.children) * new_child_count))
 
         search_space = [new_ip_values, ops, new_ip_values, ops]
         new_search_space = list(self._construct_permutations(search_space))
@@ -279,21 +274,21 @@ class StateSpace:
 
     def print_state_space(self):
         ''' Pretty print the state space '''
-        _logger.info('%s', '*' * 40 + 'STATE SPACE' + '*' * 40)
+        self._logger.info('%s', '*' * 40 + 'STATE SPACE' + '*' * 40)
 
         pp = pprint.PrettyPrinter(indent=2, width=100)
         for id, state in self.states.items():
-            _logger.info(pp.pformat(state))
+            self._logger.info(pp.pformat(state))
 
     def print_actions(self, actions):
         ''' Print the action space properly '''
-        _logger.info('Actions :')
+        self._logger.info('Actions :')
 
         for id, action in enumerate(actions):
             state = self[id]
             name = state['name']
             vals = [(self.get_state_value(id % 2, p), p) for n, p in zip(state['values'], *action)]
-            _logger.info("%s : %s", name, vals)
+            self._logger.info("%s : %s", name, vals)
 
     def update_children(self, children):
         self.children = children

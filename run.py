@@ -2,10 +2,8 @@ import argparse
 
 import train
 
-# Handle uncaught exception in a special log file
 import log_service
 import sys
-sys.excepthook = log_service.handle_exception
 
 
 def main():
@@ -26,9 +24,18 @@ def main():
 
     #os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
+    # create folder structure for log files or reuse previous logs to continue execution
+    if (args.restore == True):
+        log_service.check_log_folder(args.t)
+    else:
+        log_service.initialize_log_folders()
+
+    # Handle uncaught exception in a special log file
+    sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
+
     run = train.Train(args.b, args.k, checkpoint=args.c,
                       dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
-                      learning_rate=args.l, restore=args.restore, timestr=args.t, cpu=args.cpu)
+                      learning_rate=args.l, restore=args.restore, cpu=args.cpu)
 
     run.process()
 

@@ -15,7 +15,6 @@ from tensorflow.python.keras.models import Model
 from keras.utils.vis_utils import plot_model # per stampare modello
 
 import log_service
-_logger = log_service.getLogger(__name__)
 
 if not os.path.exists('temp_weights/'):
     os.makedirs('temp_weights/')
@@ -28,7 +27,7 @@ class NetworkManager:
     '''
     Helper class to manage the generation of subnetwork training given a dataset
     '''
-    def __init__(self, dataset, timestr, data_num=1, epochs=5, batchsize=64, learning_rate=0.002, cpu=False):
+    def __init__(self, dataset, data_num=1, epochs=5, batchsize=64, learning_rate=0.002, cpu=False):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -39,9 +38,10 @@ class NetworkManager:
             batchsize: batchsize of training the subnetworks
             learning_rate: learning rate for the Optimizer.
         '''
+        self._logger = log_service.get_logger(__name__)
+
         self.data_num = data_num
         self.dataset = dataset
-        self.timestr = timestr
         self.epochs = epochs
         self.batchsize = batchsize
         self.lr = learning_rate
@@ -84,7 +84,7 @@ class NetworkManager:
 
         # create children folder on Tensorboard
         self.num_child = self.num_child + 1
-        self.logdir = 'logs/%s/children/%s' % (self.timestr, self.num_child)
+        self.logdir = log_service.build_path('children', str(self.num_child))
         self.summary_writer = tf.contrib.summary.create_file_writer(self.logdir)
         self.summary_writer.set_as_default()
 
@@ -94,7 +94,7 @@ class NetworkManager:
         with tf.device(device):
             for index in range(self.data_num):
                 if self.data_num > 1:
-                    _logger.info("Training dataset #%d / #%d", (index + 1, self.data_num))
+                    self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
                 model = model_fn(actions)  # type: Model
                 
                 # build model shapes
@@ -172,12 +172,12 @@ class NetworkManager:
                             summary_acc = best_val_acc
                         tf.contrib.summary.scalar("child_accuracy", summary_acc, family="children", step=epoch+1)
 
-                    _logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
-                    _logger.info("\tEpoch %d: Val accuracy = %0.6f" , epoch + 1, acc)
+                    self._logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
+                    self._logger.info("\tEpoch %d: Val accuracy = %0.6f" , epoch + 1, acc)
 
                     # if acc improved, save the weights
                     if acc > best_val_acc:
-                        _logger.info("\tVal accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
+                        self._logger.info("\tVal accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
                         
                         best_val_acc = acc
                         saver.save('temp_weights/temp_network')
@@ -190,7 +190,7 @@ class NetworkManager:
 
                 # display the structure of the child model
                 if display_model_summary:
-                    model.summary()
+                    model.summary(print_fn=self._logger.info)
                     # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
                 # evaluate the best weights of the child model
@@ -206,7 +206,7 @@ class NetworkManager:
             # compute the reward (validation accuracy)
             reward = acc
 
-            _logger.info("Manager: Accuracy = %0.6f", reward)
+            self._logger.info("Manager: Accuracy = %0.6f", reward)
         
         # clean up resources and GPU memory
         del model

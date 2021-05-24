@@ -7,8 +7,6 @@ import importlib.util
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # disable GPU debugging info
 
-import time
-
 import tensorflow as tf
 
 from tensorflow.python.keras.datasets import cifar10
@@ -21,25 +19,26 @@ from manager import NetworkManager
 from model import ModelGenerator
 
 import log_service
-_logger = log_service.getLogger(__name__)
 
 # should make only CPU visible
 #os.environ['CUDA_VISIBLE_DEVICES'] = ''    
 
-if tf.test.gpu_device_name():
-    _logger.info('GPU found')
-else:
-    _logger.info("No GPU found")
+# if tf.test.gpu_device_name():
+#     _logger.info('GPU found')
+# else:
+#     _logger.info("No GPU found")
 
-device_list = tf.config.experimental.get_visible_devices()
-_logger.info(device_list)
+# device_list = tf.config.experimental.get_visible_devices()
+# _logger.info(device_list)
 
 
 class Train:
 
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
-                 learning_rate, restore, timestr, cpu):
+                 learning_rate, restore, cpu):
+
+        self._logger = log_service.get_logger(__name__)
 
         self.blocks = blocks
         self.checkpoint = checkpoint
@@ -50,7 +49,6 @@ class Train:
         self.batchsize = batchsize
         self.learning_rate = learning_rate
         self.restore = restore
-        self.timestr = timestr
         self.cpu = cpu
 
     def process(self):
@@ -61,23 +59,19 @@ class Train:
         t_max = 0
 
         if self.restore == True:
-            timestr = self.timestr 
             starting_B = self.checkpoint - 1 # change the starting point of B
 
-            _logger.info("Loading operator indeces!")
-            with open('logs/%s/csv/timers.csv' % timestr) as f:
+            self._logger.info("Loading operator indeces!")
+            with open(log_service.build_path('csv', 'timers.csv')) as f:
                 reader = csv.reader(f)
                 for row in reader:
                     elem = float(row[0])
                     index_list.append(elem)
                     if elem >= t_max :
                         t_max = elem
-            _logger.info(index_list, t_max)
+            self._logger.info(index_list, t_max)
                          
         else:
-            timestr = time.strftime('%Y-%m-%d-%H-%M-%S') # get time for logs folder
-            os.makedirs('logs/%s/csv' % timestr) # create .csv path
-            os.mkdir('logs/%s/ini' % timestr) # create .ini folder
             starting_B = 0
 
             # create headers for csv files
@@ -88,7 +82,7 @@ class Train:
                 headers.extend(new_block)
             
             # add headers to training_time.csv
-            with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
+            with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
 
@@ -141,14 +135,14 @@ class Train:
 
 
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(state_space, timestr, self.checkpoint, B=self.blocks, K=self.children,
+        controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=10,
                                        reg_param=0,
                                        controller_cells=100,
                                        restore_controller=self.restore)
 
         # create the Network Manager
-        manager = NetworkManager(dataset, timestr, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
+        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
                                  learning_rate=self.learning_rate, cpu=self.cpu)
 
         block_times = []
@@ -158,12 +152,12 @@ class Train:
             if trial == 0:
                 k = None
                 # build a starting point model with 0 blocks to evaluate the offset
-                _logger.info("Model #1 / #1")
-                _logger.info("\t%s", state_space.parse_state_space_list([]))
-                reward, timer = manager.get_rewards(ModelGenerator, state_space.parse_state_space_list([]), timestr)
-                _logger.info("Final Accuracy: %0.6f", reward)
-                _logger.info("Training time: %0.6f", timer)
-                with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
+                self._logger.info("Model #1 / #1")
+                self._logger.info("\t%s", state_space.parse_state_space_list([]))
+                reward, timer = manager.get_rewards(ModelGenerator, state_space.parse_state_space_list([]))
+                self._logger.info("Final Accuracy: %0.6f", reward)
+                self._logger.info("Training time: %0.6f", timer)
+                with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                     data = [timer, 0]
                     for i in range(self.blocks):
                         data.extend([0, 0, 0, 0])
@@ -180,29 +174,29 @@ class Train:
                 # print the action probabilities
                 state_space.print_actions(action)
                 listed_space = state_space.parse_state_space_list(action)
-                _logger.info("Model #%d / #%d" % (t + 1, len(actions)))
-                _logger.info("\t%s", listed_space)
+                self._logger.info("Model #%d / #%d" % (t + 1, len(actions)))
+                self._logger.info("\t%s", listed_space)
 
                 # build a model, train and get reward and accuracy from the network manager
                 reward, timer = manager.get_rewards(ModelGenerator, listed_space)
-                _logger.info("Final Accuracy : %0.6f", reward)
-                _logger.info("Training time : %0.6f", timer)
+                self._logger.info("Final Accuracy : %0.6f", reward)
+                self._logger.info("Training time : %0.6f", timer)
 
                 rewards.append(reward)
                 timers.append(timer)
                 if trial == 0 :
                     block_times.append([timer, listed_space])
                     if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1) :
-                        with open('logs/%s/csv/timers.csv' % timestr, mode='a+', newline='') as f:
+                        with open(log_service.build_path('csv', 'timers.csv'), mode='a+', newline='') as f:
                             writer = csv.writer(f)
                             writer.writerow([timer])
                             index_list.append(timer)
                             if timer >= t_max:
                                 t_max = timer
-                _logger.info("Finished %d out of %d models!" % (t + 1, len(actions)))
+                self._logger.info("Finished %d out of %d models!" % (t + 1, len(actions)))
 
                 # write the results of this trial into a file
-                with open('logs/%s/csv/real_accuracy.csv' % timestr, mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', 'real_accuracy.csv'), mode='a+', newline='') as f:
                     data = [reward, trial+1]
                     data.extend(listed_space)
                     writer = csv.writer(f)
@@ -210,7 +204,7 @@ class Train:
 
                 if trial > 0 :
                     # write the forward pass time of this trial into a file
-                    with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
+                    with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                         writer = csv.writer(f)
                         for i in range(trial, self.blocks):
                             data = [timer, trial+1]
@@ -231,7 +225,7 @@ class Train:
                             writer.writerow(data)
 
             if trial == 0:
-                with open('logs/%s/csv/training_time.csv' % timestr, mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     for row in block_times:
                         for i in range(trial, self.blocks):
@@ -253,9 +247,8 @@ class Train:
                             writer.writerow(data)    
             
             loss = controller.train_step(rewards)
-            _logger.info("Trial %d: ControllerManager loss : %0.6f" % (trial + 1, loss))
+            self._logger.info("Trial %d: ControllerManager loss : %0.6f" % (trial + 1, loss))
 
             controller.update_step(headers, t_max, len(operators), index_list, timers, lookback=-2)
             
-        _logger.info("Finished!")
-
+        self._logger.info("Finished!")
