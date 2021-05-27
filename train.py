@@ -21,17 +21,6 @@ from model import ModelGenerator
 
 import log_service
 
-# should make only CPU visible
-#os.environ['CUDA_VISIBLE_DEVICES'] = ''    
-
-# if tf.test.gpu_device_name():
-#     _logger.info('GPU found')
-# else:
-#     _logger.info("No GPU found")
-
-# device_list = tf.config.experimental.get_visible_devices()
-# _logger.info(device_list)
-
 
 class Train:
 
@@ -183,6 +172,7 @@ class Train:
 
         # print the state space being searched
         state_space.print_state_space()
+        # TODO: not used and actually not printing anything
         NUM_TRAILS = state_space.print_total_models(self.children)
 
         # load correct dataset (based on self.dataset)   
@@ -196,7 +186,8 @@ class Train:
                                        train_iterations=10,
                                        reg_param=0,
                                        controller_cells=100,
-                                       restore_controller=self.restore)
+                                       restore_controller=self.restore,
+                                       cpu=self.cpu)
 
         # create the Network Manager
         manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,

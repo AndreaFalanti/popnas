@@ -19,6 +19,8 @@ mypy = "^0.812"
 tqdm = "^4.60.0"
 tensorflow = "1.14.0"
 keras = "2.2.4"
+tensorflow-gpu = "1.14.0"
+d = "^0.2.2"
 
 [tool.poetry.dev-dependencies]
 

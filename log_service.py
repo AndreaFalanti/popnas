@@ -74,5 +74,7 @@ def make_exception_handler(logger):
 
         logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
+    return handle_exception
+
 def build_path(*args):
     return os.path.join(log_path, *args)

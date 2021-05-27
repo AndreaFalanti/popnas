@@ -36,7 +36,8 @@ class NetworkManager:
             dataset: a tuple of 4 arrays (X_train, y_train, X_val, y_val)
             epochs: number of epochs to train the subnetworks
             batchsize: batchsize of training the subnetworks
-            learning_rate: learning rate for the Optimizer.
+            learning_rate: learning rate for the Optimizer
+            cpu: use CPU for training networks
         '''
         self._logger = log_service.get_logger(__name__)
 

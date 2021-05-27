@@ -5,6 +5,8 @@ import train
 import log_service
 import sys
 
+import tensorflow as tf
+
 
 def main():
 
@@ -22,7 +24,16 @@ def main():
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     args = parser.parse_args()
 
-    #os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    if tf.test.gpu_device_name():
+        print('GPU found')
+    else:
+        print("No GPU found")
+
+    device_list = tf.config.experimental.get_visible_devices()
+    print(device_list)
+    
+    if (not args.cpu and not tf.test.is_gpu_available()):
+        sys.exit('GPU is not available for execution, run with --cpu flag or troubleshot the issue in case a GPU is actually present in the device')
 
     # create folder structure for log files or reuse previous logs to continue execution
     if (args.restore == True):

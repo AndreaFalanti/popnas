@@ -35,6 +35,7 @@ class Controller(tf.keras.Model):
         # Layers
         self.input_embedding = tf.keras.layers.Embedding(input_embedding_max + 1, embedding_dim)
         self.operators_embedding = tf.keras.layers.Embedding(operator_embedding_max + 1, embedding_dim)
+        # TODO
         '''  
         if tf.test.is_gpu_available():
             self.rnn = tf.keras.layers.CuDNNLSTM(controller_cells, return_state=True)
@@ -101,7 +102,8 @@ class ControllerManager:
                  controller_cells=32,
                  embedding_dim=20,
                  input_B=None,
-                 restore_controller=False):
+                 restore_controller=False,
+                 cpu=False):
         '''
         Manages the Controller network training and prediction process.
         
@@ -123,6 +125,7 @@ class ControllerManager:
                 with larger depth `B` than allowed at training time.
             restore_controller: flag whether to restore a pre-trained RNN controller
                 upon construction.
+            cpu: use CPU to train the controller
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -141,6 +144,7 @@ class ControllerManager:
         self.reg_strength = reg_param
         self.input_B = input_B
         self.restore_controller = restore_controller
+        self.cpu = cpu
 
         # restore controller
         if self.restore_controller == True:
@@ -240,13 +244,8 @@ class ControllerManager:
         
         Also constructs saver and restorer to the RNN controller if required.
         '''
-        '''
-        if tf.test.is_gpu_available():
-            device = '/gpu:0'
-        else:
-            device = '/cpu:0'
-        '''    
-        device = '/cpu:0'
+
+        device = '/cpu:0' if self.cpu else '/gpu:0'
         self.device = device
 
         if self.restore_controller and self.input_B is not None:

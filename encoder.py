@@ -217,7 +217,7 @@ class StateSpace:
             inputs = [0]
 
         self._logger.info("Obtaining search space for b = 1")
-        print("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
+        self._logger.info("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
 
         search_space = [inputs, ops, inputs, ops]
         self.children = list(self._construct_permutations(search_space))
@@ -279,6 +279,8 @@ class StateSpace:
         pp = pprint.PrettyPrinter(indent=2, width=100)
         for id, state in self.states.items():
             self._logger.info(pp.pformat(state))
+
+        self._logger.info('%s', '*' * 90)
 
     def print_actions(self, actions):
         ''' Print the action space properly '''
