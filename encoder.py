@@ -282,7 +282,7 @@ class StateSpace:
 
     def print_actions(self, actions):
         ''' Print the action space properly '''
-        self._logger.info('Actions :')
+        self._logger.info('Actions:')
 
         for id, action in enumerate(actions):
             state = self[id]

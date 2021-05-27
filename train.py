@@ -111,6 +111,33 @@ class Train:
 
         return dataset
 
+    def generate_and_train_model_from_actions(self, state_space, manager, actions, model_index, total_models_for_step):
+        """
+        Generate a model given the actions and train it to get reward and time
+
+        Args:
+            state_space (StateSpace): ...
+            manager (NetworkManager): ...
+            actions (type): actions embedding (oneHot)
+            model_index (int): model number (for logging only)
+            total_models_for_step (int): total amount of models to train in this step (for logging only)
+
+        Returns:
+            tuple: reward, timer, listed_space(parsed actions embedding)
+        """
+        # print the action probabilities
+        state_space.print_actions(actions)
+        listed_space = state_space.parse_state_space_list(actions)
+        self._logger.info("Model #%d / #%d", model_index, total_models_for_step)
+        self._logger.info("\t%s", listed_space)
+
+        # build a model, train and get reward and accuracy from the network manager
+        reward, timer = manager.get_rewards(ModelGenerator, listed_space)
+        self._logger.info("Final Accuracy: %0.6f", reward)
+        self._logger.info("Training time: %0.6f", timer)
+
+        return reward, timer, listed_space
+
 
     def process(self):
     
@@ -181,12 +208,10 @@ class Train:
         for trial in range(starting_B, self.blocks):
             if trial == 0:
                 k = None
+
                 # build a starting point model with 0 blocks to evaluate the offset
-                self._logger.info("Model #1 / #1")
-                self._logger.info("\t%s", state_space.parse_state_space_list([]))
-                reward, timer = manager.get_rewards(ModelGenerator, state_space.parse_state_space_list([]))
-                self._logger.info("Final Accuracy: %0.6f", reward)
-                self._logger.info("Training time: %0.6f", timer)
+                reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
+                
                 with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                     data = [timer, 0]
                     for i in range(self.blocks):
@@ -201,16 +226,7 @@ class Train:
             timers = []
             
             for t, action in enumerate(actions):
-                # print the action probabilities
-                state_space.print_actions(action)
-                listed_space = state_space.parse_state_space_list(action)
-                self._logger.info("Model #%d / #%d" % (t + 1, len(actions)))
-                self._logger.info("\t%s", listed_space)
-
-                # build a model, train and get reward and accuracy from the network manager
-                reward, timer = manager.get_rewards(ModelGenerator, listed_space)
-                self._logger.info("Final Accuracy : %0.6f", reward)
-                self._logger.info("Training time : %0.6f", timer)
+                reward, timer, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
 
                 rewards.append(reward)
                 timers.append(timer)
@@ -277,7 +293,7 @@ class Train:
                             writer.writerow(data)    
             
             loss = controller.train_step(rewards)
-            self._logger.info("Trial %d: ControllerManager loss : %0.6f" % (trial + 1, loss))
+            self._logger.info("Trial %d: ControllerManager loss : %0.6f", trial + 1, loss)
 
             controller.update_step(headers, t_max, len(operators), index_list, timers, lookback=-2)
             
