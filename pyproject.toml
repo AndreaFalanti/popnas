@@ -17,10 +17,7 @@ flake8 = "^3.9.2"
 eli5 = "^0.11.0"
 mypy = "^0.812"
 tqdm = "^4.60.0"
-tensorflow = "1.14.0"
-keras = "2.2.4"
-tensorflow-gpu = "1.14.0"
-d = "^0.2.2"
+tensorflow = "^2.5.0"
 
 [tool.poetry.dev-dependencies]
 

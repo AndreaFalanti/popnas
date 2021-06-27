@@ -50,7 +50,7 @@ class Controller(tf.keras.Model):
         inputs, operators = self._get_inputs_and_operators(inputs_operators)  # extract the data       
         if states is None:  # initialize the state vectors
             states = self.rnn.get_initial_state(inputs)
-            states = [tf.to_float(state) for state in states]
+            states = [tf.cast(state, tf.float32) for state in states]
         
         # map the sparse inputs and operators into dense embeddings
         embed_inputs = self.input_embedding(inputs)
@@ -328,7 +328,7 @@ class ControllerManager:
 
         #logs
         self.logdir = log_service.build_path('controller')
-        summary_writer = tf.contrib.summary.create_file_writer(self.logdir)
+        summary_writer = tf.summary.create_file_writer(self.logdir)
         summary_writer.set_as_default()
 
         for current_epoch in range(self.train_iterations):
@@ -368,9 +368,9 @@ class ControllerManager:
                 self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d", current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
 
             # add accuracy to Tensorboard
-            with tf.contrib.summary.always_record_summaries():
-                tf.contrib.summary.scalar("average_accuracy", rewards.mean(), family="controller", step=self.global_epoch)
-                tf.contrib.summary.scalar("average_loss", loss.mean(), family="controller", step=self.global_epoch)
+            with summary_writer.as_default():
+                tf.summary.scalar("average_accuracy", rewards.mean(), description="controller", step=self.global_epoch)
+                tf.summary.scalar("average_loss", loss.mean(), description="controller", step=self.global_epoch)
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)

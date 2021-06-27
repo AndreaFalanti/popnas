@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from tensorflow.python.keras.datasets import cifar10
 from tensorflow.python.keras.datasets import cifar100
-from tensorflow.python.keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical
 
 from encoder import StateSpace
 from controller import ControllerManager

@@ -7,8 +7,7 @@ import time
 import tensorflow as tf
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False #to hide warning
-from tensorflow.contrib.eager.python import tfe
-tfe.enable_eager_execution(device_policy=tfe.DEVICE_PLACEMENT_SILENT)
+# tf.compat.v1.enable_eager_execution(device_policy=tf.contrib.eager.DEVICE_PLACEMENT_SILENT)
 
 from tensorflow.python.keras.models import Model
 
@@ -86,7 +85,7 @@ class NetworkManager:
         # create children folder on Tensorboard
         self.num_child = self.num_child + 1
         self.logdir = log_service.build_path('children', str(self.num_child))
-        self.summary_writer = tf.contrib.summary.create_file_writer(self.logdir)
+        self.summary_writer = tf.summary.create_file_writer(self.logdir)
         self.summary_writer.set_as_default()
 
         acc_list = []
@@ -116,7 +115,7 @@ class NetworkManager:
 
                 num_train_batches = x_train.shape[0] // self.batchsize + 1
 
-                global_step = tf.train.get_or_create_global_step()
+                global_step = tf.compat.v1.train.get_or_create_global_step()
                 lr = tf.compat.v1.train.cosine_decay(self.lr, global_step, decay_steps=num_train_batches * self.epochs, alpha=0.1)
 
                 # construct the optimizer and saver of the child model
@@ -157,7 +156,7 @@ class NetworkManager:
                                 break
 
                     # evaluate child model
-                    acc = tfe.metrics.CategoricalAccuracy()
+                    acc = tf.metrics.CategoricalAccuracy()
                     for j, (x, y) in enumerate(val_dataset):
                         preds = model(x, training=False)
                         acc(y, preds)
@@ -165,13 +164,13 @@ class NetworkManager:
                     acc = acc.result().numpy()
 
                     # add forward pass and accuracy to Tensorboard
-                    with self.summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-                        tf.contrib.summary.scalar("training_time", timer, family="children", step=epoch+1)
+                    with self.summary_writer.as_default():
+                        tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
                         if acc > best_val_acc:
                             summary_acc = acc
                         else:
                             summary_acc = best_val_acc
-                        tf.contrib.summary.scalar("child_accuracy", summary_acc, family="children", step=epoch+1)
+                        tf.summary.scalar("child_accuracy", summary_acc, description="children", step=epoch+1)
 
                     self._logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
                     self._logger.info("\tEpoch %d: Val accuracy = %0.6f" , epoch + 1, acc)
@@ -195,7 +194,7 @@ class NetworkManager:
                     # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
                 # evaluate the best weights of the child model
-                acc = tfe.metrics.CategoricalAccuracy()
+                acc = tf.metrics.CategoricalAccuracy()
 
                 for j, (x, y) in enumerate(val_dataset):
                     preds = model(x, training=False)
