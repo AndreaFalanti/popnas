@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPool2D, AveragePooling2D, BatchNormalization
+from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
 
 
 class Identity(Model):
@@ -16,6 +16,7 @@ class Identity(Model):
                              kernel_initializer='he_uniform')
         else:
             self.op = lambda x : x
+            #self.op = Layer()   # identity
 
     def call(self, inputs, training=None, mask=None):
         return self.op(inputs)
@@ -89,7 +90,7 @@ class Pooling(Model):
         '''
         super(Pooling, self).__init__()
         if type == 'max':
-            self.pool = MaxPool2D(size, strides, padding='same')
+            self.pool = MaxPooling2D(size, strides, padding='same')
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
     def call(self, inputs, training=None, mask=None):

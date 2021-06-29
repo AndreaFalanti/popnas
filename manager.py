@@ -95,7 +95,9 @@ class NetworkManager:
             for index in range(self.data_num):
                 if self.data_num > 1:
                     self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
-                model = model_fn(actions)  # type: Model
+                    
+                # build the model, given the actions
+                model = model_fn(actions).model  # type: Model
                 
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
@@ -190,7 +192,7 @@ class NetworkManager:
 
                 # display the structure of the child model
                 if display_model_summary:
-                    model.summary(print_fn=self._logger.info)
+                    model.summary(line_length=140, print_fn=self._logger.info)
                     # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
                 # evaluate the best weights of the child model
