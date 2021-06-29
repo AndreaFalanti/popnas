@@ -116,7 +116,12 @@ class ModelGenerator(Model):
             self.block_index = i
             out_layers.append(self.build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, inputs))
 
-        return tf.keras.layers.Concatenate(axis=-1)(out_layers)
+        # concatenate all 'Add' layers, outputs of each single block
+        concat_layer = tf.keras.layers.Concatenate(axis=-1)(out_layers)
+        # reduce depth to filters value, otherwise concatenation would lead to (b * filters) tensor depth
+        x = ops.Convolution(filters, (1, 1), (1, 1))
+        x._name = f'concat_pointwise_conv_c{self.cell_index}'
+        return x(concat_layer)
 
     def build_block(self, action_L, action_R, filters, stride, inputs):
         '''

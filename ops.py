@@ -2,21 +2,36 @@ import tensorflow as tf
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
 
+def pad_closure(desired_depth):
+    '''
+    Pad depth of an identity tensor with zeros if has not already the right depth for performing addition at the end of the block.
+
+    Args:
+        desired_depth (integer): Depth required for addition with other tensor inside the block
+    '''
+    def pad_identity(inputs):
+        input_depth = inputs.get_shape().as_list()[3]
+        pad_size = desired_depth - input_depth
+
+        if pad_size > 0:
+            paddings = tf.constant([[0, 0], [0, 0], [0, 0], [0, pad_size]])
+            return tf.pad(inputs, paddings)  # constant, with 0s
+        else:
+            return inputs
+
+    return pad_identity
 
 class Identity(Model):
 
     def __init__(self, filters, strides):
         '''
-        Performs a Pointwise Conv to preserve the stride and number of channels,
-        or simply adds an identity connection.
+        Simply adds an identity connection, padding in depth with 0 if necessary to enable block add operator.
         '''
         super(Identity, self).__init__()
-        if strides == (2, 2):
-            self.op = Conv2D(filters, (1, 1), strides, padding='same',
-                             kernel_initializer='he_uniform')
-        else:
-            self.op = lambda x : x
-            #self.op = Layer()   # identity
+
+        #self.op = lambda x : x
+        #self.op = Layer()   # identity
+        self.op = pad_closure(filters)
 
     def call(self, inputs, training=None, mask=None):
         return self.op(inputs)
