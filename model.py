@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.python.keras.models import Model
 
 import ops
+import log_service
 
 from tensorflow.python.keras.layers import Dense, GlobalAveragePooling2D
 
@@ -18,12 +19,11 @@ class ModelGenerator(Model):
             actions: list of [input; action] pairs that define the cell. 
         '''
         super(ModelGenerator, self).__init__()
+        self._logger = log_service.get_logger(__name__)
 
         self.B = len(actions) // 4
 
         if len(actions) > 0:
-            # TODO: use tuples instead of list of lists?
-            #self.action_list = np.split(np.array(actions), len(actions) // 2)
             self.action_list = [x for x in zip(*[iter(actions)]*2)]     # generate a list of tuples (pairs)
             self.M = 3
             self.N = 2
@@ -46,8 +46,9 @@ class ModelGenerator(Model):
         # reset cell index, otherwise would use last model value
         self.cell_index = 0
 
-        # TODO: dimensions are unknown a priori, but could be inferred by dataset used
-        model_input = tf.keras.layers.Input(shape=(None, None, 3))
+        # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
+        # TODO: dims are required for inputs normalization, hardcoded for now
+        model_input = tf.keras.layers.Input(shape=(32, 32, 3))
 
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is the output of block previous to last one (lag 1, used in actions with input = -2)
@@ -68,8 +69,7 @@ class ModelGenerator(Model):
             filters = filters * 2
             reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2,2), inputs=[skip_output, last_output])
             self.cell_index += 1
-            # TODO: shape discrepancy doesn't allow to use skip connection after reduction, for now simply set skip_output to the reduction_cell
-            skip_output = reduction_cell
+            skip_output = last_output
             last_output = reduction_cell
 
         # add N time a normal cell
@@ -96,7 +96,6 @@ class ModelGenerator(Model):
         Args:
             B (int): Number of blocks in the cell
             action_list (list<tuple<int, string>): List of tuples of 2 elements -> (input, action_name). Input can be either -1 (last cell output) or -2 (skip connection).
-                                                TODO: add 0 for last block and allow block nesting
             filters (int): Initial filters to use
             stride (tuple<int, int>): (1, 1) for normal cells, (2, 2) for reduction cells
             inputs (list<tf.keras.layers.Layer>): Possible layers to use as input (based on action_list index value)
@@ -104,24 +103,70 @@ class ModelGenerator(Model):
         Returns:
             (tf.keras.layers.Add | tf.keras.layers.Concatenate): [description]
         '''
+        # normalize inputs if necessary
+        inputs = self.normalize_inputs(inputs)
 
         # if cell size is 1 block only
         if B == 1:
             return self.build_block(action_list[0], action_list[1], filters, stride, inputs)
 
         # else concatenate all the intermediate blocks that compose the cell
-        # TODO: actually doesn't handle nesting between blocks outputs, producing only flat cells...
-        out_layers = []
+        block_outputs = []
+        total_inputs = inputs   # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i in range(B):
             self.block_index = i
-            out_layers.append(self.build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, inputs))
+            block_out = self.build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs)
+
+            # allow fast insertion in order with respect to block creation
+            block_outputs.append(block_out)
+            # concatenate the two lists to provide the whole inputs available for next blocks of the cell
+            total_inputs = block_outputs + inputs
 
         # concatenate all 'Add' layers, outputs of each single block
-        concat_layer = tf.keras.layers.Concatenate(axis=-1)(out_layers)
+        concat_layer = tf.keras.layers.Concatenate(axis=-1)(block_outputs)
         # reduce depth to filters value, otherwise concatenation would lead to (b * filters) tensor depth
         x = ops.Convolution(filters, (1, 1), (1, 1))
         x._name = f'concat_pointwise_conv_c{self.cell_index}'
         return x(concat_layer)
+
+    def normalize_inputs(self, inputs):
+        '''
+        Normalize tensor dimensions between -2 and -1 inputs if they diverge (either spatial and depth).
+        In actual architecture the normalization should happen only if -2 is a normal cell output and -1 is instead the output
+        of a reduction cell (and in second cell because -2 is the starting image input).
+
+        Args:
+            inputs (list<tf.Tensor>): -2 and -1 input tensors
+
+        Returns:
+            [list<tf.Tensor>]: updated tensor list (input list could be unchanged, but the list will be returned anyway)
+        '''
+
+        skip_depth = inputs[-2].get_shape().as_list()[3]
+        last_depth = inputs[-1].get_shape().as_list()[3]
+
+        # by checking either height or width it's possible to check if tensor dim between the last two cells outputs diverges (normal and reduction)
+        # values are None if no starting dimension is set, so make sure to have dimensions set in the network input layer
+        skip_height = inputs[-2].get_shape().as_list()[1]
+        last_height = inputs[-1].get_shape().as_list()[1]
+
+        # address cases where the tensor dims of the two imputs diverge
+        # spatial dim divergence, pointwise convolution with (2, 2) stride to reduce dimensions of normal cell input to reduce one
+        if skip_height != last_height:
+            # also uniform the depth between the two inputs
+            self._logger.info("Normalizing inputs' spatial dims (cell %d)", self.cell_index)
+            x = ops.Convolution(last_depth, (1, 1), strides=(2, 2))
+            x._name = f'pointwise_conv_input_c{self.cell_index}'
+            # override input with the normalized one
+            inputs[-2] = x(inputs[-2])
+        # only depth divergence, should not happen with actual algorithm (should always be both spatial and depth if dims diverge)
+        elif skip_depth != last_depth:
+            self._logger.info("Normalizing inputs' depth (cell %d)", self.cell_index)
+            x = ops.Convolution(last_depth, (1, 1), strides=(1, 1))     # no stride
+            x._name = f'pointwise_conv_input_c{self.cell_index}'
+            inputs[-2] = x(inputs[-2])
+
+        return inputs
 
     def build_block(self, action_L, action_R, filters, stride, inputs):
         '''
@@ -140,9 +185,13 @@ class ModelGenerator(Model):
         input_index_L, action_name_L  = action_L
         input_index_R, action_name_R = action_R
 
+        # in reduction cell, still use stride (1, 1) if not using "original inputs" (-1, -2, no reduction for other blocks' outputs)
+        stride_L = stride if input_index_L < 0 else (1, 1)
+        stride_R = stride if input_index_R < 0 else (1, 1)
+
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.parse_action(filters, action_name_L, strides=stride, tag='L')(inputs[input_index_L])
-        right_layer = self.parse_action(filters, action_name_R, strides=stride, tag='R')(inputs[input_index_R])
+        left_layer = self.parse_action(filters, action_name_L, strides=stride_L, tag='L')(inputs[input_index_L])
+        right_layer = self.parse_action(filters, action_name_R, strides=stride_R, tag='R')(inputs[input_index_R])
         return tf.keras.layers.Add()([left_layer, right_layer])
 
     def parse_action(self, filters, action, strides=(1, 1), tag='L'):
