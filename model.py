@@ -248,13 +248,13 @@ class ModelGenerator(Model):
 
         # applies a 3x3 maxpool
         if action == '3x3 maxpool':
-            x = ops.Pooling('max', (3, 3), strides=strides)
+            x = ops.Pooling(filters, 'max', (3, 3), strides=strides)
             x._name = f'3x3_maxpool_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
         # applies a 3x3 avgpool
         if action == '3x3 avgpool':
-            x = ops.Pooling('avg', (3, 3), strides=strides)
+            x = ops.Pooling(filters, 'avg', (3, 3), strides=strides)
             x._name = f'3x3_avgpool_c{self.cell_index}b{self.block_index}{tag}'
             return x
 

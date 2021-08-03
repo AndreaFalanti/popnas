@@ -2,12 +2,16 @@ import tensorflow as tf
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
 
+# TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
 def pad_closure(desired_depth):
     '''
     Pad depth of an identity tensor with zeros if has not already the right depth for performing addition at the end of the block.
 
     Args:
-        desired_depth (integer): Depth required for addition with other tensor inside the block
+        desired_depth (int): Depth required for addition with other tensor inside the block
+
+    Returns:
+        (Callable): call function build by closure
     '''
     def pad_identity(inputs):
         input_depth = inputs.get_shape().as_list()[3]
@@ -20,6 +24,29 @@ def pad_closure(desired_depth):
             return inputs
 
     return pad_identity
+
+def pooling_closure(filters, pool_layer):
+    '''
+    Generate call for pooling operation. It adds a pointwise convolution to adapt the depth, if necessary.
+
+    Args:
+        filters (int): number of filters (depth)
+        pool_layer (tf.keras.Layer): pooling layer to use (max or avg already parametrized)
+
+    Returns:
+        (Callable): call function build by closure
+    '''
+    def pooling_call(inputs):
+        input_depth = inputs.get_shape().as_list()[3]
+
+        if input_depth != filters:
+            pool = pool_layer(inputs)
+            return Convolution(filters, (1, 1), (1, 1))(pool)
+        else:
+            return pool_layer(inputs)
+
+    return pooling_call
+            
 
 class Identity(Model):
 
@@ -99,14 +126,18 @@ class StackedConvolution(Model):
 
 class Pooling(Model):
 
-    def __init__(self, type, size, strides):
+    def __init__(self, filters, type, size, strides):
         '''
-        Constructs a pooling layer (average or max).
+        Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class) to adapt
+        the output depth to filters size, if they are not the same.
         '''
         super(Pooling, self).__init__()
         if type == 'max':
             self.pool = MaxPooling2D(size, strides, padding='same')
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
+
+        self.pool_call = pooling_closure(filters, self.pool)
+
     def call(self, inputs, training=None, mask=None):
-        return self.pool(inputs)
+        return self.pool_call(inputs)
