@@ -35,13 +35,9 @@ class Controller(tf.keras.Model):
         # Layers
         self.input_embedding = tf.keras.layers.Embedding(input_embedding_max + 1, embedding_dim)
         self.operators_embedding = tf.keras.layers.Embedding(operator_embedding_max + 1, embedding_dim)
-        # TODO
-        '''  
-        if tf.test.is_gpu_available():
-            self.rnn = tf.keras.layers.CuDNNLSTM(controller_cells, return_state=True)
-        else:
-            self.rnn = tf.keras.layers.LSTM(controller_cells, return_state=True)
-        '''
+
+        # Tensorflow2 now automatically use CuDNNLSTM if using GPU and LSTM has the right parameters (default ones are good)
+        # check this url for more info: https://www.tensorflow.org/api_docs/python/tf/keras/layers/LSTM
         self.rnn = tf.keras.layers.LSTM(controller_cells, return_state=True)
     
         self.rnn_score = tf.keras.layers.Dense(1, activation='sigmoid')

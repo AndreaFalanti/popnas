@@ -85,7 +85,6 @@ class StateSpace:
 
         input_values = list(range(input_lookback_depth, self.B-1))  # -1 = Hc-1, 0-(B-1) = Hci
         self.inputs_embedding_max = len(input_values)
-        # self.operator_embedding_max = len(np.unique(operators))
         self.operator_embedding_max = len(np.unique(self.operators))
 
         self._add_state('inputs', values=input_values)
