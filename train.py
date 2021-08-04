@@ -26,7 +26,7 @@ class Train:
 
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
-                 learning_rate, restore, cpu):
+                 learning_rate, restore, cpu, all_blocks_concat):
 
         self._logger = log_service.get_logger(__name__)
 
@@ -40,6 +40,7 @@ class Train:
         self.learning_rate = learning_rate
         self.restore = restore
         self.cpu = cpu
+        self.concat_only_unused = not all_blocks_concat
 
 
     def load_dataset(self):
@@ -121,7 +122,7 @@ class Train:
         self._logger.info("\t%s", listed_space)
 
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer = manager.get_rewards(ModelGenerator, listed_space)
+        reward, timer = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused)
         self._logger.info("Final Accuracy: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
 

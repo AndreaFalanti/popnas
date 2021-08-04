@@ -11,17 +11,23 @@ from tensorflow.python.keras.layers import Dense, GlobalAveragePooling2D
 # TODO: refactor this in a function, like the ones we have done in NN course. This will make this a lot more simple.
 class ModelGenerator(Model):
 
-    def __init__(self, actions):
+    def __init__(self, actions, concat_only_unused=True):
         '''
         Utility Model class to construct child models provided with an action list.
         
         # Args:
-            actions: list of [input; action] pairs that define the cell. 
+            actions: list of [input; action] pairs that define the cell.
+            concat_only_unused (bool): concats only unused states at the end of each cell if true, otherwise concats all blocks output.
         '''
         super(ModelGenerator, self).__init__()
         self._logger = log_service.get_logger(__name__)
 
         self.B = len(actions) // 4
+
+        self.concat_only_unused = concat_only_unused
+        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates 
+        used_inputs = set(filter(lambda el: el >= 0, actions[::2]))
+        self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
 
         if len(actions) > 0:
             self.action_list = [x for x in zip(*[iter(actions)]*2)]     # generate a list of tuples (pairs)
@@ -122,12 +128,18 @@ class ModelGenerator(Model):
             # concatenate the two lists to provide the whole inputs available for next blocks of the cell
             total_inputs = block_outputs + inputs
 
-        # concatenate all 'Add' layers, outputs of each single block
-        concat_layer = tf.keras.layers.Concatenate(axis=-1)(block_outputs)
+        if self.concat_only_unused:
+            block_outputs = [block_outputs[i] for i in self.unused_inputs]
+
         # reduce depth to filters value, otherwise concatenation would lead to (b * filters) tensor depth
-        x = ops.Convolution(filters, (1, 1), (1, 1))
-        x._name = f'concat_pointwise_conv_c{self.cell_index}'
-        return x(concat_layer)
+        if len(block_outputs) > 1:
+            # concatenate all 'Add' layers, outputs of each single block
+            concat_layer = tf.keras.layers.Concatenate(axis=-1)(block_outputs)
+            x = ops.Convolution(filters, (1, 1), (1, 1))
+            x._name = f'concat_pointwise_conv_c{self.cell_index}'
+            return x(concat_layer)
+        else:
+            return block_outputs[0]
 
     def normalize_inputs(self, inputs):
         '''

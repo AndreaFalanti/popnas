@@ -49,7 +49,7 @@ class NetworkManager:
 
         self.num_child = 0 # SUMMARY
 
-    def get_rewards(self, model_fn, actions, display_model_summary=True):
+    def get_rewards(self, model_fn, actions, concat_only_unused=True, display_model_summary=True):
         '''
         Creates a subnetwork given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
@@ -72,6 +72,8 @@ class NetworkManager:
                 etc for the number of layers.
 
                 These action values are for direct use in the construction of models.
+
+            concat_only_unused (bool): concat only unused block outputs in the cell output
 
             display_model_summary: Display the child model summary at the end of training.
 
@@ -97,7 +99,7 @@ class NetworkManager:
                     self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
                     
                 # build the model, given the actions
-                model = model_fn(actions).model  # type: Model
+                model = model_fn(actions, concat_only_unused).model  # type: Model
                 
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
