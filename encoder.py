@@ -4,10 +4,11 @@ from collections import OrderedDict
 
 import log_service
 
-# TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to 
+# TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
 # import them directly to enable intellisense
 import sys
 sys.path.insert(1, 'aMLLibrary')
+
 
 class StateSpace:
     '''
@@ -18,6 +19,7 @@ class StateSpace:
 
     Also provides a more convenient way to define the search space
     '''
+
     def __init__(self, B, operators,
                  input_lookback_depth=0,
                  input_lookforward_depth=None):
@@ -68,7 +70,7 @@ class StateSpace:
 
         self.states = OrderedDict()
         self.state_count_ = 0
-        
+
         self.children = None
         self.intermediate_children = None
 
@@ -237,7 +239,7 @@ class StateSpace:
             new_b_dash = min(self.input_lookforward_depth, new_b)
         else:
             new_b_dash = new_b - 1
-            
+
         new_ip_values = list(range(self.input_lookback_depth, new_b_dash))
         ops = list(range(len(self.operators)))
 
@@ -266,10 +268,10 @@ class StateSpace:
         for input1 in search_space[0]:
             for operation1 in search_space[1]:
                 for input2 in search_space[2]:
-                    #if input2 >= input1: # added to avoid repeated permutations
+                    # if input2 >= input1: # added to avoid repeated permutations
                     for operation2 in search_space[3]:
-                            #if (input2 != input1) or operation1 >= operation2: # added to avoid repeated permutations
-                            yield (input1, self.operators[operation1], input2, self.operators[operation2])
+                        # if (input2 != input1) or operation1 >= operation2: # added to avoid repeated permutations
+                        yield (input1, self.operators[operation1], input2, self.operators[operation2])
 
     def print_state_space(self):
         ''' Pretty print the state space '''

@@ -1,4 +1,11 @@
-from types import prepare_class
+import log_service
+from model import ModelGenerator
+from manager import NetworkManager
+from controller import ControllerManager
+from encoder import StateSpace
+from tensorflow.keras.utils import to_categorical
+from tensorflow.python.keras.datasets import cifar100
+from tensorflow.python.keras.datasets import cifar10
 import numpy as np
 import csv
 from sklearn.model_selection import train_test_split
@@ -6,20 +13,7 @@ from sklearn.model_selection import train_test_split
 import importlib.util
 
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # disable GPU debugging info
-
-import tensorflow as tf
-
-from tensorflow.python.keras.datasets import cifar10
-from tensorflow.python.keras.datasets import cifar100
-from tensorflow.keras.utils import to_categorical
-
-from encoder import StateSpace
-from controller import ControllerManager
-from manager import NetworkManager
-from model import ModelGenerator
-
-import log_service
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable GPU debugging info
 
 
 class Train:
@@ -33,7 +27,7 @@ class Train:
         self.blocks = blocks
         self.checkpoint = checkpoint
         self.children = children
-        self.dataset = dataset  
+        self.dataset = dataset
         self.sets = sets
         self.epochs = epochs
         self.batchsize = batchsize
@@ -41,7 +35,6 @@ class Train:
         self.restore = restore
         self.cpu = cpu
         self.concat_only_unused = not all_blocks_concat
-
 
     def load_dataset(self):
         if self.dataset == "cifar10":
@@ -55,7 +48,6 @@ class Train:
             (x_train_init, y_train_init), (x_test_init, y_test_init) = set.load_data()
 
         return (x_train_init, y_train_init), (x_test_init, y_test_init)
-
 
     def prepare_dataset(self, x_train_init, y_train_init, x_test, y_test):
         """Build a validation set from training set and do some preprocessing
@@ -78,7 +70,7 @@ class Train:
         for i in range(0, self.sets):
             # create a validation set for evaluation of the child models
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
-            
+
             # TODO: take only 400 images for really fast training, delete this in future
             x_train = x_train[:400]
             y_train = y_train[:400]
@@ -95,7 +87,7 @@ class Train:
                 y_validation = to_categorical(y_validation, 100)
 
             # TODO: if custom dataset is used, all works fine or some logic is missing?
-            
+
             # pack the dataset for the NetworkManager
             dataset.append([x_train, y_train, x_validation, y_validation])
 
@@ -128,16 +120,15 @@ class Train:
 
         return reward, timer, listed_space
 
-
     def process(self):
-    
+
         # create the complete headers row of the CSV files
         headers = ["time", "blocks"]
         index_list = [0]
         t_max = 0
 
-        if self.restore == True:
-            starting_B = self.checkpoint - 1 # change the starting point of B
+        if self.restore:
+            starting_B = self.checkpoint - 1  # change the starting point of B
 
             self._logger.info("Loading operator indeces!")
             with open(log_service.build_path('csv', 'timers.csv')) as f:
@@ -145,10 +136,10 @@ class Train:
                 for row in reader:
                     elem = float(row[0])
                     index_list.append(elem)
-                    if elem >= t_max :
+                    if elem >= t_max:
                         t_max = elem
             self._logger.info(index_list, t_max)
-                         
+
         else:
             starting_B = 0
 
@@ -156,9 +147,9 @@ class Train:
             for b in range(1, self.blocks+1):
                 a = b*2
                 c = a-1
-                new_block = ["input_%d" % c , "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
+                new_block = ["input_%d" % c, "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
                 headers.extend(new_block)
-            
+
             # add headers to training_time.csv
             with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                 writer = csv.writer(f)
@@ -176,11 +167,10 @@ class Train:
         # TODO: not used and actually not printing anything
         NUM_TRAILS = state_space.print_total_models(self.children)
 
-        # load correct dataset (based on self.dataset)   
+        # load correct dataset (based on self.dataset)
         (x_train_init, y_train_init), (x_test_init, y_test_init) = self.load_dataset()
-            
-        dataset = self.prepare_dataset(x_train_init, y_train_init, x_test_init, y_test_init)
 
+        dataset = self.prepare_dataset(x_train_init, y_train_init, x_test_init, y_test_init)
 
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
@@ -195,7 +185,7 @@ class Train:
                                  learning_rate=self.learning_rate, cpu=self.cpu)
 
         block_times = []
-            
+
         # train for number of trials
         for trial in range(starting_B, self.blocks):
             if trial == 0:
@@ -203,28 +193,28 @@ class Train:
 
                 # build a starting point model with 0 blocks to evaluate the offset
                 reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
-                
+
                 with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                     data = [timer, 0]
                     for i in range(self.blocks):
                         data.extend([0, 0, 0, 0])
                     writer = csv.writer(f)
-                    writer.writerow(data)           
+                    writer.writerow(data)
             else:
                 k = self.children
-                
+
             actions = controller.get_actions(top_k=k)  # get all actions for the previous state
             rewards = []
             timers = []
-            
+
             for t, action in enumerate(actions):
                 reward, timer, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
 
                 rewards.append(reward)
                 timers.append(timer)
-                if trial == 0 :
+                if trial == 0:
                     block_times.append([timer, listed_space])
-                    if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1) :
+                    if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1):
                         with open(log_service.build_path('csv', 'timers.csv'), mode='a+', newline='') as f:
                             writer = csv.writer(f)
                             writer.writerow([timer])
@@ -240,7 +230,7 @@ class Train:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
-                if trial > 0 :
+                if trial > 0:
                     # write the forward pass time of this trial into a file
                     with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                         writer = csv.writer(f)
@@ -248,8 +238,8 @@ class Train:
                             data = [timer, trial+1]
                             for j in range(trial, i):
                                 data.extend([0, 0, 0, 0])
-                            encoded_child = state_space.entity_encode_child(listed_space) #
-                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32') #
+                            encoded_child = state_space.entity_encode_child(listed_space)
+                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
                             reindexed_child = []
                             for index, elem in enumerate(concatenated_child):
                                 elem = elem + 1
@@ -270,8 +260,8 @@ class Train:
                             data = [row[0], trial+1]
                             for j in range(trial, i):
                                 data.extend([0, 0, 0, 0])
-                            encoded_child = state_space.entity_encode_child(row[1]) #
-                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32') #
+                            encoded_child = state_space.entity_encode_child(row[1])
+                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
                             reindexed_child = []
                             for index, elem in enumerate(concatenated_child):
                                 elem = elem + 1
@@ -282,11 +272,11 @@ class Train:
                             data.extend(reindexed_child)
                             for j in range(i+1, self.blocks):
                                 data.extend([0, 0, 0, 0])
-                            writer.writerow(data)    
-            
+                            writer.writerow(data)
+
             loss = controller.train_step(rewards)
             self._logger.info("Trial %d: ControllerManager loss : %0.6f", trial + 1, loss)
 
             controller.update_step(headers, t_max, len(operators), index_list, timers, lookback=-2)
-            
+
         self._logger.info("Finished!")

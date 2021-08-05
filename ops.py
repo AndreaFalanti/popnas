@@ -3,6 +3,8 @@ from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
 
 # TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
+
+
 def pad_closure(desired_depth):
     '''
     Pad depth of an identity tensor with zeros if has not already the right depth for performing addition at the end of the block.
@@ -25,6 +27,7 @@ def pad_closure(desired_depth):
 
     return pad_identity
 
+
 def pooling_closure(filters, pool_layer):
     '''
     Generate call for pooling operation. It adds a pointwise convolution to adapt the depth, if necessary.
@@ -46,7 +49,7 @@ def pooling_closure(filters, pool_layer):
             return pool_layer(inputs)
 
     return pooling_call
-            
+
 
 class Identity(Model):
 
@@ -56,8 +59,6 @@ class Identity(Model):
         '''
         super(Identity, self).__init__()
 
-        #self.op = lambda x : x
-        #self.op = Layer()   # identity
         self.op = pad_closure(filters)
 
     def call(self, inputs, training=None, mask=None):

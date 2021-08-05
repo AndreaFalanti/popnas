@@ -5,7 +5,8 @@ import time
 from pathlib import Path
 
 # Must be set using initialize_log_folders or check_log_folder
-log_path = None; 
+log_path = None
+
 
 def initialize_log_folders():
     if not os.path.exists('logs/'):
@@ -13,15 +14,16 @@ def initialize_log_folders():
 
     global log_path
     # create timestamp subfolder and set the global log path variable
-    timestr = time.strftime('%Y-%m-%d-%H-%M-%S') # get time for logs folder
+    timestr = time.strftime('%Y-%m-%d-%H-%M-%S')  # get time for logs folder
     log_path = os.path.join('logs', timestr)
     os.mkdir(log_path)
 
     # TODO: folders not listed here are created through "tf.contrib.summary.create_file_writer" function,
     #  but their content is very strange, investigate
-    os.mkdir(os.path.join(log_path, 'csv')) # create .csv path
-    os.mkdir(os.path.join(log_path, 'ini')) # create .ini folder
-    os.mkdir(os.path.join(log_path, 'weights')) # create weights folder
+    os.mkdir(os.path.join(log_path, 'csv'))  # create .csv path
+    os.mkdir(os.path.join(log_path, 'ini'))  # create .ini folder
+    os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
+
 
 def check_log_folder(timestamp):
     if not os.path.exists(os.path.join('logs', timestamp)):
@@ -50,6 +52,7 @@ def get_logger(name):
     )
     return logger
 
+
 def create_critical_logger():
     logger = logging.getLogger(__name__)
     fHandler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
@@ -59,6 +62,8 @@ def create_critical_logger():
     return logger
 
 # Taken from: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python
+
+
 def make_exception_handler(logger):
     """
     Closure to make an exception handler, given a logger.
@@ -75,6 +80,7 @@ def make_exception_handler(logger):
         logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     return handle_exception
+
 
 def build_path(*args):
     return os.path.join(log_path, *args)

@@ -1,3 +1,6 @@
+import log_service
+from keras.utils.vis_utils import plot_model  # per stampare modello
+from tensorflow.python.keras.models import Model
 import shutil
 import os
 from tqdm import tqdm
@@ -6,14 +9,9 @@ import time
 
 import tensorflow as tf
 from tensorflow.python.util import deprecation
-deprecation._PRINT_DEPRECATION_WARNINGS = False #to hide warning
+deprecation._PRINT_DEPRECATION_WARNINGS = False  # to hide warning
 # tf.compat.v1.enable_eager_execution(device_policy=tf.contrib.eager.DEVICE_PLACEMENT_SILENT)
 
-from tensorflow.python.keras.models import Model
-
-from keras.utils.vis_utils import plot_model # per stampare modello
-
-import log_service
 
 if not os.path.exists('temp_weights/'):
     os.makedirs('temp_weights/')
@@ -26,6 +24,7 @@ class NetworkManager:
     '''
     Helper class to manage the generation of subnetwork training given a dataset
     '''
+
     def __init__(self, dataset, data_num=1, epochs=5, batchsize=64, learning_rate=0.002, cpu=False):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
@@ -47,7 +46,7 @@ class NetworkManager:
         self.lr = learning_rate
         self.cpu = cpu
 
-        self.num_child = 0 # SUMMARY
+        self.num_child = 0  # SUMMARY
 
     def get_rewards(self, model_fn, actions, concat_only_unused=True, display_model_summary=True):
         '''
@@ -97,10 +96,10 @@ class NetworkManager:
             for index in range(self.data_num):
                 if self.data_num > 1:
                     self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
-                    
+
                 # build the model, given the actions
                 model = model_fn(actions, concat_only_unused).model  # type: Model
-                
+
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
 
@@ -108,13 +107,13 @@ class NetworkManager:
                 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
                 train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(10000, seed=0))
                 train_dataset = train_dataset.batch(self.batchsize)
-                train_dataset = train_dataset.prefetch(4) # da usare se prefetch_to_device non funziona
+                train_dataset = train_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
                 # train_dataset = train_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
                 # generate the dataset for evaluation
                 val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
                 val_dataset = val_dataset.batch(self.batchsize)
-                val_dataset = val_dataset.prefetch(4) # da usare se prefetch_to_device non funziona
+                val_dataset = val_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
                 # val_dataset = val_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
                 num_train_batches = x_train.shape[0] // self.batchsize + 1
@@ -127,8 +126,8 @@ class NetworkManager:
                 saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
 
                 best_val_acc = 0.0
-                timer = 0 # inizialize timer to evaluate training time
-                
+                timer = 0  # inizialize timer to evaluate training time
+
                 for epoch in range(self.epochs):
                     # train child model
                     with tqdm(train_dataset,
@@ -143,7 +142,7 @@ class NetworkManager:
                                 start = time.clock()
                                 preds = model(x, training=True)
                                 loss = tf.keras.losses.categorical_crossentropy(y, preds)
-                                
+
                             grad = tape.gradient(loss, model.variables)
                             grad_vars = zip(grad, model.variables)
 
@@ -155,7 +154,7 @@ class NetworkManager:
 
                             # evaluate training time
                             timer = timer + (stop - start)
-                            
+
                             if (i + 1) >= num_train_batches:
                                 break
 
@@ -177,16 +176,16 @@ class NetworkManager:
                         tf.summary.scalar("child_accuracy", summary_acc, description="children", step=epoch+1)
 
                     self._logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
-                    self._logger.info("\tEpoch %d: Val accuracy = %0.6f" , epoch + 1, acc)
+                    self._logger.info("\tEpoch %d: Val accuracy = %0.6f", epoch + 1, acc)
 
                     # if acc improved, save the weights
                     if acc > best_val_acc:
                         self._logger.info("\tVal accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
-                        
+
                         best_val_acc = acc
                         saver.save('temp_weights/temp_network')
 
-                #test_writer.close()
+                # test_writer.close()
 
                 # load best weights of the child model
                 path = tf.train.latest_checkpoint('temp_weights/')
@@ -211,7 +210,7 @@ class NetworkManager:
             reward = acc
 
             self._logger.info("Manager: Accuracy = %0.6f", reward)
-        
+
         # clean up resources and GPU memory
         del model
         del optimizer

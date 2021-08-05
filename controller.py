@@ -11,15 +11,16 @@ from aMLLibrary import sequence_data_processing
 
 import log_service
 
+
 class Controller(tf.keras.Model):
-    
+
     def __init__(self, controller_cells, embedding_dim,
                  input_embedding_max, operator_embedding_max):
         '''
         LSTM Controller model which accepts encoded sequence describing the
         architecture of the model and predicts a singular value describing
         its probably validation accuracy.
-        
+
         # Args:
             controller_cells: number of cells of the Controller LSTM.
             embedding_dim: size of the embedding dimension.
@@ -39,26 +40,26 @@ class Controller(tf.keras.Model):
         # Tensorflow2 now automatically use CuDNNLSTM if using GPU and LSTM has the right parameters (default ones are good)
         # check this url for more info: https://www.tensorflow.org/api_docs/python/tf/keras/layers/LSTM
         self.rnn = tf.keras.layers.LSTM(controller_cells, return_state=True)
-    
+
         self.rnn_score = tf.keras.layers.Dense(1, activation='sigmoid')
 
     def call(self, inputs_operators, states=None, training=None, mask=None):
-        inputs, operators = self._get_inputs_and_operators(inputs_operators)  # extract the data       
+        inputs, operators = self._get_inputs_and_operators(inputs_operators)  # extract the data
         if states is None:  # initialize the state vectors
             states = self.rnn.get_initial_state(inputs)
             states = [tf.cast(state, tf.float32) for state in states]
-        
+
         # map the sparse inputs and operators into dense embeddings
         embed_inputs = self.input_embedding(inputs)
         embed_ops = self.operators_embedding(operators)
-        
+
         # concatenate the embeddings
         embed = tf.concat([embed_inputs, embed_ops], axis=-1)  # concatenate the embeddings
-        
+
         # run over the LSTM
         out = self.rnn(embed, initial_state=states)
         out, h, c = out  # unpack the outputs and states
-        
+
         # get the predicted validation accuracy
         score = self.rnn_score(out)
 
@@ -68,7 +69,7 @@ class Controller(tf.keras.Model):
         '''
         Splits the joint inputs and operators into seperate inputs
         and operators list for convenience of the SearchSpace.
-        
+
         # Args:
             inputs_operators: interleaved [input; operator] pairs.
 
@@ -84,12 +85,13 @@ class Controller(tf.keras.Model):
 class ControllerManager:
     '''
     Utility class to manage the RNN Controller.
-    
+
     Tasked with maintaining the state of the training schedule,
     keep track of the children models generated from cross-products,
     cull non-optimal children model configurations and resume
     training.
     '''
+
     def __init__(self, state_space,
                  checkpoint_B,
                  B=5, K=256, T=np.inf,
@@ -102,7 +104,7 @@ class ControllerManager:
                  cpu=False):
         '''
         Manages the Controller network training and prediction process.
-        
+
         # Args:
             state_space: completely defined search space.
             timestr: time string to create the log folder.
@@ -116,7 +118,7 @@ class ControllerManager:
             input_B: override value of B, used only when we are restoring the controller.
                 Determing the maximum input connectivity allowed to the RNN Controller,
                 to maintain backward compatibility with trained models.
-                
+
                 Use it alongside `restore_controller` to evaluate model settings
                 with larger depth `B` than allowed at training time.
             restore_controller: flag whether to restore a pre-trained RNN controller
@@ -143,15 +145,15 @@ class ControllerManager:
         self.cpu = cpu
 
         # restore controller
-        if self.restore_controller == True:
+        if self.restore_controller:
             self.b_ = checkpoint_B
             self._logger.info("Loading controller history!")
 
             next_children = []
-            
-            #read next_children from .csv file
+
+            # read next_children from .csv file
             with open(log_service.build_path('csv', 'next_children.csv'), newline='') as f:
-                reader = csv.reader(f, delimiter = ',')
+                reader = csv.reader(f, delimiter=',')
                 for row in reader:
                     encoded_row = []
                     for i in range(len(row)):
@@ -162,9 +164,9 @@ class ControllerManager:
                     next_children.append(encoded_row)
 
             for i in range(1, self.b_):
-                #read children from .csv file
+                # read children from .csv file
                 with open(log_service.build_path('csv', f'children_{i}.csv'), newline='') as f:
-                    reader = csv.reader(f, delimiter = ',')
+                    reader = csv.reader(f, delimiter=',')
                     j = 0
                     for row in reader:
                         encoded_row = []
@@ -174,37 +176,37 @@ class ControllerManager:
                             else:
                                 encoded_row.append(row[el])
                         np_encoded_row = np.array(encoded_row, dtype=np.object)
-                        if j == 0 :
+                        if j == 0:
                             children_i = [np_encoded_row]
-                        else :
+                        else:
                             children_i = np.concatenate((children_i, [np_encoded_row]), axis=0)
                         j = j + 1
 
                 # read old rewards from .csv file
                 with open(log_service.build_path('csv', f'rewards_{i}.csv'), newline='') as f:
-                    reader = csv.reader(f, delimiter = ',')
+                    reader = csv.reader(f, delimiter=',')
                     j = 0
                     for row in reader:
-                        if j == 0 :
+                        if j == 0:
                             rewards_i = [float(row[0])]
-                        else :
+                        else:
                             rewards_i.append(float(row[0]))
                         j = j + 1
                     rewards_i = np.array(rewards_i, dtype=np.float32)
 
-                if i == 1 :
+                if i == 1:
                     children = [children_i]
                     rewards = [rewards_i]
-                else :
+                else:
                     children.append(children_i)
                     rewards.append(rewards_i)
-            
+
             self.state_space.update_children(next_children)
             self.children_history = children
 
             self.score_history = rewards
-            
-        else :
+
+        else:
             self.b_ = 1
             self.children_history = None
             self.score_history = None
@@ -237,7 +239,7 @@ class ControllerManager:
     def build_policy_network(self):
         '''
         Construct the RNN controller network with the provided settings.
-        
+
         Also constructs saver and restorer to the RNN controller if required.
         '''
 
@@ -274,12 +276,12 @@ class ControllerManager:
     def loss(self, real_acc, rnn_scores):
         '''
         Computes the surrogate losses to train the controller.
-        
+
         - rnn score loss is the MSE between the real validation acc and the
         predicted acc of the rnn.
-        
+
         - reg loss is the L2 regularization loss on the parameters of the controller.
-        
+
         # Args:
             real_acc: actual validation accuracy obtained by child models.
             rnn_scores: predicted validation accuracy obtained by child models.
@@ -318,11 +320,11 @@ class ControllerManager:
             self.children_history.append(children)
             self.score_history.append(rewards)
             batchsize = sum([data.shape[0] for data in self.score_history])
-            
+
         train_size = batchsize * self.train_iterations
         self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
-        #logs
+        # logs
         self.logdir = log_service.build_path('controller')
         summary_writer = tf.summary.create_file_writer(self.logdir)
         summary_writer.set_as_default()
@@ -344,7 +346,7 @@ class ControllerManager:
                     child = child.tolist()
                     state_list = self.state_space.entity_encode_child(child)
                     state_list = np.concatenate(state_list, axis=-1).astype('int32')
-                    
+
                     with tf.device(self.device):
                         state_list = tf.convert_to_tensor(state_list)
 
@@ -361,7 +363,8 @@ class ControllerManager:
 
                     loss += total_loss.numpy().sum()
 
-                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d", current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
+                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d",
+                                  current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
 
             # add accuracy to Tensorboard
             with summary_writer.as_default():
@@ -371,7 +374,7 @@ class ControllerManager:
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(map(lambda x: [x], rewards))
-            
+
         # save weights
         self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
 
@@ -382,48 +385,48 @@ class ControllerManager:
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
         '''
-        
+
         # plot controller architecture
         # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
-        
+
         if self.b_ == 2:
             df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'), skiprows=[1])
         else:
             df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'))
-        
+
         df.to_csv(log_service.build_path('csv', 'training_time.csv'), na_rep=0, index=False)
 
         inputs = []
         for b in range(1, (self.B+1)):
             a = b*2
             c = a-1
-            new_block = ["input_%d" % c , "input_%d" % a]
+            new_block = ["input_%d" % c, "input_%d" % a]
             inputs.extend(new_block)
 
         # create the NNLS configuration file
         config = configparser.ConfigParser()
-        config['General'] = {'run_num' : 1,
-                             'techniques' : ['NNLS'],
-                             'hp_selection' : 'All',
-                             'validation' : 'All',
-                             'y' : '"time"',
-                             'generate_plots' : 'True'}
-        config['DataPreparation'] = {'input_path' : log_service.build_path('csv', 'training_time.csv'),
-                                     'skip_columns' : inputs}
-        config['NNLS'] = {'fit_intercept' : [True, False]}
-    
+        config['General'] = {'run_num': 1,
+                             'techniques': ['NNLS'],
+                             'hp_selection': 'All',
+                             'validation': 'All',
+                             'y': '"time"',
+                             'generate_plots': 'True'}
+        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv'),
+                                     'skip_columns': inputs}
+        config['NNLS'] = {'fit_intercept': [True, False]}
+
         with open(log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 'w') as f:
             config.write(f)
-        
+
         # a-MLLibrary
         sequence_data_processor_NNLS = sequence_data_processing.SequenceDataProcessing(
-            log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 
+            log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'),
             output=log_service.build_path(f'output_NNLS_{self.b_}'))
         regressor_NNLS = sequence_data_processor_NNLS.process()
         if self.b_ + 1 <= self.B:
             self.b_ += 1
             models_scores = []
-         
+
             # iterate through all the intermediate children
             for i, intermediate_child in enumerate(self.state_space.prepare_intermediate_children(self.b_)):
                 state_list = self.state_space.entity_encode_child(intermediate_child)
@@ -450,7 +453,7 @@ class ControllerManager:
                     data = [regressor_NNLS.predict(df_row)[0]]
                     data.extend(intermediate_child)
                     writer.writerow(data)
-                
+
                 # score the child
                 score, _ = self.controller(state_list, states=None)
                 score = score[0, 0].numpy()
@@ -473,10 +476,10 @@ class ControllerManager:
             models_scores = sorted(models_scores, key=lambda x: x[1], reverse=True)
 
             pareto_front = [models_scores[0]]
-            for pair in models_scores[1:] :
-                if pair[2] <= pareto_front[-1][2] :
+            for pair in models_scores[1:]:
+                if pair[2] <= pareto_front[-1][2]:
                     pareto_front.append(pair)
-            for row in pareto_front :
+            for row in pareto_front:
                 with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     data = [row[2], row[1]]

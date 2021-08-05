@@ -1,5 +1,3 @@
-import numpy as np
-
 import tensorflow as tf
 from tensorflow.python.keras.models import Model
 
@@ -9,12 +7,14 @@ import log_service
 from tensorflow.python.keras.layers import Dense, GlobalAveragePooling2D
 
 # TODO: refactor this in a function, like the ones we have done in NN course. This will make this a lot more simple.
+
+
 class ModelGenerator(Model):
 
     def __init__(self, actions, concat_only_unused=True):
         '''
         Utility Model class to construct child models provided with an action list.
-        
+
         # Args:
             actions: list of [input; action] pairs that define the cell.
             concat_only_unused (bool): concats only unused states at the end of each cell if true, otherwise concats all blocks output.
@@ -25,7 +25,7 @@ class ModelGenerator(Model):
         self.B = len(actions) // 4
 
         self.concat_only_unused = concat_only_unused
-        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates 
+        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
         used_inputs = set(filter(lambda el: el >= 0, actions[::2]))
         self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
 
@@ -47,7 +47,6 @@ class ModelGenerator(Model):
 
         self.model = self.build_model(32)
 
-
     def build_model(self, filters=32):
         # reset cell index, otherwise would use last model value
         self.cell_index = 0
@@ -61,36 +60,35 @@ class ModelGenerator(Model):
         last_output = model_input
         skip_output = last_output
 
-        # TODO: refactor this to avoid updating output here everytime  
+        # TODO: refactor this to avoid updating output here everytime
         # add (M - 1) times N normal cells and a reduction cell
         for i in range(self.M - 1):
             # add N times a normal cell
             for j in range(self.N):
-                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1,1), inputs=[skip_output, last_output])
+                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1), inputs=[skip_output, last_output])
                 self.cell_index += 1
                 skip_output = last_output
                 last_output = normal_cell
 
             # add 1 time a reduction cell
             filters = filters * 2
-            reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2,2), inputs=[skip_output, last_output])
+            reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2, 2), inputs=[skip_output, last_output])
             self.cell_index += 1
             skip_output = last_output
             last_output = reduction_cell
 
         # add N time a normal cell
         for i in range(self.N):
-            normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1,1), inputs=[skip_output, last_output])
+            normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1), inputs=[skip_output, last_output])
             self.cell_index += 1
             skip_output = last_output
             last_output = normal_cell
-                
+
         gap = GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 constant)
-        output = Dense(10, activation='softmax', name='Softmax')(gap) # only logits
+        output = Dense(10, activation='softmax', name='Softmax')(gap)  # only logits
 
-        return tf.keras.Model(inputs = model_input, outputs = output)
-
+        return tf.keras.Model(inputs=model_input, outputs=output)
 
     def call(self, inputs, training=None, mask=None):
         return self.model(inputs, training=training)
@@ -194,7 +192,7 @@ class ModelGenerator(Model):
         Returns:
             (tf.keras.layers.Add): [description]
         '''
-        input_index_L, action_name_L  = action_L
+        input_index_L, action_name_L = action_L
         input_index_R, action_name_R = action_R
 
         # in reduction cell, still use stride (1, 1) if not using "original inputs" (-1, -2, no reduction for other blocks' outputs)
