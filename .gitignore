@@ -132,7 +132,7 @@ dmypy.json
 .idea
 
 # VSCODE project
-.vscode
+# .vscode
 
 # POPNAS outputs
 logs

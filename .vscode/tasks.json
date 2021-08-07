@@ -1,0 +1,34 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "docker-build",
+			"label": "docker-build",
+			"platform": "python",
+			"dockerBuild": {
+				"tag": "falanti/popnas:py3.6.9-tf2.6.0gpu",
+				"dockerfile": "${workspaceFolder}\\docker\\Dockerfile",
+				"context": "${workspaceFolder}\\docker",
+				"pull": true
+			}
+		},
+		{
+			"type": "docker-run",
+			"label": "docker-run: debug",
+			"dependsOn": [
+				"docker-build"
+			],
+			"python": {
+				"file": "run.py",
+				"args": [
+					"-b",
+					"5",
+					"-k",
+					"2",
+					"-e",
+					"1"
+				]
+			}
+		}
+	]
+}
