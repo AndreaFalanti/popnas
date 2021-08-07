@@ -1,10 +1,10 @@
 import tensorflow as tf
-from tensorflow.python.keras.models import Model
+from tensorflow.keras.models import Model
 
 import ops
 import log_service
 
-from tensorflow.python.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
 
 # TODO: refactor this in a function, like the ones we have done in NN course. This will make this a lot more simple.
 

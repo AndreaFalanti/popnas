@@ -1,6 +1,6 @@
 import tensorflow as tf
-from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
 
 # TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
 

@@ -8,7 +8,7 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "3.6.9"
 sklearn = "^0.0"
-tensorflow = "^2.6.0rc0"
+tensorflow = "2.6.0rc2"
 pandas = ">=0.25.2"
 tqdm = ">=4.32.1"
 xgboost = ">=0.90"

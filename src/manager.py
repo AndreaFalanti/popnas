@@ -1,6 +1,6 @@
 import log_service
 from keras.utils.vis_utils import plot_model  # per stampare modello
-from tensorflow.python.keras.models import Model
+from tensorflow.keras.models import Model
 import shutil
 import os
 from tqdm import tqdm
