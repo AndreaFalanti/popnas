@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "run.py",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}\\src",
+            "cwd": "${workspaceFolder}/src",
             "args": [
                 "-b",
                 "5",
@@ -27,7 +27,7 @@
             "request": "launch",
             "program": "run.py",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}\\src",
+            "cwd": "${workspaceFolder}/src",
             "args": [
                 "-b",
                 "5",
