@@ -6,16 +6,18 @@ authors = ["AndreaFalanti <a.falanti@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "3.6.9"
-sklearn = "^0.0"
-tensorflow = "2.6.0rc2"
-pandas = ">=0.25.2"
-tqdm = ">=4.32.1"
-xgboost = ">=0.90"
-mlxtend = "^0.18.0"
-matplotlib = ">=3.1.1"
-eli5 = "^0.11.0"
-mypy = "^0.910"
+# 3.6.9 is standard for tensorflow docker images and linux,
+# 3.7.4 is good for windows (3.7 is retrocompatible with 3.6)
+python = ">=3.6.9, 3.7.4"
+sklearn = "0.0"
+tensorflow = "2.6.0rc0"
+pandas = "1.1.5"
+tqdm = "4.62.0"
+xgboost = "1.4.2"
+mlxtend = "0.18.0"
+matplotlib = "3.3.4"
+eli5 = "0.11.0"
+mypy = "0.910"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.7"
