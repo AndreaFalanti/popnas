@@ -20,7 +20,7 @@ class Train:
 
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
-                 learning_rate, restore, cpu, all_blocks_concat):
+                 learning_rate, restore, filters, cpu, all_blocks_concat):
 
         self._logger = log_service.get_logger(__name__)
 
@@ -33,6 +33,7 @@ class Train:
         self.batchsize = batchsize
         self.learning_rate = learning_rate
         self.restore = restore
+        self.filters = filters
         self.cpu = cpu
         self.concat_only_unused = not all_blocks_concat
 
@@ -176,13 +177,12 @@ class Train:
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=10,
                                        reg_param=0,
-                                       controller_cells=100,
                                        restore_controller=self.restore,
                                        cpu=self.cpu)
 
         # create the Network Manager
         manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
-                                 learning_rate=self.learning_rate, cpu=self.cpu)
+                                 learning_rate=self.learning_rate, filters=self.filters, cpu=self.cpu)
 
         block_times = []
 
@@ -191,7 +191,7 @@ class Train:
             if trial == 0:
                 k = None
 
-                # build a starting point model with 0 blocks to evaluate the offset
+                # build a starting point model with 0 blocks to evaluate the offset (initial thrust)
                 reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
 
                 with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:

@@ -97,8 +97,8 @@ class ControllerManager:
                  B=5, K=256, T=np.inf,
                  train_iterations=10,
                  reg_param=0.001,
-                 controller_cells=32,
-                 embedding_dim=20,
+                 controller_cells=100,
+                 embedding_dim=100,
                  input_B=None,
                  restore_controller=False,
                  cpu=False):
@@ -252,7 +252,7 @@ class ControllerManager:
             input_B = self.state_space.inputs_embedding_max
 
         self.global_step = tf.compat.v1.train.get_or_create_global_step()
-        learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
+        #learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
 
         with tf.device(device):
             self.controller = Controller(self.controller_cells,
@@ -260,7 +260,7 @@ class ControllerManager:
                                          input_B,
                                          self.state_space.operator_embedding_max)
 
-            self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
+            self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.002)
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,

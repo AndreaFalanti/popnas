@@ -21,6 +21,7 @@ def main():
     parser.add_argument('-l', metavar=('LEARNING_RATE'), type=float, help="learning rate of the child networks", default=0.01)
     parser.add_argument('-r', '--restore', help="restore a previous run", action="store_true")
     parser.add_argument('-t', metavar=('FOLDER'), type=str, help="log folder to restore", default="")
+    parser.add_argument('-f', metavar=('FILTERS'), type=int, help="initial number of filters", default=24)
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     parser.add_argument('--abc', help="concat all blocks output in a cell output, otherwise use unused only", action="store_true")
     args = parser.parse_args()
@@ -47,7 +48,8 @@ def main():
 
     run = train.Train(args.b, args.k, checkpoint=args.c,
                       dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
-                      learning_rate=args.l, restore=args.restore, cpu=args.cpu, all_blocks_concat=args.abc)
+                      learning_rate=args.l, restore=args.restore,
+                      filters=args.f, cpu=args.cpu, all_blocks_concat=args.abc)
 
     run.process()
 

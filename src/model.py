@@ -11,12 +11,13 @@ from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
 
 class ModelGenerator(Model):
 
-    def __init__(self, actions, concat_only_unused=True):
+    def __init__(self, actions, filters=24, concat_only_unused=True):
         '''
         Utility Model class to construct child models provided with an action list.
 
         # Args:
             actions: list of [input; action] pairs that define the cell.
+            filters (int): initial number of filters.
             concat_only_unused (bool): concats only unused states at the end of each cell if true, otherwise concats all blocks output.
         '''
         super(ModelGenerator, self).__init__()
@@ -45,7 +46,7 @@ class ModelGenerator(Model):
         self.cell_index = 0
         self.block_index = 0
 
-        self.model = self.build_model(32)
+        self.model = self.build_model(filters)
 
     def build_model(self, filters=32):
         # reset cell index, otherwise would use last model value
@@ -164,14 +165,14 @@ class ModelGenerator(Model):
         # spatial dim divergence, pointwise convolution with (2, 2) stride to reduce dimensions of normal cell input to reduce one
         if skip_height != last_height:
             # also uniform the depth between the two inputs
-            self._logger.info("Normalizing inputs' spatial dims (cell %d)", self.cell_index)
+            self._logger.debug("Normalizing inputs' spatial dims (cell %d)", self.cell_index)
             x = ops.Convolution(last_depth, (1, 1), strides=(2, 2))
             x._name = f'pointwise_conv_input_c{self.cell_index}'
             # override input with the normalized one
             inputs[-2] = x(inputs[-2])
         # only depth divergence, should not happen with actual algorithm (should always be both spatial and depth if dims diverge)
         elif skip_depth != last_depth:
-            self._logger.info("Normalizing inputs' depth (cell %d)", self.cell_index)
+            self._logger.debug("Normalizing inputs' depth (cell %d)", self.cell_index)
             x = ops.Convolution(last_depth, (1, 1), strides=(1, 1))     # no stride
             x._name = f'pointwise_conv_input_c{self.cell_index}'
             inputs[-2] = x(inputs[-2])

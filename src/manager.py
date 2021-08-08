@@ -25,7 +25,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset, data_num=1, epochs=5, batchsize=64, learning_rate=0.002, cpu=False):
+    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24, cpu=False):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -35,7 +35,8 @@ class NetworkManager:
             epochs: number of epochs to train the subnetworks
             batchsize: batchsize of training the subnetworks
             learning_rate: learning rate for the Optimizer
-            cpu: use CPU for training networks
+            filters (int): initial number of filters
+            cpu (bool): use CPU for training networks
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -44,6 +45,7 @@ class NetworkManager:
         self.epochs = epochs
         self.batchsize = batchsize
         self.lr = learning_rate
+        self.filters = filters
         self.cpu = cpu
 
         self.num_child = 0  # SUMMARY
@@ -98,7 +100,7 @@ class NetworkManager:
                     self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
 
                 # build the model, given the actions
-                model = model_fn(actions, concat_only_unused).model  # type: Model
+                model = model_fn(actions, self.filters, concat_only_unused).model  # type: Model
 
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
@@ -121,6 +123,7 @@ class NetworkManager:
                 global_step = tf.compat.v1.train.get_or_create_global_step()
                 lr = tf.compat.v1.train.cosine_decay(self.lr, global_step, decay_steps=num_train_batches * self.epochs, alpha=0.1)
 
+                # TODO: original PNAS don't mention Adam, only cosine decay
                 # construct the optimizer and saver of the child model
                 optimizer = tf.compat.v1.train.AdamOptimizer(lr)
                 saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
