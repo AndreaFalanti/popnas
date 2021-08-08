@@ -47,8 +47,22 @@ POPNASv2 can then be launched with command (set arguments as you like):
 docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 ```
 
-## Command line parameters
-TODO
+## Command line arguments
+**Required arguments:**
+- **-b**: defines the maximum amount of blocks B a cell can contain.
+- **-k**: defines the amount of top-K cells the algorithm picks up to expand at the next iteration.
+
+**Optional arguments:**
+- **-d**: defines the Python file the program should use as dataset, the default dataset is CIFAR-10.
+- **-e**: defines for how many epochs E each child network has to be trained, the default value is 20.
+- **-s**: defines the batch size dimension of the dataset, the default value is 128.
+- **-l**: defines the learning rate of the child networks, the default value is 0.01.
+- **-h**: defines how many times a child network has to be trained from scratch, each time with a different dataset splitting into train set and validation set, in order to minimize the accuracy dependence of the child networks on the splitting. The default value is 1, if it is set as higher the resulting accuracy is the arithmetic mean of all the accuracies.
+- **-r**: if the user specifies this argument, the algorithm will restore a previous run. The correct checkpoint B value, i.e. the number of blocks per cell, needs to be indicated in -c, while the run to recover has to be specified in -t.
+- **-c**: defines the checkpoint B value from which restart if the argument -r is specified in the input command.
+- **-d**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
+- **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available. Must be specified if the host machine has no gpu.
+- **--abc**: short for "all blocks concatenation". If specified, all blocks' output of a cell will be used in concatenation at the end of a cell to build the cell output, instead of concatenating only block outputs not used by other blocks (that is the PNAS implementation behavior, enabled by default).
 
 ## Changelog from original version
 TODO
