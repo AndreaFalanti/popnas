@@ -23,6 +23,7 @@ def initialize_log_folders():
     os.mkdir(os.path.join(log_path, 'csv'))  # create .csv path
     os.mkdir(os.path.join(log_path, 'ini'))  # create .ini folder
     os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
+    os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
 
 
 def check_log_folder(timestamp):

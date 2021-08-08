@@ -32,14 +32,22 @@
             "cwd": "${workspaceFolder}/src",
             "args": [
                 "-b",
-                "5",
+                "3",
                 "-k",
-                "2",
+                "3",
                 "-e",
                 "1",
                 "-f",
                 "32"
             ]
+        },
+        {
+            "name": "Best model script",
+            "type": "python",
+            "request": "launch",
+            "program": "best_model.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src"
         },
         {
             "name": "Docker: Python - General",

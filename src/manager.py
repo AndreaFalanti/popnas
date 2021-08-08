@@ -49,8 +49,9 @@ class NetworkManager:
         self.cpu = cpu
 
         self.num_child = 0  # SUMMARY
+        self.best_reward = 0.0
 
-    def get_rewards(self, model_fn, actions, concat_only_unused=True, display_model_summary=True):
+    def get_rewards(self, model_fn, actions, concat_only_unused=True, save_best_model=False, display_model_summary=True):
         '''
         Creates a subnetwork given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
@@ -213,6 +214,14 @@ class NetworkManager:
             reward = acc
 
             self._logger.info("Manager: Accuracy = %0.6f", reward)
+
+        # if algorithm is training the last models batch (B = value provided in command line)
+        # save the best model in a folder, so that can be trained from scratch later on
+        if save_best_model and reward > self.best_reward:
+            self.best_reward = reward
+            # last model should be automatically overwritten, leaving only one model
+            self._logger.info('Saving model...')
+            model.save(log_service.build_path('best_model'))
 
         # clean up resources and GPU memory
         del model

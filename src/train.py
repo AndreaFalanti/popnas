@@ -115,7 +115,7 @@ class Train:
         self._logger.info("\t%s", listed_space)
 
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused)
+        reward, timer = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
         self._logger.info("Final Accuracy: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
 
