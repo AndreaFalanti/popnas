@@ -9,6 +9,9 @@ log_path = None
 
 
 def initialize_log_folders():
+    '''
+    Used in POPNAS algorithm, initialize logs folder and subfolders.
+    '''
     if not os.path.exists('logs/'):
         os.mkdir('logs/')
 
@@ -24,6 +27,23 @@ def initialize_log_folders():
     os.mkdir(os.path.join(log_path, 'ini'))  # create .ini folder
     os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
     os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
+
+
+def initialize_log_folders_best_model_script():
+    '''
+    Used in best model training script, initialize logs folder and subfolders.
+    '''
+    if not os.path.exists('logs/'):
+        os.mkdir('logs/')
+
+    global log_path
+    # create timestamp subfolder and set the global log path variable
+    timestr = time.strftime('%Y-%m-%d-%H-%M-%S')  # get time for logs folder
+    log_path = os.path.join('logs', timestr + '-model-run')
+    os.mkdir(log_path)
+
+    os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
+    os.mkdir(os.path.join(log_path, 'tensorboard'))  # create tensorboard folder
 
 
 def check_log_folder(timestamp):

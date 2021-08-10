@@ -222,6 +222,8 @@ class NetworkManager:
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
             model.save(log_service.build_path('best_model'))
+            self._logger.info('Model saved successfully')
+
 
         # clean up resources and GPU memory
         del model
