@@ -68,13 +68,14 @@ class Train:
 
         dataset = []
         # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or its possible to deprecate this feature?
+        # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
+            # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
+            x_train_init = x_train_init[:10000]
+            y_train_init = y_train_init[:10000]
+
             # create a validation set for evaluation of the child models
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
-
-            # TODO: take only 400 images for really fast training, delete this in future
-            # x_train = x_train[:400]
-            # y_train = y_train[:400]
 
             # TODO: missing y_test to categorical or done somewhere else?
             if self.dataset == "cifar10":
