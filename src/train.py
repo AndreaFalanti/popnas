@@ -73,8 +73,8 @@ class Train:
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
 
             # TODO: take only 400 images for really fast training, delete this in future
-            x_train = x_train[:400]
-            y_train = y_train[:400]
+            # x_train = x_train[:400]
+            # y_train = y_train[:400]
 
             # TODO: missing y_test to categorical or done somewhere else?
             if self.dataset == "cifar10":
@@ -157,8 +157,8 @@ class Train:
                 writer.writerow(headers)
 
         # TODO: restore search space
-        #operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        operators = ['identity', '3x3 dconv']
+        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        #operators = ['identity', '3x3 dconv']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
