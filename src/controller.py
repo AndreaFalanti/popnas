@@ -380,21 +380,13 @@ class ControllerManager:
 
         return loss.mean()
 
-    def update_step(self, headers, t_max, op_size, index_list, timers, lookback=0):
+    def setup_regressor(self):
         '''
-        Updates the children from the intermediate products for the next generation
-        of larger number of blocks in each cell
+        Generate time regressor configuration and build the regressor.
+
+        Returns:
+            (Regressor): time regressor (aMLLibrary)
         '''
-
-        # plot controller architecture
-        # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
-
-        if self.b_ == 2:
-            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'), skiprows=[1])
-        else:
-            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'))
-
-        df.to_csv(log_service.build_path('csv', 'training_time.csv'), na_rep=0, index=False)
 
         inputs = []
         for b in range(1, (self.B+1)):
@@ -422,85 +414,159 @@ class ControllerManager:
         sequence_data_processor_NNLS = sequence_data_processing.SequenceDataProcessing(
             log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'),
             output=log_service.build_path(f'output_NNLS_{self.b_}'))
-        regressor_NNLS = sequence_data_processor_NNLS.process()
+
+        return sequence_data_processor_NNLS.process()
+
+    def estimate_time(self, regressor, intermediate_child, headers, t_max, op_size, index_list):
+        '''
+        Use regressor to estimate the time for training the model. Write also an entry in predicted_time_{b}.csv.
+
+        Args:
+            regressor (Regressor): time regressor
+            intermediate_child (list[str]): model encoding
+            headers ([type]): [description]
+            t_max ([type]): [description]
+            op_size ([type]): [description]
+            index_list ([type]): [description]
+
+        Returns:
+            (float): estimated time predicted
+        '''
+
+        predicted_time = None
+
+        # save predicted times on a .csv file
+        with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+            encoded_child = self.state_space.entity_encode_child(intermediate_child)
+            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
+            reindexed_child = []
+            for index, elem in enumerate(concatenated_child):
+                elem = elem + 1
+                if index % 2 == 0:
+                    reindexed_child.append(elem)
+                else:
+                    reindexed_child.append(op_size * index_list[elem] / t_max)
+                    
+            reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
+            array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
+
+            for b in range(self.b_, self.B):
+                array = np.append(array, np.array([0, 0, 0, 0]))
+
+            df_row = pandas.DataFrame([array], columns=headers)
+            predicted_time = regressor.predict(df_row)[0]
+            data = [predicted_time]
+            data.extend(intermediate_child)
+            writer.writerow(data)
+
+        return predicted_time
+
+    def estimate_accuracy(self, intermediate_child):
+        '''
+        Use RNN controller to estimate the model accuracy. Write also an entry in predicted_accuracy_{b}.csv.
+
+        Args:
+            intermediate_child (list[str]): model encoding
+
+        Returns:
+            (float): estimated accuracy predicted
+        '''
+
+        state_list = self.state_space.entity_encode_child(intermediate_child)
+        state_list = np.concatenate(state_list, axis=-1).astype('int32')
+        state_list = tf.convert_to_tensor(state_list)
+
+        score, _ = self.controller(state_list, states=None)
+        score = score[0, 0].numpy()
+
+        # save predicted scores on a .csv file
+        with open(log_service.build_path('csv', f'predicted_accuracy_{self.b_}.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+            data = [score]
+            data.extend(intermediate_child)
+            writer.writerow(data)
+
+        return score
+
+    # TODO: investigate unused variables
+    def update_step(self, headers, t_max, op_size, index_list, timers, lookback=0):
+        '''
+        Updates the children from the intermediate products for the next generation
+        of larger number of blocks in each cell
+        '''
+
+        # plot controller architecture
+        # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
+
+        if self.b_ == 2:
+            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'), skiprows=[1])
+        else:
+            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'))
+
+        df.to_csv(log_service.build_path('csv', 'training_time.csv'), na_rep=0, index=False)
+
+        regressor_NNLS = self.setup_regressor()
+
         if self.b_ + 1 <= self.B:
             self.b_ += 1
-            models_scores = []
+            model_estimations = []  # type: list[ModelEstimate]
 
-            # iterate through all the intermediate children
+            # iterate through all the intermediate children (intermediate_child is an array of repeated [input,action,input,action] blocks)
             for i, intermediate_child in enumerate(self.state_space.prepare_intermediate_children(self.b_)):
-                state_list = self.state_space.entity_encode_child(intermediate_child)
-                state_list = np.concatenate(state_list, axis=-1).astype('int32')
-                state_list = tf.convert_to_tensor(state_list)
+                # Regressor (aMLLibrary, estimates time)
+                estimated_time = self.estimate_time(regressor_NNLS, intermediate_child, headers, t_max, op_size, index_list)
 
-                # save predicted times on a .csv file
-                with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    encoded_child = self.state_space.entity_encode_child(intermediate_child)
-                    concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
-                    reindexed_child = []
-                    for index, elem in enumerate(concatenated_child):
-                        elem = elem + 1
-                        if index % 2 == 0:
-                            reindexed_child.append(elem)
-                        else:
-                            reindexed_child.append(op_size * index_list[elem] / t_max)
-                    reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
-                    array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
-                    for b in range(self.b_, self.B):
-                        array = np.append(array, np.array([0, 0, 0, 0]))
-                    df_row = pandas.DataFrame([array], columns=headers)
-                    data = [regressor_NNLS.predict(df_row)[0]]
-                    data.extend(intermediate_child)
-                    writer.writerow(data)
-
-                # score the child
-                score, _ = self.controller(state_list, states=None)
-                score = score[0, 0].numpy()
+                # LSTM controller (RNN, estimates the accuracy)
+                score = self.estimate_accuracy(intermediate_child)
 
                 # preserve the child and its score
-                if data[0] <= self.T:
-                    models_scores.append([intermediate_child, score, regressor_NNLS.predict(df_row)[0]])
-
-                # save predicted scores on a .csv file
-                with open(log_service.build_path('csv', f'predicted_accuracy_{self.b_}.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    data = [score]
-                    data.extend(intermediate_child)
-                    writer.writerow(data)
+                if estimated_time <= self.T:
+                    model_estimations.append(ModelEstimate(intermediate_child, score, estimated_time))
 
                 if (i + 1) % 500 == 0:
                     self._logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
 
             # sort the children according to their score
-            models_scores = sorted(models_scores, key=lambda x: x[1], reverse=True)
+            model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
 
-            pareto_front = [models_scores[0]]
-            for pair in models_scores[1:]:
-                if pair[2] <= pareto_front[-1][2]:
-                    pareto_front.append(pair)
-            for row in pareto_front:
+            # start process by putting first model into pareto front (best score, ordered array),
+            # then comparing the rest only by time because of ordering trick
+            pareto_front = [model_estimations[0]]
+            for model_est in model_estimations[1:]:
+                if model_est.time <= pareto_front[-1].time:
+                    pareto_front.append(model_est)
+
+            for model_est in pareto_front:
                 with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
-                    data = [row[2], row[1]]
-                    data.extend(row[0])
-                    writer.writerow(data)
+                    writer.writerow(model_est.to_csv_array())
 
             # account for case where there are fewer children than K
-            if self.K is not None:
-                children_count = min(self.K, len(pareto_front))
-            else:
-                children_count = len(pareto_front)
+            children_count = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
 
             # take only the K highest scoring children for next iteration
             children = []
             for i in range(children_count):
-                children.append(pareto_front[i][0])
+                children.append(pareto_front[i].model_encoding)
                 with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(pareto_front[i][0])
+                    writer.writerow(pareto_front[i].model_encoding)
 
             # save these children for next round
             self.state_space.update_children(children)
         else:
             self._logger.info("No more updates necessary as max B has been reached!")
+
+
+class ModelEstimate:
+    '''
+    Helper class, basically a struct with a function to convert into array for csv saving
+    '''
+    def __init__(self, model_encoding, score, time):
+        self.model_encoding = model_encoding
+        self.score = score
+        self.time = time
+
+    def to_csv_array(self):
+        return [self.time, self.score] + self.model_encoding    # list concatenation
