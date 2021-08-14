@@ -20,7 +20,8 @@ class Train:
 
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
-                 learning_rate, restore, filters, cpu, all_blocks_concat):
+                 learning_rate, restore, filters,
+                 cpu, all_blocks_concat, pnas_mode):
 
         self._logger = log_service.get_logger(__name__)
 
@@ -36,6 +37,7 @@ class Train:
         self.filters = filters
         self.cpu = cpu
         self.concat_only_unused = not all_blocks_concat
+        self.pnas_mode = pnas_mode
 
     def load_dataset(self):
         if self.dataset == "cifar10":
@@ -71,8 +73,9 @@ class Train:
         # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
             # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
-            x_train_init = x_train_init[:10000]
-            y_train_init = y_train_init[:10000]
+            limit = 10000
+            x_train_init = x_train_init[:limit]
+            y_train_init = y_train_init[:limit]
 
             # create a validation set for evaluation of the child models
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
@@ -178,6 +181,7 @@ class Train:
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=10,
                                        reg_param=0,
+                                       pnas_mode=self.pnas_mode,
                                        restore_controller=self.restore,
                                        cpu=self.cpu)
 
@@ -278,6 +282,6 @@ class Train:
             loss = controller.train_step(rewards)
             self._logger.info("Trial %d: ControllerManager loss : %0.6f", trial + 1, loss)
 
-            controller.update_step(headers, t_max, len(operators), index_list, timers, lookback=-2)
+            controller.update_step(headers, t_max, len(operators), index_list)
 
         self._logger.info("Finished!")

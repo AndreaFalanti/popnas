@@ -24,6 +24,7 @@ def main():
     parser.add_argument('-f', metavar=('FILTERS'), type=int, help="initial number of filters", default=24)
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     parser.add_argument('--abc', help="concat all blocks output in a cell output, otherwise use unused only", action="store_true")
+    parser.add_argument('--pnas', help="run in PNAS mode (no regressor, only LSTM controller)", action="store_true")
     args = parser.parse_args()
 
     if tf.test.gpu_device_name():
@@ -49,7 +50,8 @@ def main():
     run = train.Train(args.b, args.k, checkpoint=args.c,
                       dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
                       learning_rate=args.l, restore=args.restore,
-                      filters=args.f, cpu=args.cpu, all_blocks_concat=args.abc)
+                      filters=args.f, cpu=args.cpu, all_blocks_concat=args.abc,
+                      pnas_mode=args.pnas)
 
     run.process()
 

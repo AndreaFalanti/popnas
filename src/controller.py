@@ -100,6 +100,7 @@ class ControllerManager:
                  controller_cells=100,
                  embedding_dim=100,
                  input_B=None,
+                 pnas_mode=False,
                  restore_controller=False,
                  cpu=False):
         '''
@@ -121,6 +122,8 @@ class ControllerManager:
 
                 Use it alongside `restore_controller` to evaluate model settings
                 with larger depth `B` than allowed at training time.
+            pnas_mode: if True, do not build a regressor to estimate time. Use only LSTM controller,
+                like original PNAS.
             restore_controller: flag whether to restore a pre-trained RNN controller
                 upon construction.
             cpu: use CPU to train the controller
@@ -141,6 +144,7 @@ class ControllerManager:
         self.controller_cells = controller_cells
         self.reg_strength = reg_param
         self.input_B = input_B
+        self.pnas_mode = pnas_mode
         self.restore_controller = restore_controller
         self.cpu = cpu
 
@@ -490,7 +494,7 @@ class ControllerManager:
         return score
 
     # TODO: investigate unused variables
-    def update_step(self, headers, t_max, op_size, index_list, timers, lookback=0):
+    def update_step(self, headers, t_max, op_size, index_list):
         '''
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
@@ -515,15 +519,17 @@ class ControllerManager:
             # iterate through all the intermediate children (intermediate_child is an array of repeated [input,action,input,action] blocks)
             for i, intermediate_child in enumerate(self.state_space.prepare_intermediate_children(self.b_)):
                 # Regressor (aMLLibrary, estimates time)
-                estimated_time = self.estimate_time(regressor_NNLS, intermediate_child, headers, t_max, op_size, index_list)
+                estimated_time = None if self.pnas_mode \
+                    else self.estimate_time(regressor_NNLS, intermediate_child, headers, t_max, op_size, index_list)
 
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
 
-                # preserve the child and its score
-                if estimated_time <= self.T:
+                # always preserve the child and its score in pnas mode, otherwise check that time estimation is < T (time threshold)
+                if self.pnas_mode or estimated_time <= self.T:
                     model_estimations.append(ModelEstimate(intermediate_child, score, estimated_time))
 
+                # debug print every 500 models
                 if (i + 1) % 500 == 0:
                     self._logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
 
@@ -531,16 +537,21 @@ class ControllerManager:
             model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
 
             # start process by putting first model into pareto front (best score, ordered array),
-            # then comparing the rest only by time because of ordering trick
-            pareto_front = [model_estimations[0]]
-            for model_est in model_estimations[1:]:
-                if model_est.time <= pareto_front[-1].time:
-                    pareto_front.append(model_est)
+            # then comparing the rest only by time because of ordering trick.
+            # Pareto front can be built only if using regressor (needs time estimation, not in pnas mode)
+            if not self.pnas_mode:
+                pareto_front = [model_estimations[0]]
+                for model_est in model_estimations[1:]:
+                    if model_est.time <= pareto_front[-1].time:
+                        pareto_front.append(model_est)
 
-            for model_est in pareto_front:
-                with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(model_est.to_csv_array())
+                for model_est in pareto_front:
+                    with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(model_est.to_csv_array())
+            else:
+                # just a rename to integrate with existent code below, it's not a pareto front in this case!
+                pareto_front = model_estimations
 
             # account for case where there are fewer children than K
             children_count = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
