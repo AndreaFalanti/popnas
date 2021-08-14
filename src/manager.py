@@ -106,16 +106,19 @@ class NetworkManager:
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
 
+                # TODO: seems that repeat is not necessary
                 # generate the dataset for training
                 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-                train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(10000, seed=0))
+                train_dataset = train_dataset.shuffle(10000, seed=0)
                 train_dataset = train_dataset.batch(self.batchsize)
+                #train_dataset = train_dataset.repeat()
                 train_dataset = train_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
                 # train_dataset = train_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
                 # generate the dataset for evaluation
                 val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
                 val_dataset = val_dataset.batch(self.batchsize)
+                #val_dataset = val_dataset.repeat()
                 val_dataset = val_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
                 # val_dataset = val_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
@@ -134,14 +137,14 @@ class NetworkManager:
 
                 for epoch in range(self.epochs):
                     # train child model
-                    with tqdm(train_dataset,
-                              desc='Train Epoch (%d / %d): ' % (epoch + 1, self.epochs),
-                              total=num_train_batches) as iterator:
+                    with tqdm(iterable=enumerate(train_dataset),
+                              desc=f'Train Epoch ({epoch + 1} / {self.epochs}): ',
+                              unit='batch',
+                              total=num_train_batches) as pbar:
 
-                        for i, (x, y) in enumerate(iterator):
+                        for _, (x, y) in pbar:
                             # get gradients
                             with tf.GradientTape() as tape:
-
                                 # get training starting time
                                 start = time.clock()
                                 preds = model(x, training=True)
@@ -159,12 +162,9 @@ class NetworkManager:
                             # evaluate training time
                             timer = timer + (stop - start)
 
-                            if (i + 1) >= num_train_batches:
-                                break
-
                     # evaluate child model
                     acc = tf.metrics.CategoricalAccuracy()
-                    for j, (x, y) in enumerate(val_dataset):
+                    for _, (x, y) in enumerate(val_dataset):
                         preds = model(x, training=False)
                         acc(y, preds)
 
