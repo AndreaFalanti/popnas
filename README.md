@@ -47,6 +47,11 @@ POPNASv2 can then be launched with command (set arguments as you like):
 docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 ```
 
+## GPU support
+To use GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
+Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
+to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https://www.tensorflow.org/install/source#linux).
+
 ## Command line arguments
 **Required arguments:**
 - **-b**: defines the maximum amount of blocks B a cell can contain.
@@ -64,6 +69,27 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **-f**: defines the initial number of filters to use. Defaults to 24.
 - **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available. Must be specified if the host machine has no gpu.
 - **--abc**: short for "all blocks concatenation". If specified, all blocks' output of a cell will be used in concatenation at the end of a cell to build the cell output, instead of concatenating only block outputs not used by other blocks (that is the PNAS implementation behavior, enabled by default).
+- **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation. This will make
+the computation extremely similar to PNAS algorithm.
 
 ## Changelog from original version
-TODO
+- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to
+use other blocks output as input of another block).
+- Fix blocks not having addition of the two operations output.
+- Fix skip connections (input index -2) not working as expected.
+- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
+- Migrate code to Tensorflow 2.
+- Format code with pep8 and flake, to follow standard python conventions.
+- Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
+- Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed
+only on console.
+- Add --cpu option to easily choose between running on cpu or gpu.
+- Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
+- Add --abc and -f options, to make cell structure more configurable and flexible.
+- Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
+- General code fix and improvements, especially improve readability of various code parts for better future maintainability.
+
+## TODO
+- Refactor parts of the code to better use the Tensorflow 2 API (i performed a lazy migration in many parts).
+- Improve and tweak best model training script.
+- Fix tqdm bars not updating correctly (minor priority).
