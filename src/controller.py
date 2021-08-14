@@ -421,13 +421,13 @@ class ControllerManager:
 
         return sequence_data_processor_NNLS.process()
 
-    def estimate_time(self, regressor, intermediate_child, headers, t_max, op_size, index_list):
+    def estimate_time(self, regressor, child_encoding, headers, t_max, op_size, index_list):
         '''
         Use regressor to estimate the time for training the model. Write also an entry in predicted_time_{b}.csv.
 
         Args:
             regressor (Regressor): time regressor
-            intermediate_child (list[str]): model encoding
+            child_encoding (list[str]): model encoding
             headers ([type]): [description]
             t_max ([type]): [description]
             op_size ([type]): [description]
@@ -442,7 +442,7 @@ class ControllerManager:
         # save predicted times on a .csv file
         with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
-            encoded_child = self.state_space.entity_encode_child(intermediate_child)
+            encoded_child = self.state_space.entity_encode_child(child_encoding)
             concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
             reindexed_child = []
             for index, elem in enumerate(concatenated_child):
@@ -460,24 +460,22 @@ class ControllerManager:
 
             df_row = pandas.DataFrame([array], columns=headers)
             predicted_time = regressor.predict(df_row)[0]
-            data = [predicted_time]
-            data.extend(intermediate_child)
-            writer.writerow(data)
+            writer.writerow([predicted_time] + child_encoding)
 
         return predicted_time
 
-    def estimate_accuracy(self, intermediate_child):
+    def estimate_accuracy(self, child_encoding):
         '''
         Use RNN controller to estimate the model accuracy. Write also an entry in predicted_accuracy_{b}.csv.
 
         Args:
-            intermediate_child (list[str]): model encoding
+            child_encoding (list[str]): model encoding
 
         Returns:
             (float): estimated accuracy predicted
         '''
 
-        state_list = self.state_space.entity_encode_child(intermediate_child)
+        state_list = self.state_space.entity_encode_child(child_encoding)
         state_list = np.concatenate(state_list, axis=-1).astype('int32')
         state_list = tf.convert_to_tensor(state_list)
 
@@ -487,9 +485,7 @@ class ControllerManager:
         # save predicted scores on a .csv file
         with open(log_service.build_path('csv', f'predicted_accuracy_{self.b_}.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
-            data = [score]
-            data.extend(intermediate_child)
-            writer.writerow(data)
+            writer.writerow([score] + child_encoding)
 
         return score
 
@@ -545,10 +541,10 @@ class ControllerManager:
                     if model_est.time <= pareto_front[-1].time:
                         pareto_front.append(model_est)
 
-                for model_est in pareto_front:
-                    with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(model_est.to_csv_array())
+                with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(map(lambda model_est: model_est.to_csv_array(), pareto_front))
+                    
             else:
                 # just a rename to integrate with existent code below, it's not a pareto front in this case!
                 pareto_front = model_estimations
@@ -557,12 +553,11 @@ class ControllerManager:
             children_count = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
 
             # take only the K highest scoring children for next iteration
-            children = []
-            for i in range(children_count):
-                children.append(pareto_front[i].model_encoding)
-                with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(pareto_front[i].model_encoding)
+            children = list(map(lambda child: child.model_encoding, pareto_front[:children_count]))
+
+            with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(children)
 
             # save these children for next round
             self.state_space.update_children(children)
