@@ -87,9 +87,11 @@ only on console.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
 - Add --abc and -f options, to make cell structure more configurable and flexible.
 - Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
+- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat was wrongly used before batching.
+- Fix and add more tqdm bars for better progress visualization.
 - General code fix and improvements, especially improve readability of various code parts for better future maintainability.
+
 
 ## TODO
 - Refactor parts of the code to better use the Tensorflow 2 API (i performed a lazy migration in many parts).
 - Improve and tweak best model training script.
-- Fix tqdm bars not updating correctly (minor priority).
