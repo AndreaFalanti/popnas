@@ -8,6 +8,7 @@ import configparser
 
 from encoder import StateSpace
 from aMLLibrary import sequence_data_processing
+from tqdm import tqdm
 
 import log_service
 
@@ -512,8 +513,14 @@ class ControllerManager:
             self.b_ += 1
             model_estimations = []  # type: list[ModelEstimate]
 
+            # closure that returns a function that returns the model generator for current generation step
+            generate_models = self.state_space.prepare_intermediate_children(self.b_)
+            pbar = tqdm(iterable=enumerate(generate_models()),
+                        unit='model', desc='Estimating models: ',
+                        total=self.state_space.get_current_step_total_models(self.b_))
+
             # iterate through all the intermediate children (intermediate_child is an array of repeated [input,action,input,action] blocks)
-            for i, intermediate_child in enumerate(self.state_space.prepare_intermediate_children(self.b_)):
+            for i, intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
                     else self.estimate_time(regressor_NNLS, intermediate_child, headers, t_max, op_size, index_list)
@@ -521,13 +528,13 @@ class ControllerManager:
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
 
+                pbar.set_postfix({'score': score}, refresh=False)
+
                 # always preserve the child and its score in pnas mode, otherwise check that time estimation is < T (time threshold)
                 if self.pnas_mode or estimated_time <= self.T:
                     model_estimations.append(ModelEstimate(intermediate_child, score, estimated_time))
 
-                # debug print every 500 models
-                if (i + 1) % 500 == 0:
-                    self._logger.info("Scored %d models. Current model score = %0.4f", i + 1, score)
+            self._logger.info('Model evaluation completed')
 
             # sort the children according to their score
             model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
@@ -536,6 +543,7 @@ class ControllerManager:
             # then comparing the rest only by time because of ordering trick.
             # Pareto front can be built only if using regressor (needs time estimation, not in pnas mode)
             if not self.pnas_mode:
+                self._logger.info('Building pareto front...')
                 pareto_front = [model_estimations[0]]
                 for model_est in model_estimations[1:]:
                     if model_est.time <= pareto_front[-1].time:
@@ -544,7 +552,8 @@ class ControllerManager:
                 with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerows(map(lambda model_est: model_est.to_csv_array(), pareto_front))
-                    
+
+                self._logger.info('Pareto front built successfully')    
             else:
                 # just a rename to integrate with existent code below, it's not a pareto front in this case!
                 pareto_front = model_estimations

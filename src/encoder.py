@@ -21,7 +21,7 @@ class StateSpace:
     '''
 
     def __init__(self, B, operators,
-                 input_lookback_depth=0,
+                 input_lookback_depth=-1,
                  input_lookforward_depth=None):
         '''
         Constructs a search space which models the NAS and PNAS papers
@@ -50,13 +50,10 @@ class StateSpace:
                 interpreted by the model designer when constructing the
                 actual model. Usually a list of strings.
 
-            input_lookback_depth: should be a negative number or 0.
+            input_lookback_depth: should be a negative number.
                 Describes how many cells the input should look behind.
-                Can be used to tensor information from 0 or more cells from
-                the current cell.
-
                 The negative number describes how many cells to look back.
-                Set to 0 if the lookback feature is not needed (flat cells).
+                -1 indicates the last cell (or input image at start), and so on.          
 
             input_lookforward_depth: sets a limit on input depth that can be looked forward.
                 This is useful for scenarios where "flat" models are preferred,
@@ -84,6 +81,8 @@ class StateSpace:
 
         self.input_lookback_depth = input_lookback_depth
         self.input_lookforward_depth = input_lookforward_depth
+
+        assert self.input_lookback_depth < 0, "Invalid lookback_depth value"
 
         input_values = list(range(input_lookback_depth, self.B-1))  # -1 = Hc-1, 0-(B-1) = Hci
         self.inputs_embedding_max = len(input_values)
@@ -223,6 +222,16 @@ class StateSpace:
         search_space = [inputs, ops, inputs, ops]
         self.children = list(self._construct_permutations(search_space))
 
+    def get_current_step_total_models(self, new_b):
+        new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
+            else min(self.input_lookforward_depth, new_b)
+
+        possible_input_values = new_b_dash - self.input_lookback_depth
+
+        new_child_count = (possible_input_values ** 2) * (len(self.operators) ** 2)
+
+        return len(self.children) * new_child_count
+
     def prepare_intermediate_children(self, new_b):
         '''
         Generates the intermediate product of the previous children
@@ -232,36 +241,33 @@ class StateSpace:
             new_b: the number of blocks in current stage
 
         # Returns:
-            a generator that produces a joint of the previous and current
-            child models
+            A function that returns a generator that produces a joint of
+            the previous and current child models
         '''
-        if self.input_lookforward_depth is not None:
-            new_b_dash = min(self.input_lookforward_depth, new_b)
-        else:
-            new_b_dash = new_b - 1
 
-        new_ip_values = list(range(self.input_lookback_depth, new_b_dash))
+        new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
+            else min(self.input_lookforward_depth, new_b)
+
+        possible_input_values = list(range(self.input_lookback_depth, new_b_dash))
         ops = list(range(len(self.operators)))
 
-        # if input_lookback_depth == 0, then we need to adjust to have at least
-        # one input (generally 0)
-        if len(new_ip_values) == 0:
-            new_ip_values = [0]
-
-        new_child_count = ((len(new_ip_values)) ** 2) * (len(self.operators) ** 2)
+        new_child_count = ((len(possible_input_values)) ** 2) * (len(self.operators) ** 2)
         self._logger.info("Obtaining search space for b = %d", new_b)
         self._logger.info("Search space size: %d", new_child_count)
 
-        self._logger.info("Total models to evaluate: %d", (len(self.children) * new_child_count))
+        self._logger.info("Total models to evaluate: %d", len(self.children) * new_child_count)
 
-        search_space = [new_ip_values, ops, new_ip_values, ops]
+        search_space = [possible_input_values, ops, possible_input_values, ops]
         new_search_space = list(self._construct_permutations(search_space))
 
-        for i, child in enumerate(self.children):
-            for permutation in new_search_space:
-                temp_child = list(child)
-                temp_child.extend(permutation)
-                yield temp_child
+        def generate_models():
+            for i, child in enumerate(self.children):
+                for permutation in new_search_space:
+                    temp_child = list(child)
+                    temp_child.extend(permutation)
+                    yield temp_child
+        
+        return generate_models
 
     def _construct_permutations(self, search_space):
         ''' state space is a 4-tuple (ip1, op1, ip2, op2) '''
