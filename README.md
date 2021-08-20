@@ -88,7 +88,8 @@ only on console.
 - Add --abc and -f options, to make cell structure more configurable and flexible.
 - Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
 - Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat was wrongly used before batching.
-- Fix and add more tqdm bars for better progress visualization.
+- Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
+- Fix tqdm bars of CNN training and add tqdm bars to LSTM training and model predictions procedure for better progress visualization.
 - General code fix and improvements, especially improve readability of various code parts for better future maintainability.
 
 
