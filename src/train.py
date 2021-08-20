@@ -3,14 +3,16 @@ from model import ModelGenerator
 from manager import NetworkManager
 from controller import ControllerManager
 from encoder import StateSpace
+
 from tensorflow.keras.utils import to_categorical
 from tensorflow.python.keras.datasets import cifar100
 from tensorflow.python.keras.datasets import cifar10
 import numpy as np
-import csv
 from sklearn.model_selection import train_test_split
 
 import importlib.util
+import csv
+import statistics
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable GPU debugging info
@@ -125,6 +127,30 @@ class Train:
 
         return reward, timer, listed_space
 
+    def perform_initial_thrust(self, state_space, manager):
+        '''
+        Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
+
+        Args:
+            state_space ([type]): [description]
+            manager ([type]): [description]
+        '''
+
+        reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
+
+        with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
+            data = [timer, 0]
+            for i in range(self.blocks):
+                data.extend([0, 0, 0, 0])
+            writer = csv.writer(f)
+            writer.writerow(data)
+
+    def write_average_training_time(self, blocks, timers):
+        with open(log_service.build_path('csv', 'avg_training_time.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+            avg_time = statistics.mean(timers)
+            writer.writerow([blocks, avg_time])
+
     def process(self):
 
         # create the complete headers row of the CSV files
@@ -133,7 +159,7 @@ class Train:
         t_max = 0
 
         if self.restore:
-            starting_B = self.checkpoint - 1  # change the starting point of B
+            starting_B = self.checkpoint  # change the starting point of B
 
             self._logger.info("Loading operator indeces!")
             with open(log_service.build_path('csv', 'timers.csv')) as f:
@@ -191,23 +217,17 @@ class Train:
 
         block_times = []
 
-        # train for number of trials
-        for trial in range(starting_B, self.blocks):
-            if trial == 0:
-                k = None
+        # if B = 0, perform initial thrust before starting actual training procedure
+        if starting_B == 0:
+            k = None
+            self.perform_initial_thrust(state_space, manager)
+            
+            starting_B = 1
+        else:
+            k = self.children
 
-                # build a starting point model with 0 blocks to evaluate the offset (initial thrust)
-                reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
-
-                with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-                    data = [timer, 0]
-                    for i in range(self.blocks):
-                        data.extend([0, 0, 0, 0])
-                    writer = csv.writer(f)
-                    writer.writerow(data)
-            else:
-                k = self.children
-
+        # train the child CNN networks for each number of blocks
+        for current_blocks in range(starting_B, self.blocks + 1):
             actions = controller.get_actions(top_k=k)  # get all actions for the previous state
             rewards = []
             timers = []
@@ -217,7 +237,7 @@ class Train:
 
                 rewards.append(reward)
                 timers.append(timer)
-                if trial == 0:
+                if current_blocks == 1:
                     block_times.append([timer, listed_space])
                     if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1):
                         with open(log_service.build_path('csv', 'timers.csv'), mode='a+', newline='') as f:
@@ -226,22 +246,22 @@ class Train:
                             index_list.append(timer)
                             if timer >= t_max:
                                 t_max = timer
-                self._logger.info("Finished %d out of %d models!" % (t + 1, len(actions)))
+                self._logger.info("Finished %d out of %d models!", (t + 1), len(actions))
 
                 # write the results of this trial into a file
                 with open(log_service.build_path('csv', 'real_accuracy.csv'), mode='a+', newline='') as f:
-                    data = [reward, trial+1]
+                    data = [reward, current_blocks]
                     data.extend(listed_space)
                     writer = csv.writer(f)
                     writer.writerow(data)
 
-                if trial > 0:
-                    # write the forward pass time of this trial into a file
+                if current_blocks > 1:
+                    # write the forward pass time of this CNN network into a file
                     with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                         writer = csv.writer(f)
-                        for i in range(trial, self.blocks):
-                            data = [timer, trial+1]
-                            for j in range(trial, i):
+                        for i in range(current_blocks, self.blocks + 1):
+                            data = [timer, current_blocks]
+                            for _ in range(current_blocks, i):
                                 data.extend([0, 0, 0, 0])
                             encoded_child = state_space.entity_encode_child(listed_space)
                             concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
@@ -253,17 +273,17 @@ class Train:
                                 else:
                                     reindexed_child.append(len(operators) * index_list[elem] / t_max)
                             data.extend(reindexed_child)
-                            for j in range(i+1, self.blocks):
+                            for _ in range(i+1, self.blocks):
                                 data.extend([0, 0, 0, 0])
                             writer.writerow(data)
 
-            if trial == 0:
+            if current_blocks == 1:
                 with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     for row in block_times:
-                        for i in range(trial, self.blocks):
-                            data = [row[0], trial+1]
-                            for j in range(trial, i):
+                        for i in range(current_blocks, self.blocks + 1):
+                            data = [row[0], current_blocks]
+                            for _ in range(current_blocks, i):
                                 data.extend([0, 0, 0, 0])
                             encoded_child = state_space.entity_encode_child(row[1])
                             concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
@@ -275,12 +295,14 @@ class Train:
                                 else:
                                     reindexed_child.append(len(operators) * index_list[elem] / t_max)
                             data.extend(reindexed_child)
-                            for j in range(i+1, self.blocks):
+                            for _ in range(i+1, self.blocks):
                                 data.extend([0, 0, 0, 0])
                             writer.writerow(data)
 
+            self.write_average_training_time(current_blocks, timers)
+
             loss = controller.train_step(rewards)
-            self._logger.info("Trial %d: ControllerManager loss : %0.6f", trial + 1, loss)
+            self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
             controller.update_step(headers, t_max, len(operators), index_list)
 
