@@ -179,7 +179,7 @@ class Train:
 
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
-                                       train_iterations=10,
+                                       train_iterations=15,
                                        reg_param=0,
                                        pnas_mode=self.pnas_mode,
                                        restore_controller=self.restore,

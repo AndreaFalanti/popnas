@@ -173,10 +173,7 @@ class NetworkManager:
                     # add forward pass and accuracy to Tensorboard
                     with self.summary_writer.as_default():
                         tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
-                        if acc > best_val_acc:
-                            summary_acc = acc
-                        else:
-                            summary_acc = best_val_acc
+                        summary_acc = acc if acc > best_val_acc else best_val_acc
                         tf.summary.scalar("child_accuracy", summary_acc, description="children", step=epoch+1)
 
                     self._logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)

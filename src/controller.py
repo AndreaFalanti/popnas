@@ -98,8 +98,8 @@ class ControllerManager:
                  B=5, K=256, T=np.inf,
                  train_iterations=10,
                  reg_param=0.001,
-                 controller_cells=100,
-                 embedding_dim=100,
+                 controller_cells=48,
+                 embedding_dim=30,
                  input_B=None,
                  pnas_mode=False,
                  restore_controller=False,
@@ -265,10 +265,13 @@ class ControllerManager:
                                          input_B,
                                          self.state_space.operator_embedding_max)
 
+            # PNAS paper specifies different learning rates, one for b=1 and another for other b values
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.002)
+            self.optimizer_b1 = tf.compat.v1.train.AdamOptimizer(learning_rate=0.01)
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,
+                                         optimizer_b1=self.optimizer_b1,
                                          global_step=self.global_step)
 
         if self.restore_controller:
@@ -315,7 +318,7 @@ class ControllerManager:
         children = np.array(self.state_space.children, dtype=np.object)  # take all the children
         rewards = np.array(rewards, dtype=np.float32)
         self._logger.info("Rewards : %s", rewards)
-        loss = 0
+        total_loss = 0
 
         if self.children_history is None:
             self.children_history = [children]
@@ -334,20 +337,26 @@ class ControllerManager:
         summary_writer = tf.summary.create_file_writer(self.logdir)
         summary_writer.set_as_default()
 
-        for current_epoch in range(self.train_iterations):
-            self._logger.info("Controller: Begin training epoch %d", current_epoch + 1)
+        for current_epoch in range(1, self.train_iterations + 1):
+            self._logger.info("Controller: Begin training epoch %d", current_epoch)
 
-            self.global_epoch = self.global_epoch + 1
+            self.global_epoch = self.global_epoch
 
-            for dataset_id in range(self.b_):
-                children = self.children_history[dataset_id]
-                scores = self.score_history[dataset_id]
+            for current_b in range(1, self.b_ + 1):
+                children = self.children_history[current_b - 1]
+                scores = self.score_history[current_b - 1]
                 ids = np.array(list(range(len(scores))))
                 np.random.shuffle(ids)
 
-                self._logger.info("Controller: Begin training - B = %d", dataset_id + 1)
+                self._logger.info("Controller: Begin training - B = %d", current_b)
+                epoch_loss = 0
 
-                for id, (child, score) in enumerate(zip(children[ids], scores[ids])):
+                pbar = tqdm(iterable=enumerate(zip(children[ids], scores[ids])),
+                        unit='child',
+                        desc=f'Training LSTM (B={current_b}, epoch={current_epoch}): ',
+                        total=len(children[ids]))
+
+                for _, (child, score) in pbar:
                     child = child.tolist()
                     state_list = self.state_space.entity_encode_child(child)
                     state_list = np.concatenate(state_list, axis=-1).astype('int32')
@@ -359,22 +368,25 @@ class ControllerManager:
                             rnn_scores, states = self.controller(state_list, states=None)
                             acc_scores = score.reshape((1, 1))
 
-                            total_loss = self.loss(acc_scores, rnn_scores)
+                            loss = self.loss(acc_scores, rnn_scores)
 
-                        grads = tape.gradient(total_loss, self.controller.trainable_variables)
+                        grads = tape.gradient(loss, self.controller.trainable_variables)
                         grad_vars = zip(grads, self.controller.trainable_variables)
 
-                        self.optimizer.apply_gradients(grad_vars, self.global_step)
+                        optimizer = self.optimizer_b1 if current_b == 1 else self.optimizer
+                        optimizer.apply_gradients(grad_vars, self.global_step)
 
-                    loss += total_loss.numpy().sum()
+                    loss = loss.numpy().sum()
+                    epoch_loss += loss
 
-                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d",
-                                  current_epoch + 1, self.train_iterations, dataset_id + 1, self.b_)
+                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d, loss: %0.6f",
+                                  current_epoch, self.train_iterations, current_b, self.b_, epoch_loss)
+                total_loss += epoch_loss
 
             # add accuracy to Tensorboard
             with summary_writer.as_default():
                 tf.summary.scalar("average_accuracy", rewards.mean(), description="controller", step=self.global_epoch)
-                tf.summary.scalar("average_loss", loss.mean(), description="controller", step=self.global_epoch)
+                tf.summary.scalar("average_loss", total_loss.mean(), description="controller", step=self.global_epoch)
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -383,7 +395,8 @@ class ControllerManager:
         # save weights
         self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
 
-        return loss.mean()
+        # TODO: total_loss is a scalar, why it uses mean?
+        return total_loss.mean()
 
     def setup_regressor(self):
         '''
