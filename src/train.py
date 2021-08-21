@@ -127,6 +127,24 @@ class Train:
 
         return reward, timer, listed_space
 
+    def generate_dynamic_reindex_function(self, operators, op_timers, t_max):
+        '''
+        Closure for generating a function to easily apply dynamic reindex where necessary.
+
+        Args:
+            operators (list<str>): allowed operations
+            op_timers (list<float>): timers for each block with same operations, in order
+            t_max (float): max time between op_timers
+
+        Returns:
+            Callable(int): dynamic reindex function
+        '''
+
+        def apply_dynamic_reindex(op_index):
+            return len(operators) * op_timers[op_index] / t_max
+
+        return apply_dynamic_reindex
+
     def perform_initial_thrust(self, state_space, manager):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
@@ -151,11 +169,57 @@ class Train:
             avg_time = statistics.mean(timers)
             writer.writerow([blocks, avg_time])
 
+    def write_sliding_blocks_training_time(self, current_blocks, timer, listed_space,
+                                            state_space, reindex_function):
+        '''
+        Write on csv the training time, that will be used for regressor training.
+        Use sliding blocks mechanism to multiple the entries.
+
+        Args:
+            current_blocks ([type]): [description]
+            timer ([type]): [description]
+            listed_space ([type]): [description]
+            state_space ([type]): [description]
+            reindex_function ([type]): [description]
+        '''
+
+        with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+
+            # generate all possible 'sliding blocks' combinations
+            for i in range(current_blocks, self.blocks + 1):
+                data = [timer, current_blocks]
+
+                # slide block forward
+                for _ in range(current_blocks, i):
+                    data.extend([0, 0, 0, 0])
+
+                # add reindexed block encoding
+                encoded_child = state_space.entity_encode_child(listed_space)
+                concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
+                reindexed_child = []
+                for i, action_index in enumerate(concatenated_child):
+                    if i % 2 == 0:
+                        # TODO: investigate this
+                        reindexed_child.append(action_index + 1)
+                    else:
+                        reindexed_child.append(reindex_function(action_index))
+                data.extend(reindexed_child)
+
+                # extend with empty blocks, if necessary
+                for _ in range(i+1, self.blocks):
+                    data.extend([0, 0, 0, 0])
+
+                writer.writerow(data)
+
     def process(self):
+        '''
+        Main function, executed by run.py to start POPNAS algorithm.
+        '''
 
         # create the complete headers row of the CSV files
         headers = ["time", "blocks"]
-        index_list = [0]
+        op_timers = []
         t_max = 0
 
         if self.restore:
@@ -166,10 +230,10 @@ class Train:
                 reader = csv.reader(f)
                 for row in reader:
                     elem = float(row[0])
-                    index_list.append(elem)
+                    op_timers.append(elem)
                     if elem >= t_max:
                         t_max = elem
-            self._logger.info(index_list, t_max)
+            self._logger.info(op_timers, t_max)
 
         else:
             starting_B = 0
@@ -178,7 +242,7 @@ class Train:
             for b in range(1, self.blocks+1):
                 a = b*2
                 c = a-1
-                new_block = ["input_%d" % c, "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
+                new_block = [f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"]
                 headers.extend(new_block)
 
             # add headers to training_time.csv
@@ -215,8 +279,6 @@ class Train:
         manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
                                  learning_rate=self.learning_rate, filters=self.filters, cpu=self.cpu)
 
-        block_times = []
-
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_B == 0:
             k = None
@@ -226,6 +288,9 @@ class Train:
         else:
             k = self.children
 
+        monoblock_times = []
+        reindex_function = None
+
         # train the child CNN networks for each number of blocks
         for current_blocks in range(starting_B, self.blocks + 1):
             actions = controller.get_actions(top_k=k)  # get all actions for the previous state
@@ -234,18 +299,23 @@ class Train:
 
             for t, action in enumerate(actions):
                 reward, timer, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
-
                 rewards.append(reward)
                 timers.append(timer)
+
                 if current_blocks == 1:
-                    block_times.append([timer, listed_space])
+                    monoblock_times.append([timer, listed_space])
+
+                    # get required data for dynamic reindex
+                    # op_timers will contain timers for blocks with both same operation, for each operation, in order
                     if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1):
                         with open(log_service.build_path('csv', 'timers.csv'), mode='a+', newline='') as f:
                             writer = csv.writer(f)
                             writer.writerow([timer])
-                            index_list.append(timer)
+                            op_timers.append(timer)
+
                             if timer >= t_max:
                                 t_max = timer
+
                 self._logger.info("Finished %d out of %d models!", (t + 1), len(actions))
 
                 # write the results of this trial into a file
@@ -255,55 +325,23 @@ class Train:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
+                # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex
                 if current_blocks > 1:
-                    # write the forward pass time of this CNN network into a file
-                    with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-                        writer = csv.writer(f)
-                        for i in range(current_blocks, self.blocks + 1):
-                            data = [timer, current_blocks]
-                            for _ in range(current_blocks, i):
-                                data.extend([0, 0, 0, 0])
-                            encoded_child = state_space.entity_encode_child(listed_space)
-                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
-                            reindexed_child = []
-                            for index, elem in enumerate(concatenated_child):
-                                elem = elem + 1
-                                if index % 2 == 0:
-                                    reindexed_child.append(elem)
-                                else:
-                                    reindexed_child.append(len(operators) * index_list[elem] / t_max)
-                            data.extend(reindexed_child)
-                            for _ in range(i+1, self.blocks):
-                                data.extend([0, 0, 0, 0])
-                            writer.writerow(data)
+                    self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
+                                                            state_space, reindex_function)
 
+            # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
-                with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    for row in block_times:
-                        for i in range(current_blocks, self.blocks + 1):
-                            data = [row[0], current_blocks]
-                            for _ in range(current_blocks, i):
-                                data.extend([0, 0, 0, 0])
-                            encoded_child = state_space.entity_encode_child(row[1])
-                            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
-                            reindexed_child = []
-                            for index, elem in enumerate(concatenated_child):
-                                elem = elem + 1
-                                if index % 2 == 0:
-                                    reindexed_child.append(elem)
-                                else:
-                                    reindexed_child.append(len(operators) * index_list[elem] / t_max)
-                            data.extend(reindexed_child)
-                            for _ in range(i+1, self.blocks):
-                                data.extend([0, 0, 0, 0])
-                            writer.writerow(data)
-
+                reindex_function = self.generate_dynamic_reindex_function(operators, op_timers, t_max)
+                for timer, listed_space in monoblock_times:
+                    self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
+                                                            state_space, reindex_function)
+            
             self.write_average_training_time(current_blocks, timers)
 
             loss = controller.train_step(rewards)
             self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
-            controller.update_step(headers, t_max, len(operators), index_list)
+            controller.update_step(headers, reindex_function)
 
         self._logger.info("Finished!")

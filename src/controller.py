@@ -435,7 +435,7 @@ class ControllerManager:
 
         return sequence_data_processor_NNLS.process()
 
-    def estimate_time(self, regressor, child_encoding, headers, t_max, op_size, index_list):
+    def estimate_time(self, regressor, child_encoding, headers, reindex_function):
         '''
         Use regressor to estimate the time for training the model. Write also an entry in predicted_time_{b}.csv.
 
@@ -443,9 +443,7 @@ class ControllerManager:
             regressor (Regressor): time regressor
             child_encoding (list[str]): model encoding
             headers ([type]): [description]
-            t_max ([type]): [description]
-            op_size ([type]): [description]
-            index_list ([type]): [description]
+            reindex_function ([type]): [description]
 
         Returns:
             (float): estimated time predicted
@@ -456,20 +454,21 @@ class ControllerManager:
         # save predicted times on a .csv file
         with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
+            
             encoded_child = self.state_space.entity_encode_child(child_encoding)
             concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
             reindexed_child = []
-            for index, elem in enumerate(concatenated_child):
-                elem = elem + 1
-                if index % 2 == 0:
-                    reindexed_child.append(elem)
+            for i, action_index in enumerate(concatenated_child):
+                if i % 2 == 0:
+                    # TODO: investigate this
+                    reindexed_child.append(action_index + 1)
                 else:
-                    reindexed_child.append(op_size * index_list[elem] / t_max)
+                    reindexed_child.append(reindex_function(action_index))
                     
             reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
             array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
 
-            for b in range(self.b_, self.B):
+            for _ in range(self.b_, self.B):
                 array = np.append(array, np.array([0, 0, 0, 0]))
 
             df_row = pandas.DataFrame([array], columns=headers)
@@ -504,7 +503,7 @@ class ControllerManager:
         return score
 
     # TODO: investigate unused variables
-    def update_step(self, headers, t_max, op_size, index_list):
+    def update_step(self, headers, reindex_function):
         '''
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
@@ -536,7 +535,7 @@ class ControllerManager:
             for i, intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
-                    else self.estimate_time(regressor_NNLS, intermediate_child, headers, t_max, op_size, index_list)
+                    else self.estimate_time(regressor_NNLS, intermediate_child, headers, reindex_function)
 
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
