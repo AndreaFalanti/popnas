@@ -228,9 +228,11 @@ class StateSpace:
 
         possible_input_values = new_b_dash - self.input_lookback_depth
 
-        new_child_count = (possible_input_values ** 2) * (len(self.operators) ** 2)
+        total_new_child_count = (possible_input_values ** 2) * (len(self.operators) ** 2)
+        symmetric_child_count = possible_input_values * len(self.operators)
+        non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
 
-        return len(self.children) * new_child_count
+        return len(self.children) * non_specular_child_count
 
     def prepare_intermediate_children(self, new_b):
         '''
@@ -251,11 +253,14 @@ class StateSpace:
         possible_input_values = list(range(self.input_lookback_depth, new_b_dash))
         ops = list(range(len(self.operators)))
 
-        new_child_count = ((len(possible_input_values)) ** 2) * (len(self.operators) ** 2)
-        self._logger.info("Obtaining search space for b = %d", new_b)
-        self._logger.info("Search space size: %d", new_child_count)
+        total_new_child_count = (len(possible_input_values) ** 2) * (len(self.operators) ** 2)
+        symmetric_child_count = len(possible_input_values) * len(self.operators)
+        non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
 
-        self._logger.info("Total models to evaluate: %d", len(self.children) * new_child_count)
+        self._logger.info("Obtaining search space for b = %d", new_b)
+        self._logger.info("Search space size: %d", non_specular_child_count)
+
+        self._logger.info("Total models to evaluate: %d", len(self.children) * non_specular_child_count)
 
         search_space = [possible_input_values, ops, possible_input_values, ops]
         new_search_space = list(self._construct_permutations(search_space))
@@ -270,14 +275,17 @@ class StateSpace:
         return generate_models
 
     def _construct_permutations(self, search_space):
-        ''' state space is a 4-tuple (ip1, op1, ip2, op2) '''
+        '''
+        State space is a 4-tuple (ip1, op1, ip2, op2).
+        Specular blocks are excluded from the search space.
+        '''
         for input1 in search_space[0]:
             for operation1 in search_space[1]:
                 for input2 in search_space[2]:
-                    # if input2 >= input1: # added to avoid repeated permutations
-                    for operation2 in search_space[3]:
-                        # if (input2 != input1) or operation1 >= operation2: # added to avoid repeated permutations
-                        yield (input1, self.operators[operation1], input2, self.operators[operation2])
+                    if input2 >= input1: # added to avoid repeated permutations (specular blocks)
+                        for operation2 in search_space[3]:
+                            if input2 != input1 or operation2 >= operation1: # added to avoid repeated permutations (specular blocks)
+                                yield (input1, self.operators[operation1], input2, self.operators[operation2])
 
     def print_state_space(self):
         ''' Pretty print the state space '''
