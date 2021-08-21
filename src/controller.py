@@ -512,12 +512,14 @@ class ControllerManager:
         # plot controller architecture
         # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
+        # TODO: pandas is used only to add 0s and remove headers? But this is already done in code...
+        csv_path = log_service.build_path('csv', 'training_time.csv')
         if self.b_ == 2:
-            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'), skiprows=[1])
+            df = pandas.read_csv(csv_path, skiprows=[1])
         else:
-            df = pandas.read_csv(log_service.build_path('csv', 'training_time.csv'))
+            df = pandas.read_csv(csv_path)
 
-        df.to_csv(log_service.build_path('csv', 'training_time.csv'), na_rep=0, index=False)
+        df.to_csv(csv_path, na_rep=0, index=False)
 
         regressor_NNLS = self.setup_regressor()
 

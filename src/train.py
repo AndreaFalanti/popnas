@@ -198,8 +198,8 @@ class Train:
                 encoded_child = state_space.entity_encode_child(listed_space)
                 concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
                 reindexed_child = []
-                for i, action_index in enumerate(concatenated_child):
-                    if i % 2 == 0:
+                for j, action_index in enumerate(concatenated_child):
+                    if j % 2 == 0:
                         # TODO: investigate this
                         reindexed_child.append(action_index + 1)
                     else:
@@ -207,7 +207,7 @@ class Train:
                 data.extend(reindexed_child)
 
                 # extend with empty blocks, if necessary
-                for _ in range(i+1, self.blocks):
+                for _ in range(i+1, self.blocks + 1):
                     data.extend([0, 0, 0, 0])
 
                 writer.writerow(data)
@@ -253,6 +253,7 @@ class Train:
         # TODO: restore search space
         operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
         #operators = ['identity', '3x3 dconv']
+        operators = ['identity', '3x3 dconv']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
@@ -270,7 +271,6 @@ class Train:
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=15,
-                                       reg_param=0,
                                        pnas_mode=self.pnas_mode,
                                        restore_controller=self.restore,
                                        cpu=self.cpu)
