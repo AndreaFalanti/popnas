@@ -90,7 +90,8 @@ only on console.
 - Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat was wrongly used before batching.
 - Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
 - Fix tqdm bars of CNN training and add tqdm bars to LSTM training and model predictions procedure for better progress visualization.
-- General code fix and improvements, especially improve readability of various code parts for better future maintainability.
+- Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
+- General code fixes and improvements, especially improve readability of various code parts for better future maintainability. Many blob functions have been finely subdivided in multiple subfunctions and properly commented.
 
 
 ## TODO
