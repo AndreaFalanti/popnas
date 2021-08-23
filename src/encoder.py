@@ -271,7 +271,7 @@ class StateSpace:
                     temp_child = list(child)
                     temp_child.extend(permutation)
                     yield temp_child
-        
+
         return generate_models
 
     def _construct_permutations(self, search_space):
@@ -316,11 +316,3 @@ class StateSpace:
     @property
     def size(self):
         return self.state_count_
-
-    def print_total_models(self, K):
-        ''' Compute the total number of models to generate and train '''
-        num_inputs = 1 if self.input_lookback_depth == 0 else abs(self.input_lookback_depth)
-        level1 = (num_inputs ** 2) * (len(self.operators) ** 2)
-        remainder = (self.B - 1) * K
-        total = level1 + remainder
-        return total

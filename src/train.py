@@ -259,8 +259,6 @@ class Train:
 
         # print the state space being searched
         state_space.print_state_space()
-        # TODO: not used and actually not printing anything
-        NUM_TRAILS = state_space.print_total_models(self.children)
 
         # load correct dataset (based on self.dataset)
         (x_train_init, y_train_init), (x_test_init, y_test_init) = self.load_dataset()
