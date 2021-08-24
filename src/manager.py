@@ -1,14 +1,17 @@
 import log_service
-from keras.utils.vis_utils import plot_model  # per stampare modello
-from tensorflow.keras.models import Model
-import shutil
-import os
-from tqdm import tqdm
 
+from tqdm import tqdm
+import numpy as np
+
+import os
 import time
+import shutil
 
 import tensorflow as tf
+from tensorflow.keras.models import Model
+from keras.utils.vis_utils import plot_model  # per stampare modello
 from tensorflow.python.util import deprecation
+
 deprecation._PRINT_DEPRECATION_WARNINGS = False  # to hide warning
 # tf.compat.v1.enable_eager_execution(device_policy=tf.contrib.eager.DEVICE_PLACEMENT_SILENT)
 
@@ -135,7 +138,10 @@ class NetworkManager:
                 best_val_acc = 0.0
                 timer = 0  # inizialize timer to evaluate training time
 
+                # TODO: why not using a Keras model to run model.fit? Could be better to convert it maybe
                 for epoch in range(self.epochs):
+                    epoch_losses = np.array([])
+
                     # train child model
                     with tqdm(iterable=enumerate(train_dataset),
                               desc=f'Train Epoch ({epoch + 1} / {self.epochs}): ',
@@ -159,14 +165,23 @@ class NetworkManager:
                             # get training ending time
                             stop = time.clock()
 
+                            # loss is the loss of each element of the batch considered, append them to produce the mean at epoch end
+                            epoch_losses = np.append(epoch_losses, loss)
+                            # current average loss of already processed batches
+                            avg_loss = np.mean(epoch_losses)
+
+                            pbar.set_postfix({ 'avg_loss': avg_loss }, refresh=False)
+
                             # evaluate training time
                             timer = timer + (stop - start)
 
+                    val_losses = np.array([])
                     # evaluate child model
                     acc = tf.metrics.CategoricalAccuracy()
                     for _, (x, y) in enumerate(val_dataset):
                         preds = model(x, training=False)
                         acc(y, preds)
+                        val_losses = np.append(val_losses, tf.keras.losses.categorical_crossentropy(y, preds).numpy())
 
                     acc = acc.result().numpy()
 
@@ -176,8 +191,11 @@ class NetworkManager:
                         summary_acc = acc if acc > best_val_acc else best_val_acc
                         tf.summary.scalar("child_accuracy", summary_acc, description="children", step=epoch+1)
 
-                    self._logger.info("\tEpoch %d: Training time = %0.6f", epoch + 1, timer)
-                    self._logger.info("\tEpoch %d: Val accuracy = %0.6f", epoch + 1, acc)
+                    self._logger.info("\tEpoch %d:", epoch + 1)
+                    self._logger.info("\tTraining time = %0.6f", timer)
+                    self._logger.info("\tTraining loss = %0.6f", avg_loss)
+                    self._logger.info("\tVal accuracy = %0.6f", acc)
+                    self._logger.info("\tVal loss = %0.6f", np.mean(val_losses))
 
                     # if acc improved, save the weights
                     if acc > best_val_acc:
@@ -200,7 +218,7 @@ class NetworkManager:
                 # evaluate the best weights of the child model
                 acc = tf.metrics.CategoricalAccuracy()
 
-                for j, (x, y) in enumerate(val_dataset):
+                for _, (x, y) in enumerate(val_dataset):
                     preds = model(x, training=False)
                     acc(y, preds)
 

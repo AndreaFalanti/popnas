@@ -318,7 +318,6 @@ class ControllerManager:
         children = np.array(self.state_space.children, dtype=np.object)  # take all the children
         rewards = np.array(rewards, dtype=np.float32)
         self._logger.info("Rewards : %s", rewards)
-        total_loss = 0
 
         if self.children_history is None:
             self.children_history = [children]
@@ -349,7 +348,7 @@ class ControllerManager:
                 np.random.shuffle(ids)
 
                 self._logger.info("Controller: Begin training - B = %d", current_b)
-                epoch_loss = 0
+                epoch_losses = np.array([])
 
                 pbar = tqdm(iterable=enumerate(zip(children[ids], scores[ids])),
                         unit='child',
@@ -376,17 +375,17 @@ class ControllerManager:
                         optimizer = self.optimizer_b1 if current_b == 1 else self.optimizer
                         optimizer.apply_gradients(grad_vars, self.global_step)
 
-                    loss = loss.numpy().sum()
-                    epoch_loss += loss
+                    epoch_losses = np.append(epoch_losses, loss.numpy())
+
+                avg_loss = np.mean(epoch_losses)
 
                 self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d, loss: %0.6f",
-                                  current_epoch, self.train_iterations, current_b, self.b_, epoch_loss)
-                total_loss += epoch_loss
+                                  current_epoch, self.train_iterations, current_b, self.b_, avg_loss)
 
             # add accuracy to Tensorboard
             with summary_writer.as_default():
                 tf.summary.scalar("average_accuracy", rewards.mean(), description="controller", step=self.global_epoch)
-                tf.summary.scalar("average_loss", total_loss.mean(), description="controller", step=self.global_epoch)
+                tf.summary.scalar("average_loss", avg_loss, description="controller", step=self.global_epoch)
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -395,8 +394,7 @@ class ControllerManager:
         # save weights
         self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
 
-        # TODO: total_loss is a scalar, why it uses mean?
-        return total_loss.mean()
+        return avg_loss
 
     def setup_regressor(self):
         '''
