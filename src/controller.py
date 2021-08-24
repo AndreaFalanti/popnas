@@ -528,13 +528,23 @@ class ControllerManager:
             model_estimations = []  # type: list[ModelEstimate]
 
             # closure that returns a function that returns the model generator for current generation step
-            generate_models = self.state_space.prepare_intermediate_children(self.b_)
-            pbar = tqdm(iterable=enumerate(generate_models()),
+            # and a function that directly returns ALL valid models in oneshot
+            generate_models, get_unique_models = self.state_space.prepare_intermediate_children(self.b_)
+
+            next_models, pruned_count = get_unique_models()
+            self._logger.info('Pruned %d equivalent models', pruned_count)
+
+            # TODO: previous method with generator (it generate also equivalent models)
+            # pbar = tqdm(iterable=enumerate(generate_models()),
+            #             unit='model', desc='Estimating models: ',
+            #             total=self.state_space.get_current_step_total_models(self.b_))
+
+            pbar = tqdm(iterable=next_models,
                         unit='model', desc='Estimating models: ',
-                        total=self.state_space.get_current_step_total_models(self.b_))
+                        total=len(next_models))
 
             # iterate through all the intermediate children (intermediate_child is an array of repeated [input,action,input,action] blocks)
-            for i, intermediate_child in pbar:
+            for intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
                     else self.estimate_time(regressor_NNLS, intermediate_child, headers, reindex_function)
@@ -542,7 +552,7 @@ class ControllerManager:
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
 
-                pbar.set_postfix({'score': score}, refresh=False)
+                pbar.set_postfix({ 'score': score }, refresh=False)
 
                 # always preserve the child and its score in pnas mode, otherwise check that time estimation is < T (time threshold)
                 if self.pnas_mode or estimated_time <= self.T:
