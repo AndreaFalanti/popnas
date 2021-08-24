@@ -80,6 +80,7 @@ use other blocks output as input of another block).
 - Specular blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality. Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
 - Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
+- Change metric of weights saving of CNN from validation accuracy to validation loss (should generalize better). 
 - Migrate code to Tensorflow 2.
 - Format code with pep8 and flake, to follow standard python conventions.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
@@ -89,6 +90,7 @@ only on console.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
 - Add --abc and -f options, to make cell structure more configurable and flexible.
 - Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
+- Print losses on both console and file during CNN and controller training, to make easier the analysis of the training procedure while the algorithm is running.
 - Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat was wrongly used before batching.
 - Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
 - Fix tqdm bars of CNN training and add tqdm bars to LSTM training and model predictions procedure for better progress visualization.
