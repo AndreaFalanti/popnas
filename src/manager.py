@@ -130,12 +130,12 @@ class NetworkManager:
                 global_step = tf.compat.v1.train.get_or_create_global_step()
                 lr = tf.compat.v1.train.cosine_decay(self.lr, global_step, decay_steps=num_train_batches * self.epochs, alpha=0.1)
 
-                # TODO: original PNAS don't mention Adam, only cosine decay
+                # TODO: original PNAS paper doesn't mention Adam, only cosine decay
                 # construct the optimizer and saver of the child model
                 optimizer = tf.compat.v1.train.AdamOptimizer(lr)
                 saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
 
-                best_val_acc = 0.0
+                best_val_loss = np.inf
                 timer = 0  # inizialize timer to evaluate training time
 
                 # TODO: why not using a Keras model to run model.fit? Could be better to convert it maybe
@@ -181,28 +181,31 @@ class NetworkManager:
                     for _, (x, y) in enumerate(val_dataset):
                         preds = model(x, training=False)
                         acc(y, preds)
-                        val_losses = np.append(val_losses, tf.keras.losses.categorical_crossentropy(y, preds).numpy())
+                        val_batch_loss = tf.keras.losses.categorical_crossentropy(y, preds)
+                        val_losses = np.append(val_losses, val_batch_loss)
 
                     acc = acc.result().numpy()
+                    avg_val_loss = np.mean(val_losses)
 
-                    # add forward pass and accuracy to Tensorboard
-                    with self.summary_writer.as_default():
-                        tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
-                        summary_acc = acc if acc > best_val_acc else best_val_acc
-                        tf.summary.scalar("child_accuracy", summary_acc, description="children", step=epoch+1)
-
+                    # print important metrics about training
                     self._logger.info("\tEpoch %d:", epoch + 1)
                     self._logger.info("\tTraining time = %0.6f", timer)
                     self._logger.info("\tTraining loss = %0.6f", avg_loss)
                     self._logger.info("\tVal accuracy = %0.6f", acc)
-                    self._logger.info("\tVal loss = %0.6f", np.mean(val_losses))
+                    self._logger.info("\tVal loss = %0.6f", avg_val_loss)
 
                     # if acc improved, save the weights
-                    if acc > best_val_acc:
-                        self._logger.info("\tVal accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
+                    if avg_val_loss < best_val_loss:
+                        self._logger.info("\tAverage val loss improved from %0.6f to %0.6f. Saving weights!", best_val_loss, avg_val_loss)
 
-                        best_val_acc = acc
+                        best_val_loss = avg_val_loss
                         saver.save('temp_weights/temp_network')
+
+                    # add forward pass and accuracy to Tensorboard
+                    with self.summary_writer.as_default():
+                        tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
+                        #summary_acc = acc if acc > best_val_loss else best_val_loss
+                        tf.summary.scalar("child_accuracy", acc, description="children", step=epoch+1)
 
                 # test_writer.close()
 
