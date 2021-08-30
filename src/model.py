@@ -48,6 +48,27 @@ class ModelGenerator(Model):
 
         self.model = self.build_model(filters)
 
+    def build_cell_util(self, filters, inputs, reduction=False):
+        '''
+        Simple helper function for building a cell and quickly return the inputs for next cell.
+
+        Args:
+            filters (int): number of filters
+            inputs (list<tf.Tensor>): previous cells output, that can be used as inputs in the current cell
+            reduction (bool, optional): Build a reduction cell? Defaults to False.
+
+        Returns:
+            (list<tf.Tensor>): Usable inputs for next cell
+        '''
+
+        stride = (2, 2) if reduction else (1, 1)
+        cell_output = self.build_cell(self.B, self.action_list, filters=filters, stride=stride, inputs=inputs)
+        self.cell_index += 1
+
+        # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
+        # while -1 is the output of the created cell
+        return [inputs[-1], cell_output]    
+
     def build_model(self, filters=32):
         # reset cell index, otherwise would use last model value
         self.cell_index = 0
@@ -57,36 +78,27 @@ class ModelGenerator(Model):
         model_input = tf.keras.layers.Input(shape=(32, 32, 3))
 
         # define inputs usable by blocks
-        # last_output will be the input image at start, while skip_output is the output of block previous to last one (lag 1, used in actions with input = -2)
-        last_output = model_input
-        skip_output = last_output
+        # last_output will be the input image at start, while skip_output is set to None to trigger a special case in build_cell (avoids input normalization)
+        cell_inputs = [None, model_input]   # [skip, last]
 
-        # TODO: refactor this to avoid updating output here everytime
         # add (M - 1) times N normal cells and a reduction cell
-        for i in range(self.M - 1):
+        for _ in range(self.M - 1):
             # add N times a normal cell
-            for j in range(self.N):
-                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1), inputs=[skip_output, last_output])
-                self.cell_index += 1
-                skip_output = last_output
-                last_output = normal_cell
+            for _ in range(self.N):
+                cell_inputs = self.build_cell_util(filters, inputs=cell_inputs)
 
             # add 1 time a reduction cell
             filters = filters * 2
-            reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2, 2), inputs=[skip_output, last_output])
-            self.cell_index += 1
-            skip_output = last_output
-            last_output = reduction_cell
+            cell_inputs = self.build_cell_util(filters, inputs=cell_inputs, reduction=True)
 
         # add N time a normal cell
-        for i in range(self.N):
-            normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1), inputs=[skip_output, last_output])
-            self.cell_index += 1
-            skip_output = last_output
-            last_output = normal_cell
+        for _ in range(self.N):
+            cell_inputs = self.build_cell_util(filters, inputs=cell_inputs)
 
+        # take last cell output and use it in GAP
+        last_output = cell_inputs[-1]
         gap = GlobalAveragePooling2D(name='GAP')(last_output)
-        # TODO: other datasets have a different number of classes, should be a parameter (10 constant)
+        # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
         output = Dense(10, activation='softmax', name='Softmax')(gap)  # only logits
 
         return tf.keras.Model(inputs=model_input, outputs=output)
@@ -153,6 +165,11 @@ class ModelGenerator(Model):
             [list<tf.Tensor>]: updated tensor list (input list could be unchanged, but the list will be returned anyway)
         '''
 
+        # Initial cell case, skip input is not defined, simply use the other input without any depth normalization
+        if inputs[-2] == None:
+            inputs[-2] = inputs[-1]
+            return inputs
+
         skip_depth = inputs[-2].get_shape().as_list()[3]
         last_depth = inputs[-1].get_shape().as_list()[3]
 
@@ -171,6 +188,7 @@ class ModelGenerator(Model):
             # override input with the normalized one
             inputs[-2] = x(inputs[-2])
         # only depth divergence, should not happen with actual algorithm (should always be both spatial and depth if dims diverge)
+        # TODO: also it is no more required and could be not good for the network
         elif skip_depth != last_depth:
             self._logger.debug("Normalizing inputs' depth (cell %d)", self.cell_index)
             x = ops.Convolution(last_depth, (1, 1), strides=(1, 1))     # no stride
@@ -222,6 +240,9 @@ class ModelGenerator(Model):
 
         # basically a huge switch case, python has no switch case because 'reasons'...
         # TODO: with python 3.10.0 match-case is available, it's worth to upgrade python for it?
+
+        # TODO: could be improved to generalize operations to different sizes, extrapolating them through regex.
+        # For example 3x3 dconv and 5x5 dconv as \dx\d dconv and setting accordingly the kernel size
 
         # applies a 3x3 separable conv
         if action == '3x3 dconv':
