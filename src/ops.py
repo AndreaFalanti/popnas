@@ -1,54 +1,59 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization
+from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
 
 # TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
 
 
-def pad_closure(desired_depth):
+def depth_zero_pad_closure(desired_depth, op_layer):
     '''
-    Pad depth of an identity tensor with zeros if has not already the right depth for performing addition at the end of the block.
+    Pad depth of a Keras layer with zeros, if it has not already the right depth for performing addition at the end of the block.
 
     Args:
-        desired_depth (int): Depth required for addition with other tensor inside the block
+        desired_depth (int): Depth required for addition with other tensor inside the block (filters value).
+        op_layer (tf.keras.Layer): Keras layer to use. Only layers that don't modify depth can be used, otherwise the closure will fail
+            (as it wouldn't be necessary to adapt the depth).
 
     Returns:
         (Callable): call function build by closure
     '''
-    def pad_identity(inputs):
+    def depth_zero_pad_call(inputs):
+        # directly compute depth on input, because 
         input_depth = inputs.get_shape().as_list()[3]
         pad_size = desired_depth - input_depth
 
         if pad_size > 0:
+            output = op_layer(inputs)
             paddings = tf.constant([[0, 0], [0, 0], [0, 0], [0, pad_size]])
-            return tf.pad(inputs, paddings)  # constant, with 0s
+            return tf.pad(output, paddings)  # pad output with 0s
         else:
-            return inputs
+            return op_layer(inputs)
 
-    return pad_identity
+    return depth_zero_pad_call
 
 
-def pooling_closure(filters, pool_layer):
+def depth_pointwise_conv_closure(desired_depth, op_layer):
     '''
     Generate call for pooling operation. It adds a pointwise convolution to adapt the depth, if necessary.
 
     Args:
-        filters (int): number of filters (depth)
-        pool_layer (tf.keras.Layer): pooling layer to use (max or avg already parametrized)
+        desired_depth (int): Depth required for addition with other tensor inside the block (filters value).
+        op_layer (tf.keras.Layer): Keras layer to use. Only layers that don't modify depth can be used, otherwise the closure will fail
+            (as it wouldn't be necessary to adapt the depth).
 
     Returns:
         (Callable): call function build by closure
     '''
-    def pooling_call(inputs):
+    def depth_pointwise_conv_call(inputs):
         input_depth = inputs.get_shape().as_list()[3]
 
-        if input_depth != filters:
-            pool = pool_layer(inputs)
-            return Convolution(filters, (1, 1), (1, 1))(pool)
+        if input_depth != desired_depth:
+            output = op_layer(inputs)
+            return Convolution(desired_depth, (1, 1), (1, 1))(output)
         else:
-            return pool_layer(inputs)
+            return op_layer(inputs)
 
-    return pooling_call
+    return depth_pointwise_conv_call
 
 
 class Identity(Model):
@@ -59,10 +64,11 @@ class Identity(Model):
         '''
         super(Identity, self).__init__()
 
-        self.op = pad_closure(filters)
+        self.op = Layer()   # Identity layer in Keras
+        self.identity_call = depth_zero_pad_closure(filters, self.op)
 
     def call(self, inputs, training=None, mask=None):
-        return self.op(inputs)
+        return self.identity_call(inputs)
 
 
 class SeperableConvolution(Model):
@@ -138,7 +144,7 @@ class Pooling(Model):
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
 
-        self.pool_call = pooling_closure(filters, self.pool)
+        self.pool_call = depth_pointwise_conv_closure(filters, self.pool)
 
     def call(self, inputs, training=None, mask=None):
         return self.pool_call(inputs)
