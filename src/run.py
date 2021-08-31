@@ -32,10 +32,12 @@ def main():
     else:
         print("No GPU found")
 
-    device_list = tf.config.experimental.get_visible_devices()
+    device_list = tf.config.list_physical_devices()
     print(device_list)
 
-    if (not args.cpu and not tf.test.is_gpu_available()):
+    gpu_devices = tf.config.list_physical_devices('GPU')
+
+    if (not args.cpu and len(gpu_devices) == 0):
         sys.exit('GPU is not available for execution, run with --cpu flag or troubleshot the issue in case a GPU is actually present in the device')
 
     # create folder structure for log files or reuse previous logs to continue execution

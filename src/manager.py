@@ -10,10 +10,6 @@ import shutil
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from keras.utils.vis_utils import plot_model  # per stampare modello
-from tensorflow.python.util import deprecation
-
-deprecation._PRINT_DEPRECATION_WARNINGS = False  # to hide warning
-# tf.compat.v1.enable_eager_execution(device_policy=tf.contrib.eager.DEVICE_PLACEMENT_SILENT)
 
 
 if not os.path.exists('temp_weights/'):

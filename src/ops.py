@@ -4,7 +4,6 @@ from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, Avera
 
 # TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
 
-
 def depth_zero_pad_closure(desired_depth, op_layer):
     '''
     Pad depth of a Keras layer with zeros, if it has not already the right depth for performing addition at the end of the block.
@@ -15,7 +14,7 @@ def depth_zero_pad_closure(desired_depth, op_layer):
             (as it wouldn't be necessary to adapt the depth).
 
     Returns:
-        (Callable): call function build by closure
+        (Callable): call function built by closure
     '''
     def depth_zero_pad_call(inputs):
         # directly compute depth on input, because 
@@ -42,7 +41,7 @@ def depth_pointwise_conv_closure(desired_depth, op_layer):
             (as it wouldn't be necessary to adapt the depth).
 
     Returns:
-        (Callable): call function build by closure
+        (Callable): call function built by closure
     '''
     def depth_pointwise_conv_call(inputs):
         input_depth = inputs.get_shape().as_list()[3]
@@ -118,7 +117,7 @@ class StackedConvolution(Model):
         assert len(filter_list) == len(kernel_list) and len(kernel_list) == len(stride_list), "List lengths must match"
 
         self.convs = []
-        for i, (f, k, s) in enumerate(zip(filter_list, kernel_list, stride_list)):
+        for (f, k, s) in zip(filter_list, kernel_list, stride_list):
             conv = Convolution(f, k, s)
             self.convs.append(conv)
 
