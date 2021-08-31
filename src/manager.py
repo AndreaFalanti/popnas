@@ -127,7 +127,7 @@ class NetworkManager:
             optimizer = tf.compat.v1.train.AdamOptimizer(lr)
             saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
 
-            best_val_loss = np.inf
+            best_val_acc = 0
             timer = 0  # inizialize timer to evaluate training time
 
             # TODO: why not using a Keras model to run model.fit? Could be better to convert it maybe
@@ -187,16 +187,16 @@ class NetworkManager:
                 self._logger.info("\tVal loss = %0.6f", avg_val_loss)
 
                 # if acc improved, save the weights
-                if avg_val_loss < best_val_loss:
-                    self._logger.info("\tAverage val loss improved from %0.6f to %0.6f. Saving weights!", best_val_loss, avg_val_loss)
+                if acc > best_val_acc:
+                    self._logger.info("\tValidation accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
 
-                    best_val_loss = avg_val_loss
+                    best_val_acc = acc
                     saver.save('temp_weights/temp_network')
 
                 # add forward pass and accuracy to Tensorboard
                 with self.summary_writer.as_default():
                     tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
-                    #summary_acc = acc if acc > best_val_loss else best_val_loss
+                    #summary_acc = acc if acc > best_val_acc else best_val_acc
                     tf.summary.scalar("child_accuracy", acc, description="children", step=epoch+1)
 
             # test_writer.close()

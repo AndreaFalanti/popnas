@@ -80,7 +80,6 @@ use other blocks output as input of another block).
 - Specular blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality. Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
 - Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
-- Change metric of weights saving of CNN from validation accuracy to validation loss (should generalize better). 
 - Migrate code to Tensorflow 2.
 - Format code with pep8 and flake, to follow standard python conventions.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
