@@ -102,8 +102,7 @@ class ControllerManager:
                  embedding_dim=30,
                  input_B=None,
                  pnas_mode=False,
-                 restore_controller=False,
-                 cpu=False):
+                 restore_controller=False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -127,7 +126,6 @@ class ControllerManager:
                 like original PNAS.
             restore_controller: flag whether to restore a pre-trained RNN controller
                 upon construction.
-            cpu: use CPU to train the controller
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -147,7 +145,6 @@ class ControllerManager:
         self.input_B = input_B
         self.pnas_mode = pnas_mode
         self.restore_controller = restore_controller
-        self.cpu = cpu
 
         # restore controller
         if self.restore_controller:
@@ -248,9 +245,6 @@ class ControllerManager:
         Also constructs saver and restorer to the RNN controller if required.
         '''
 
-        device = '/cpu:0' if self.cpu else '/gpu:0'
-        self.device = device
-
         if self.restore_controller and self.input_B is not None:
             input_B = self.input_B
         else:
@@ -259,15 +253,14 @@ class ControllerManager:
         self.global_step = tf.compat.v1.train.get_or_create_global_step()
         #learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
 
-        with tf.device(device):
-            self.controller = Controller(self.controller_cells,
-                                         self.embedding_dim,
-                                         input_B,
-                                         self.state_space.operator_embedding_max)
+        self.controller = Controller(self.controller_cells,
+                                        self.embedding_dim,
+                                        input_B,
+                                        self.state_space.operator_embedding_max)
 
-            # PNAS paper specifies different learning rates, one for b=1 and another for other b values
-            self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.002)
-            self.optimizer_b1 = tf.compat.v1.train.AdamOptimizer(learning_rate=0.01)
+        # PNAS paper specifies different learning rates, one for b=1 and another for other b values
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.002)
+        self.optimizer_b1 = tf.compat.v1.train.AdamOptimizer(learning_rate=0.01)
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,
@@ -360,20 +353,19 @@ class ControllerManager:
                     state_list = self.state_space.entity_encode_child(child)
                     state_list = np.concatenate(state_list, axis=-1).astype('int32')
 
-                    with tf.device(self.device):
-                        state_list = tf.convert_to_tensor(state_list)
+                    state_list = tf.convert_to_tensor(state_list)
 
-                        with tf.GradientTape() as tape:
-                            rnn_scores, states = self.controller(state_list, states=None)
-                            acc_scores = score.reshape((1, 1))
+                    with tf.GradientTape() as tape:
+                        rnn_scores, states = self.controller(state_list, states=None)
+                        acc_scores = score.reshape((1, 1))
 
-                            loss = self.loss(acc_scores, rnn_scores)
+                        loss = self.loss(acc_scores, rnn_scores)
 
-                        grads = tape.gradient(loss, self.controller.trainable_variables)
-                        grad_vars = zip(grads, self.controller.trainable_variables)
+                    grads = tape.gradient(loss, self.controller.trainable_variables)
+                    grad_vars = zip(grads, self.controller.trainable_variables)
 
-                        optimizer = self.optimizer_b1 if current_b == 1 else self.optimizer
-                        optimizer.apply_gradients(grad_vars, self.global_step)
+                    optimizer = self.optimizer_b1 if current_b == 1 else self.optimizer
+                    optimizer.apply_gradients(grad_vars, self.global_step)
 
                     epoch_losses = np.append(epoch_losses, loss.numpy())
 

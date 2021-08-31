@@ -22,7 +22,7 @@ class Train:
     def __init__(self, blocks, children, checkpoint,
                  dataset, sets, epochs, batchsize,
                  learning_rate, restore, filters,
-                 cpu, all_blocks_concat, pnas_mode):
+                 all_blocks_concat, pnas_mode):
 
         self._logger = log_service.get_logger(__name__)
 
@@ -36,7 +36,6 @@ class Train:
         self.learning_rate = learning_rate
         self.restore = restore
         self.filters = filters
-        self.cpu = cpu
         self.concat_only_unused = not all_blocks_concat
         self.pnas_mode = pnas_mode
 
@@ -268,12 +267,11 @@ class Train:
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=15,
                                        pnas_mode=self.pnas_mode,
-                                       restore_controller=self.restore,
-                                       cpu=self.cpu)
+                                       restore_controller=self.restore)
 
         # create the Network Manager
         manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
-                                 learning_rate=self.learning_rate, filters=self.filters, cpu=self.cpu)
+                                 learning_rate=self.learning_rate, filters=self.filters)
 
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_B == 0:

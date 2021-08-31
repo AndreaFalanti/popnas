@@ -1,9 +1,8 @@
 import argparse
-
-import train
+import sys
 
 import log_service
-import sys
+from train import Train
 
 import tensorflow as tf
 
@@ -37,7 +36,14 @@ def main():
 
     gpu_devices = tf.config.list_physical_devices('GPU')
 
-    if (not args.cpu and len(gpu_devices) == 0):
+    # DEBUG: To find out which devices your operations and tensors are assigned to
+    #tf.debugging.set_log_device_placement(True)
+
+    if (args.cpu):
+        # remove GPUs from visible devices, using only CPUs
+        tf.config.set_visible_devices([], 'GPU')
+        print("Using CPU devices only")
+    elif (not args.cpu and len(gpu_devices) == 0):
         sys.exit('GPU is not available for execution, run with --cpu flag or troubleshot the issue in case a GPU is actually present in the device')
 
     # create folder structure for log files or reuse previous logs to continue execution
@@ -49,11 +55,11 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
-    run = train.Train(args.b, args.k, checkpoint=args.c,
-                      dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
-                      learning_rate=args.l, restore=args.restore,
-                      filters=args.f, cpu=args.cpu, all_blocks_concat=args.abc,
-                      pnas_mode=args.pnas)
+    run = Train(args.b, args.k, checkpoint=args.c,
+                dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
+                learning_rate=args.l, restore=args.restore,
+                filters=args.f, all_blocks_concat=args.abc,
+                pnas_mode=args.pnas)
 
     run.process()
 
