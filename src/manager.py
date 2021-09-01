@@ -4,12 +4,14 @@ from tqdm import tqdm
 import numpy as np
 
 import os
-import time
 import shutil
 
 import tensorflow as tf
-from tensorflow.keras.models import Model
-from keras.utils.vis_utils import plot_model  # per stampare modello
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from keras.utils.vis_utils import plot_model   # per stampare modello
+
+from model import ModelGenerator
+from utils.TimingCallback import TimingCallback
 
 
 if not os.path.exists('temp_weights/'):
@@ -32,7 +34,7 @@ class NetworkManager:
         # Args:
             dataset: a tuple of 4 arrays (X_train, y_train, X_val, y_val)
             epochs: number of epochs to train the subnetworks
-            batchsize: batchsize of training the subnetworks
+            batchsize: batchsize
             learning_rate: learning rate for the Optimizer
             filters (int): initial number of filters
         '''
@@ -48,9 +50,62 @@ class NetworkManager:
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
 
+    def __compile_model(self, model_fn: ModelGenerator, actions: 'list[str]', concat_only_unused: bool, tb_logdir: str):
+        '''
+        Generate and compile a Keras model, with cell structure defined by actions provided.
+
+        Args:
+            model_fn (ModelGenerator): [description]
+            actions (list): [description]
+            concat_only_unused (bool): [description]
+            tb_logdir (str): path for tensorboard logging
+
+        Returns:
+            (tf.keras.Model, list(tf.keras.callbacks.Callback)): model and callbacks to use while training
+        '''
+        model_gen = model_fn(actions, self.filters, concat_only_unused)  # type: ModelGenerator
+        model = model_gen.build_model()
+
+        loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
+        model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+        return model, model_gen.define_callbacks(tb_logdir)
+
+    def __build_datasets(self, dataset_index: int, use_data_augmentation: bool):
+        '''
+        Build the training and validation datasets to be used in model.fit().
+
+        Args:
+            dataset_index (int): dataset index
+            use_data_augmentation (bool): [description]
+
+        Returns:
+            [type]: [description]
+        '''
+
+        x_train, y_train, x_val, y_val = self.dataset[dataset_index]
+
+        if use_data_augmentation:
+            train_datagen = ImageDataGenerator(horizontal_flip=True)
+            validation_datagen = ImageDataGenerator(horizontal_flip=True)
+        else:
+            train_datagen = ImageDataGenerator()
+            validation_datagen = ImageDataGenerator()
+
+        train_datagen.fit(x_train)
+        validation_datagen.fit(x_val)
+
+        train_dataset = train_datagen.flow(x_train, y_train, batch_size=self.batchsize)
+        validation_dataset = validation_datagen.flow(x_val, y_val, batch_size=self.batchsize)
+
+        train_batches = np.ceil(len(x_train) / self.batchsize)
+        val_batches = np.ceil(len(x_val) / self.batchsize)
+
+        return train_dataset, validation_dataset, train_batches, val_batches
+
     def get_rewards(self, model_fn, actions, concat_only_unused=True, save_best_model=False, display_model_summary=True):
         '''
-        Creates a subnetwork given the actions predicted by the controller RNN,
+        Creates a CNN given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
 
         # Args:
@@ -84,11 +139,8 @@ class NetworkManager:
 
         # create children folder on Tensorboard
         self.num_child = self.num_child + 1
-        self.logdir = log_service.build_path('children', str(self.num_child))
-        self.summary_writer = tf.summary.create_file_writer(self.logdir)
-        self.summary_writer.set_as_default()
-
-        acc_list = []
+        # grouped for block count and enumerated progressively
+        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(actions) // 4}', str(self.num_child))
 
         # generate a submodel given predicted actions
         for index in range(self.data_num):
@@ -96,134 +148,32 @@ class NetworkManager:
                 self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
 
             # build the model, given the actions
-            model = model_fn(actions, self.filters, concat_only_unused).model  # type: Model
+            model, callbacks = self.__compile_model(model_fn, actions, concat_only_unused, tb_logdir)
+            # add callback to register as accurate as possible the training time
+            time_cb = TimingCallback()
+            callbacks.append(time_cb)
 
-            # build model shapes
-            x_train, y_train, x_val, y_val = self.dataset[index]
+            train_ds, val_ds, train_batches, val_batches = self.__build_datasets(index, True)
 
-            # TODO: seems that repeat is not necessary
-            # generate the dataset for training
-            train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-            train_dataset = train_dataset.shuffle(10000, seed=0)
-            train_dataset = train_dataset.batch(self.batchsize)
-            #train_dataset = train_dataset.repeat()
-            train_dataset = train_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
-            # train_dataset = train_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
+            hist = model.fit(x=train_ds,
+                        epochs=self.epochs,
+                        batch_size=self.batchsize,
+                        steps_per_epoch=train_batches,
+                        validation_data=val_ds,
+                        validation_steps=val_batches,
+                        callbacks=callbacks)
 
-            # generate the dataset for evaluation
-            val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-            val_dataset = val_dataset.batch(self.batchsize)
-            #val_dataset = val_dataset.repeat()
-            val_dataset = val_dataset.prefetch(4)  # da usare se prefetch_to_device non funziona
-            # val_dataset = val_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
-
-            num_train_batches = x_train.shape[0] // self.batchsize + 1
-
-            global_step = tf.compat.v1.train.get_or_create_global_step()
-            lr = tf.compat.v1.train.cosine_decay(self.lr, global_step, decay_steps=num_train_batches * self.epochs, alpha=0.1)
-
-            # TODO: original PNAS paper doesn't mention Adam, only cosine decay
-            # construct the optimizer and saver of the child model
-            optimizer = tf.compat.v1.train.AdamOptimizer(lr)
-            saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
-
-            best_val_acc = 0
-            timer = 0  # inizialize timer to evaluate training time
-
-            # TODO: why not using a Keras model to run model.fit? Could be better to convert it maybe
-            for epoch in range(self.epochs):
-                epoch_losses = np.array([])
-
-                # train child model
-                with tqdm(iterable=enumerate(train_dataset),
-                            desc=f'Train Epoch ({epoch + 1} / {self.epochs}): ',
-                            unit='batch',
-                            total=num_train_batches) as pbar:
-
-                    for _, (x, y) in pbar:
-                        # get gradients
-                        with tf.GradientTape() as tape:
-                            # get training starting time
-                            start = time.clock()
-                            preds = model(x, training=True)
-                            loss = tf.keras.losses.categorical_crossentropy(y, preds)
-
-                        grad = tape.gradient(loss, model.variables)
-                        grad_vars = zip(grad, model.variables)
-
-                        # update weights of the child models
-                        optimizer.apply_gradients(grad_vars, global_step)
-
-                        # get training ending time
-                        stop = time.clock()
-
-                        # loss is the loss of each element of the batch considered, append them to produce the mean at epoch end
-                        epoch_losses = np.append(epoch_losses, loss)
-                        # current average loss of already processed batches
-                        avg_loss = np.mean(epoch_losses)
-
-                        pbar.set_postfix({ 'avg_loss': avg_loss }, refresh=False)
-
-                        # evaluate training time
-                        timer = timer + (stop - start)
-
-                val_losses = np.array([])
-                # evaluate child model
-                acc = tf.metrics.CategoricalAccuracy()
-                for _, (x, y) in enumerate(val_dataset):
-                    preds = model(x, training=False)
-                    acc(y, preds)
-                    val_batch_loss = tf.keras.losses.categorical_crossentropy(y, preds)
-                    val_losses = np.append(val_losses, val_batch_loss)
-
-                acc = acc.result().numpy()
-                avg_val_loss = np.mean(val_losses)
-
-                # print important metrics about training
-                self._logger.info("\tEpoch %d:", epoch + 1)
-                self._logger.info("\tTraining time = %0.6f", timer)
-                self._logger.info("\tTraining loss = %0.6f", avg_loss)
-                self._logger.info("\tVal accuracy = %0.6f", acc)
-                self._logger.info("\tVal loss = %0.6f", avg_val_loss)
-
-                # if acc improved, save the weights
-                if acc > best_val_acc:
-                    self._logger.info("\tValidation accuracy improved from %0.6f to %0.6f. Saving weights!", best_val_acc, acc)
-
-                    best_val_acc = acc
-                    saver.save('temp_weights/temp_network')
-
-                # add forward pass and accuracy to Tensorboard
-                with self.summary_writer.as_default():
-                    tf.summary.scalar("training_time", timer, description="children", step=epoch+1)
-                    #summary_acc = acc if acc > best_val_acc else best_val_acc
-                    tf.summary.scalar("child_accuracy", acc, description="children", step=epoch+1)
-
-            # test_writer.close()
-
-            # load best weights of the child model
-            path = tf.train.latest_checkpoint('temp_weights/')
-            saver.restore(path)
+            timer = sum(time_cb.logs)
 
             # display the structure of the child model
             if display_model_summary:
                 model.summary(line_length=140, print_fn=self._logger.info)
                 # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
-            # evaluate the best weights of the child model
-            acc = tf.metrics.CategoricalAccuracy()
+        # compute the reward (best validation accuracy)
+        reward = max(hist.history.get('val_accuracy'))
 
-            for _, (x, y) in enumerate(val_dataset):
-                preds = model(x, training=False)
-                acc(y, preds)
-
-            acc = acc.result().numpy()
-            acc_list.append(acc)
-
-        # compute the reward (validation accuracy)
-        reward = acc
-
-        self._logger.info("Manager: Accuracy = %0.6f", reward)
+        self._logger.info("Manager: Accuracy = %0.6f, Training time: %0.6f seconds", reward, timer)
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
@@ -237,7 +187,5 @@ class NetworkManager:
 
         # clean up resources and GPU memory
         del model
-        del optimizer
-        del global_step
 
         return [reward, timer]

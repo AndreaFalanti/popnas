@@ -14,8 +14,8 @@ import importlib.util
 import csv
 import statistics
 
-# import os
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable GPU debugging info
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
 class Train:
 

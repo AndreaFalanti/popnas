@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras.models import Model
 
 import ops
 import log_service
@@ -9,18 +8,18 @@ from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
 # TODO: refactor this in a function, like the ones we have done in NN course. This will make this a lot more simple.
 
 
-class ModelGenerator(Model):
+class ModelGenerator():
 
     def __init__(self, actions, filters=24, concat_only_unused=True):
         '''
-        Utility Model class to construct child models provided with an action list.
+        Utility class to build a CNN with structure provided in the action list.
 
         # Args:
             actions: list of [input; action] pairs that define the cell.
             filters (int): initial number of filters.
             concat_only_unused (bool): concats only unused states at the end of each cell if true, otherwise concats all blocks output.
         '''
-        super(ModelGenerator, self).__init__()
+
         self._logger = log_service.get_logger(__name__)
 
         self.B = len(actions) // 4
@@ -39,16 +38,9 @@ class ModelGenerator(Model):
             self.M = 1
             self.N = 0
 
-        # TODO: never used?
-        self.global_counter = 0
+        self.filters = filters
 
-        # used for layers naming, defined in class to avoid to pass them across multiple functions
-        self.cell_index = 0
-        self.block_index = 0
-
-        self.model = self.build_model(filters)
-
-    def build_cell_util(self, filters, inputs, reduction=False):
+    def __build_cell_util(self, filters, inputs, reduction=False):
         '''
         Simple helper function for building a cell and quickly return the inputs for next cell.
 
@@ -62,16 +54,19 @@ class ModelGenerator(Model):
         '''
 
         stride = (2, 2) if reduction else (1, 1)
-        cell_output = self.build_cell(self.B, self.action_list, filters=filters, stride=stride, inputs=inputs)
+        cell_output = self.__build_cell(self.B, self.action_list, filters=filters, stride=stride, inputs=inputs)
         self.cell_index += 1
 
         # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
         # while -1 is the output of the created cell
-        return [inputs[-1], cell_output]    
+        return [inputs[-1], cell_output]
 
-    def build_model(self, filters=32):
-        # reset cell index, otherwise would use last model value
+    def build_model(self):
+        # used for layers naming, defined in class to avoid to pass them across multiple functions
         self.cell_index = 0
+        self.block_index = 0
+
+        filters = self.filters
 
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
@@ -85,15 +80,15 @@ class ModelGenerator(Model):
         for _ in range(self.M - 1):
             # add N times a normal cell
             for _ in range(self.N):
-                cell_inputs = self.build_cell_util(filters, inputs=cell_inputs)
+                cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs)
 
             # add 1 time a reduction cell
             filters = filters * 2
-            cell_inputs = self.build_cell_util(filters, inputs=cell_inputs, reduction=True)
+            cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs, reduction=True)
 
         # add N time a normal cell
         for _ in range(self.N):
-            cell_inputs = self.build_cell_util(filters, inputs=cell_inputs)
+            cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs)
 
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
@@ -103,10 +98,7 @@ class ModelGenerator(Model):
 
         return tf.keras.Model(inputs=model_input, outputs=output)
 
-    def call(self, inputs, training=None, mask=None):
-        return self.model(inputs, training=training)
-
-    def build_cell(self, B, action_list, filters, stride, inputs):
+    def __build_cell(self, B, action_list, filters, stride, inputs):
         '''
         Generate cell from action list. Following PNAS paper, addition is used to combine block results.
 
@@ -121,18 +113,18 @@ class ModelGenerator(Model):
             (tf.keras.layers.Add | tf.keras.layers.Concatenate): [description]
         '''
         # normalize inputs if necessary
-        inputs = self.normalize_inputs(inputs)
+        inputs = self.__normalize_inputs(inputs)
 
         # if cell size is 1 block only
         if B == 1:
-            return self.build_block(action_list[0], action_list[1], filters, stride, inputs)
+            return self.__build_block(action_list[0], action_list[1], filters, stride, inputs)
 
         # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
         total_inputs = inputs   # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i in range(B):
             self.block_index = i
-            block_out = self.build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs)
+            block_out = self.__build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs)
 
             # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
@@ -152,7 +144,7 @@ class ModelGenerator(Model):
         else:
             return block_outputs[0]
 
-    def normalize_inputs(self, inputs):
+    def __normalize_inputs(self, inputs):
         '''
         Normalize tensor dimensions between -2 and -1 inputs if they diverge (either spatial and depth).
         In actual architecture the normalization should happen only if -2 is a normal cell output and -1 is instead the output
@@ -197,7 +189,7 @@ class ModelGenerator(Model):
 
         return inputs
 
-    def build_block(self, action_L, action_R, filters, stride, inputs):
+    def __build_block(self, action_L, action_R, filters, stride, inputs):
         '''
         Generate a block, following PNAS conventions.
 
@@ -219,11 +211,11 @@ class ModelGenerator(Model):
         stride_R = stride if input_index_R < 0 else (1, 1)
 
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.parse_action(filters, action_name_L, strides=stride_L, tag='L')(inputs[input_index_L])
-        right_layer = self.parse_action(filters, action_name_R, strides=stride_R, tag='R')(inputs[input_index_R])
+        left_layer = self.__parse_action(filters, action_name_L, strides=stride_L, tag='L')(inputs[input_index_L])
+        right_layer = self.__parse_action(filters, action_name_R, strides=stride_R, tag='R')(inputs[input_index_R])
         return tf.keras.layers.Add()([left_layer, right_layer])
 
-    def parse_action(self, filters, action, strides=(1, 1), tag='L'):
+    def __parse_action(self, filters, action, strides=(1, 1), tag='L'):
         '''
         Generate correct custom layer for provided action. Certain cases are handled incorrectly,
         so that model can still be built, albeit not with original specification
@@ -301,3 +293,40 @@ class ModelGenerator(Model):
             x = ops.Identity(filters, strides)
             x._name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
             return x
+
+    def define_callbacks(self, tb_logdir):
+        '''
+        Define callbacks used in model training.
+
+        Returns:
+            (tf.keras.Callback[]): Keras callbacks
+        '''
+        callbacks = []
+
+        # TODO: Save best weights, not really necessary? Was used only to get best val_accuracy...
+        # ckpt_callback = tf.keras.callbacks.ModelCheckpoint(filepath=log_service.build_path('temp_weights', 'cp_e{epoch:02d}_vl{val_accuracy:.2f}.ckpt'),
+        #                                                     save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max', verbose=1)
+        # callbacks.append(ckpt_callback)
+        
+        # By default shows losses and metrics for both training and validation
+        # tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
+        #                                             profile_batch=0, histogram_freq=0, update_freq='epoch')
+
+        # callbacks.append(tb_callback)
+
+        # TODO: convert into a parameter
+        early_stop = False
+        if early_stop:
+            es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
+            callbacks.append(es_callback)
+
+        return callbacks
+
+    def define_training_hyperparams_and_metrics(self, lr=0.01):
+        loss = tf.keras.losses.CategoricalCrossentropy()
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+        metrics = ['accuracy']
+
+        # TODO: pnas used cosine decay with SGD, instead of Adam. Investigate which alternative is better
+
+        return loss, optimizer, metrics
