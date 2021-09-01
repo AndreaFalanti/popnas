@@ -103,7 +103,7 @@ class NetworkManager:
 
         return train_dataset, validation_dataset, train_batches, val_batches
 
-    def get_rewards(self, model_fn, actions, concat_only_unused=True, save_best_model=False, display_model_summary=True):
+    def get_rewards(self, model_fn, actions, concat_only_unused=True, save_best_model=False, display_model_summary=False):
         '''
         Creates a CNN given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
@@ -141,6 +141,7 @@ class NetworkManager:
         self.num_child = self.num_child + 1
         # grouped for block count and enumerated progressively
         tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(actions) // 4}', str(self.num_child))
+        os.makedirs(tb_logdir, exist_ok = True)
 
         # generate a submodel given predicted actions
         for index in range(self.data_num):
@@ -165,10 +166,16 @@ class NetworkManager:
 
             timer = sum(time_cb.logs)
 
-            # display the structure of the child model
+            # display the structure of the child model on console if flag is true
             if display_model_summary:
                 model.summary(line_length=140, print_fn=self._logger.info)
                 # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
+
+            # always write model summary to file
+            with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
+                # str casting is required since inputs are int
+                f.write('Model actions: ' + ','.join(map(lambda el: str(el), actions)) + '\n\n')
+                model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
 
         # compute the reward (best validation accuracy)
         reward = max(hist.history.get('val_accuracy'))
