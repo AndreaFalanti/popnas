@@ -119,11 +119,11 @@ class Train:
         self._logger.info("\t%s", listed_space)
 
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
-        self._logger.info("Final Accuracy: %0.6f", reward)
+        reward, timer, total_params = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
+        self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
 
-        return reward, timer, listed_space
+        return reward, timer, total_params, listed_space
 
     def generate_dynamic_reindex_function(self, operators, op_timers, t_max):
         '''
@@ -152,11 +152,11 @@ class Train:
             manager ([type]): [description]
         '''
 
-        reward, timer, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
+        _, timer, _, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             data = [timer, 0]
-            for i in range(self.blocks):
+            for _ in range(self.blocks):
                 data.extend([0, 0, 0, 0])
             writer = csv.writer(f)
             writer.writerow(data)
@@ -165,6 +165,8 @@ class Train:
         with open(log_service.build_path('csv', 'avg_training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             avg_time = statistics.mean(timers)
+            max_time = max(timers)
+            min_time = min(timers)
             writer.writerow([blocks, avg_time])
 
     def write_sliding_blocks_training_time(self, current_blocks, timer, listed_space,
@@ -292,7 +294,7 @@ class Train:
             timers = []
 
             for t, action in enumerate(actions):
-                reward, timer, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
+                reward, timer, total_params, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
                 rewards.append(reward)
                 timers.append(timer)
 
@@ -313,13 +315,19 @@ class Train:
                 self._logger.info("Finished %d out of %d models!", (t + 1), len(actions))
 
                 # write the results of this trial into a file
-                with open(log_service.build_path('csv', 'real_accuracy.csv'), mode='a+', newline='') as f:
-                    data = [reward, current_blocks]
-                    data.extend(listed_space)
+                with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
+
+                    # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+                    if f.tell() == 0:
+                        writer.writerow(['best_val_accuracy', 'train_time(seconds)', 'total params', '# blocks', 'cell structure'])
+
+                    cell_structure = f"[{';'.join(map(lambda el: str(el), listed_space))}]"
+                    data = [reward, timer, total_params, current_blocks, cell_structure]
+                    
                     writer.writerow(data)
 
-                # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex
+                # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
                 if current_blocks > 1:
                     self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
                                                             state_space, reindex_function)

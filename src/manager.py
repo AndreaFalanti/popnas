@@ -179,8 +179,7 @@ class NetworkManager:
 
         # compute the reward (best validation accuracy)
         reward = max(hist.history.get('val_accuracy'))
-
-        self._logger.info("Manager: Accuracy = %0.6f, Training time: %0.6f seconds", reward, timer)
+        total_params = model.count_params()
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
@@ -195,4 +194,4 @@ class NetworkManager:
         # clean up resources and GPU memory
         del model
 
-        return [reward, timer]
+        return reward, timer, total_params
