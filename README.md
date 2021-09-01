@@ -77,10 +77,11 @@ the computation extremely similar to PNAS algorithm.
 use other blocks output as input of another block).
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
-- Specular blocks are now excluded from the search space, like in PNAS.
+- Equivalent blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality. Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
 - Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
 - Migrate code to Tensorflow 2.
+- CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
 - Format code with pep8 and flake, to follow standard python conventions.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed

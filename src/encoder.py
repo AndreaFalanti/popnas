@@ -321,14 +321,14 @@ class StateSpace:
     def _construct_permutations(self, search_space):
         '''
         State space is a 4-tuple (ip1, op1, ip2, op2).
-        Specular blocks are excluded from the search space.
+        Equivalent blocks (example: [-2, A, -1, A] and [-1, A, -2, A]) are excluded from the search space.
         '''
         for input1 in search_space[0]:
             for operation1 in search_space[1]:
                 for input2 in search_space[2]:
-                    if input2 >= input1: # added to avoid repeated permutations (specular blocks)
+                    if input2 >= input1: # added to avoid repeated permutations (equivalent blocks)
                         for operation2 in search_space[3]:
-                            if input2 != input1 or operation2 >= operation1: # added to avoid repeated permutations (specular blocks)
+                            if input2 != input1 or operation2 >= operation1: # added to avoid repeated permutations (equivalent blocks)
                                 yield (input1, self.operators[operation1], input2, self.operators[operation2])
 
 
