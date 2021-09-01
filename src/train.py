@@ -164,10 +164,15 @@ class Train:
     def write_average_training_time(self, blocks, timers):
         with open(log_service.build_path('csv', 'avg_training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
+
+            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            if f.tell() == 0:
+                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time'])
+            
             avg_time = statistics.mean(timers)
             max_time = max(timers)
             min_time = min(timers)
-            writer.writerow([blocks, avg_time])
+            writer.writerow([blocks, avg_time, max_time, min_time])
 
     def write_sliding_blocks_training_time(self, current_blocks, timer, listed_space,
                                             state_space, reindex_function):
@@ -221,20 +226,25 @@ class Train:
         headers = ["time", "blocks"]
         op_timers = []
         t_max = 0
+        reindex_function = None
+
+        # TODO: restore search space
+        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        #operators = ['identity', '3x3 dconv']
 
         if self.restore:
             starting_B = self.checkpoint  # change the starting point of B
 
             self._logger.info("Loading operator indeces!")
-            with open(log_service.build_path('csv', 'timers.csv')) as f:
+            with open(log_service.build_path('csv', 'reindex_op_times.csv')) as f:
                 reader = csv.reader(f)
                 for row in reader:
-                    elem = float(row[0])
-                    op_timers.append(elem)
-                    if elem >= t_max:
-                        t_max = elem
-            self._logger.info(op_timers, t_max)
+                    op_time = float(row[0])
+                    op_timers.append(op_time)
+                    if op_time >= t_max:
+                        t_max = op_time
 
+            reindex_function = self.generate_dynamic_reindex_function(operators, op_timers, t_max)
         else:
             starting_B = 0
 
@@ -245,14 +255,10 @@ class Train:
                 new_block = [f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"]
                 headers.extend(new_block)
 
-            # add headers to training_time.csv
+            # add headers
             with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-
-        # TODO: restore search space
-        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        #operators = ['identity', '3x3 dconv']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
@@ -285,7 +291,6 @@ class Train:
             k = self.children
 
         monoblock_times = []
-        reindex_function = None
 
         # train the child CNN networks for each number of blocks
         for current_blocks in range(starting_B, self.blocks + 1):
@@ -302,11 +307,14 @@ class Train:
                     monoblock_times.append([timer, listed_space])
 
                     # get required data for dynamic reindex
-                    # op_timers will contain timers for blocks with both same operation, for each operation, in order
-                    if (listed_space[0] == listed_space[2] and listed_space[1] == listed_space[3] and listed_space[0] == -1):
-                        with open(log_service.build_path('csv', 'timers.csv'), mode='a+', newline='') as f:
+                    # op_timers will contain timers for blocks with both same operation and input -1, for each operation, in order
+                    same_inputs = listed_space[0] == listed_space[2]
+                    same_op = listed_space[1] == listed_space[3]
+                    if (same_inputs and same_op and listed_space[0] == -1):
+                        with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
                             writer = csv.writer(f)
-                            writer.writerow([timer])
+                            op_considered = listed_space[1]
+                            writer.writerow([timer, op_considered])
                             op_timers.append(timer)
 
                             if timer >= t_max:
@@ -320,7 +328,7 @@ class Train:
 
                     # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
                     if f.tell() == 0:
-                        writer.writerow(['best_val_accuracy', 'train_time(seconds)', 'total params', '# blocks', 'cell structure'])
+                        writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', '# blocks', 'cell structure'])
 
                     cell_structure = f"[{';'.join(map(lambda el: str(el), listed_space))}]"
                     data = [reward, timer, total_params, current_blocks, cell_structure]
