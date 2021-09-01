@@ -438,32 +438,26 @@ class ControllerManager:
         Returns:
             (float): estimated time predicted
         '''
+  
+        # TODO: the f** is happening here?
+        encoded_child = self.state_space.entity_encode_child(child_encoding)
+        concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
+        reindexed_child = []
+        for i, action_index in enumerate(concatenated_child):
+            if i % 2 == 0:
+                # TODO: investigate this
+                reindexed_child.append(action_index + 1)
+            else:
+                reindexed_child.append(reindex_function(action_index))
+                
+        reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
+        array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
 
-        predicted_time = None
+        for _ in range(self.b_, self.B):
+            array = np.append(array, np.array([0, 0, 0, 0]))
 
-        # save predicted times on a .csv file
-        with open(log_service.build_path('csv', f'predicted_time_{self.b_}.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            
-            encoded_child = self.state_space.entity_encode_child(child_encoding)
-            concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
-            reindexed_child = []
-            for i, action_index in enumerate(concatenated_child):
-                if i % 2 == 0:
-                    # TODO: investigate this
-                    reindexed_child.append(action_index + 1)
-                else:
-                    reindexed_child.append(reindex_function(action_index))
-                    
-            reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
-            array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
-
-            for _ in range(self.b_, self.B):
-                array = np.append(array, np.array([0, 0, 0, 0]))
-
-            df_row = pandas.DataFrame([array], columns=headers)
-            predicted_time = regressor.predict(df_row)[0]
-            writer.writerow([predicted_time] + child_encoding)
+        df_row = pandas.DataFrame([array], columns=headers)
+        predicted_time = regressor.predict(df_row)[0]
 
         return predicted_time
 
@@ -485,14 +479,20 @@ class ControllerManager:
         score, _ = self.controller(state_list, states=None)
         score = score[0, 0].numpy()
 
-        # save predicted scores on a .csv file
-        with open(log_service.build_path('csv', f'predicted_accuracy_{self.b_}.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([score] + child_encoding)
-
         return score
 
-    # TODO: investigate unused variables
+    def __write_predictions_on_csv(self, model_estimates):
+        '''
+        Write predictions on csv for further data analysis.
+
+        Args:
+            model_estimates (list[ModelEstimate]): [description]
+        '''
+        with open(log_service.build_path('csv', f'predictions_B{self.b_}.csv'), mode='w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['time', 'score', 'cell structure'])
+            writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
+
     def update_step(self, headers, reindex_function):
         '''
         Updates the children from the intermediate products for the next generation
@@ -548,6 +548,8 @@ class ControllerManager:
                 if self.pnas_mode or estimated_time <= self.T:
                     model_estimations.append(ModelEstimate(intermediate_child, score, estimated_time))
 
+            self.__write_predictions_on_csv(model_estimations)
+
             self._logger.info('Model evaluation completed')
 
             # sort the children according to their score
@@ -563,7 +565,7 @@ class ControllerManager:
                     if model_est.time <= pareto_front[-1].time:
                         pareto_front.append(model_est)
 
-                with open(log_service.build_path('csv', f'pareto_front_{self.b_}.csv'), mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', f'pareto_front_B{self.b_}.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerows(map(lambda model_est: model_est.to_csv_array(), pareto_front))
 
@@ -598,4 +600,5 @@ class ModelEstimate:
         self.time = time
 
     def to_csv_array(self):
-        return [self.time, self.score] + self.model_encoding    # list concatenation
+        cell_structure = f"[{';'.join(map(lambda el: str(el), self.model_encoding))}]"
+        return [self.time, self.score, cell_structure]
