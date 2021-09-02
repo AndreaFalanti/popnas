@@ -359,4 +359,5 @@ class Train:
 
             controller.update_step(headers, reindex_function)
 
+        plotter.plot_training_info_per_block()
         self._logger.info("Finished!")
