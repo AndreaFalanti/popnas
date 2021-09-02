@@ -521,6 +521,8 @@ class ControllerManager:
             # and a function that directly returns ALL valid models in oneshot
             generate_models, get_unique_models = self.state_space.prepare_intermediate_children(self.b_)
 
+            # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the 
+            # necessary ones and takes lot less time (instead of O(N^2) it becomes O(K^2))
             next_models, pruned_count = get_unique_models()
             self._logger.info('Pruned %d equivalent models', pruned_count)
 
@@ -557,7 +559,7 @@ class ControllerManager:
 
             # start process by putting first model into pareto front (best score, ordered array),
             # then comparing the rest only by time because of ordering trick.
-            # Pareto front can be built only if using regressor (needs time estimation, not in pnas mode)
+            # Pareto front can be built only if using regressor (needs time estimation, not possible in pnas mode)
             if not self.pnas_mode:
                 self._logger.info('Building pareto front...')
                 pareto_front = [model_estimations[0]]

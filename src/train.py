@@ -3,6 +3,7 @@ from model import ModelGenerator
 from manager import NetworkManager
 from controller import ControllerManager
 from encoder import StateSpace
+import plotter
 
 from tensorflow.keras.utils import to_categorical
 from tensorflow.python.keras.datasets import cifar100
@@ -38,6 +39,8 @@ class Train:
         self.filters = filters
         self.concat_only_unused = not all_blocks_concat
         self.pnas_mode = pnas_mode
+
+        plotter.initialize_logger()
 
     def load_dataset(self):
         if self.dataset == "cifar10":
@@ -343,6 +346,8 @@ class Train:
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
                 reindex_function = self.generate_dynamic_reindex_function(operators, op_timers, t_max)
+                plotter.plot_dynamic_reindex_related_blocks_info()
+
                 for timer, listed_space in monoblock_times:
                     self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
                                                             state_space, reindex_function)
