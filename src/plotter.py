@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import Iterable, NamedTuple
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -17,6 +17,11 @@ __logger = None
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
+
+
+def __parse_cell_structures(cell_structures: Iterable):
+    # parse cell structure (trim square brackets and split by ;)
+    return  list(map(lambda cs: cs[1:-1].split(';'), cell_structures))
 
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name):
@@ -56,6 +61,22 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
 
+def __plot_pie_chart(labels, values, save_name):
+    total = sum(values)
+    def pct_val_formatter(x):
+        return '{:.3f}%\n({:.0f})'.format(x, total*x/100)
+
+    fig1, ax1 = plt.subplots()
+
+    explode = np.empty(len(labels)) # type: np.ndarray
+    explode.fill(0.1)
+
+    ax1.pie(values, labels=labels, autopct=pct_val_formatter, explode=explode, startangle=90)
+    ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+    save_path = log_service.build_path('plots', save_name)
+    plt.savefig(save_path, bbox_inches='tight')
+
 
 def plot_dynamic_reindex_related_blocks_info():
     __logger.info("Analyzing training_results.csv...")
@@ -65,8 +86,7 @@ def plot_dynamic_reindex_related_blocks_info():
     # take only mono block cells
     df = df[df['# blocks'] == 1]
 
-    # parse cell structure (trim square brackets and split by ;)
-    cells = list(map(lambda cs: cs[1:-1].split(';'), df['cell structure']))
+    cells = __parse_cell_structures(df['cell structure'])
 
     # TODO: refactor this mess if you find a more intelligent way
     df['in1'] = [x for x, _, _, _ in cells]
@@ -100,6 +120,43 @@ def plot_training_info_per_block():
 
     __plot_multibar_histogram(x, [bar_avg, bar_max, bar_min], 0.2, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
     __logger.info("Train time overview plot written successfully")
+
+def plot_operation_usage(b, operations: 'list[str]'):
+    # create dictionary with indexes and initialize counters
+    op_index = {}
+    op_counters = np.zeros(len(operations)) # type: np.ndarray
+
+    for index, op in enumerate(operations):
+        op_index[op] = index  
+
+    __logger.info("Analyzing operation usage for pareto front of b=%d", b)
+    csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
+    df = pd.read_csv(csv_path)
+
+    cells = __parse_cell_structures(df['cell structure'])
+    # iterate all cells (models selected for training)
+    for cell in cells:
+        # iterate on blocks (in1, op1, in2, op2)
+        for i in range(b):
+            # get indices for operation in dict 
+            op1_index = op_index[cell[(i*4) + 1]]
+            op2_index = op_index[cell[(i*4) + 3]]
+
+            op_counters[op1_index] += 1
+            op_counters[op2_index] += 1
+
+    # prune labels associated to 0 values to avoid displaying them in plot
+    for index, val in enumerate(op_counters):
+        if val == 0:
+            operations.pop(index)
+
+    # prune 0 values
+    op_counters = op_counters[op_counters != 0]
+
+    __plot_pie_chart(operations, op_counters, f'op_usage_B{b}')
+    __logger.info("Op usage plot for b=%d written successfully", b)
+
+
 
 
 class BarInfo(NamedTuple):

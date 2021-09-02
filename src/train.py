@@ -354,10 +354,13 @@ class Train:
             
             self.write_average_training_time(current_blocks, timers)
 
-            loss = controller.train_step(rewards)
-            self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
+            # avoid controller training, pareto front estimation and plot at final step
+            if current_blocks + 1 != self.blocks:
+                loss = controller.train_step(rewards)
+                self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
-            controller.update_step(headers, reindex_function)
+                controller.update_step(headers, reindex_function)
+                plotter.plot_operation_usage(current_blocks + 1, operators)
 
         plotter.plot_training_info_per_block()
         self._logger.info("Finished!")

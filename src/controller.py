@@ -567,8 +567,9 @@ class ControllerManager:
                     if model_est.time <= pareto_front[-1].time:
                         pareto_front.append(model_est)
 
-                with open(log_service.build_path('csv', f'pareto_front_B{self.b_}.csv'), mode='a+', newline='') as f:
+                with open(log_service.build_path('csv', f'pareto_front_B{self.b_}.csv'), mode='w', newline='') as f:
                     writer = csv.writer(f)
+                    writer.writerow(ModelEstimate.get_csv_headers())
                     writer.writerows(map(lambda model_est: model_est.to_csv_array(), pareto_front))
 
                 self._logger.info('Pareto front built successfully')    
@@ -604,3 +605,7 @@ class ModelEstimate:
     def to_csv_array(self):
         cell_structure = f"[{';'.join(map(lambda el: str(el), self.model_encoding))}]"
         return [self.time, self.score, cell_structure]
+
+    @staticmethod
+    def get_csv_headers():
+        return ['time', 'val accuracy', 'cell structure']
