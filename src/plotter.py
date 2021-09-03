@@ -118,22 +118,41 @@ def plot_training_info_per_block():
     bar_max = BarInfo(df['max time'], 'g', 'max')
     bar_min = BarInfo(df['min time'], 'r', 'min')
 
-    __plot_multibar_histogram(x, [bar_avg, bar_max, bar_min], 0.2, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
+    __plot_multibar_histogram(x, [bar_avg, bar_max, bar_min], 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
     __logger.info("Train time overview plot written successfully")
 
-def plot_operation_usage(b, operations: 'list[str]'):
-    # create dictionary with indexes and initialize counters
+
+def __initialize_operation_usage_data(operations):
+    '''
+    Create dictionary with indexes and initialize counters.
+    '''
     op_index = {}
     op_counters = np.zeros(len(operations)) # type: np.ndarray
 
     for index, op in enumerate(operations):
-        op_index[op] = index  
+        op_index[op] = index
 
-    __logger.info("Analyzing operation usage for pareto front of b=%d", b)
-    csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
-    df = pd.read_csv(csv_path)
+    return op_index, op_counters
 
-    cells = __parse_cell_structures(df['cell structure'])
+
+def __prune_zero_values_and_labels(operations, op_counters):
+    '''
+    Prune labels associated to 0 values to avoid displaying them in plot
+    '''
+    for index, val in enumerate(op_counters):
+        if val == 0:
+            operations.pop(index)
+
+    # prune 0 values
+    op_counters = op_counters[op_counters != 0]
+
+    return operations, op_counters
+
+
+def __update_op_counters(cells, b, op_counters, op_index):
+    '''
+    Iterate cell structures and increment operation counters when the operation is encountered. 
+    '''
     # iterate all cells (models selected for training)
     for cell in cells:
         # iterate on blocks (in1, op1, in2, op2)
@@ -145,18 +164,36 @@ def plot_operation_usage(b, operations: 'list[str]'):
             op_counters[op1_index] += 1
             op_counters[op2_index] += 1
 
-    # prune labels associated to 0 values to avoid displaying them in plot
-    for index, val in enumerate(op_counters):
-        if val == 0:
-            operations.pop(index)
-
-    # prune 0 values
-    op_counters = op_counters[op_counters != 0]
-
-    __plot_pie_chart(operations, op_counters, f'op_usage_B{b}')
-    __logger.info("Op usage plot for b=%d written successfully", b)
+    return op_counters
 
 
+def plot_operation_usage(b: int, operations: 'list[str]'):
+    op_index, op_counters = __initialize_operation_usage_data(operations)
+
+    __logger.info("Analyzing operation usage for pareto front of b=%d", b)
+    csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
+    df = pd.read_csv(csv_path)
+
+    cells = __parse_cell_structures(df['cell structure'])
+
+    op_counters = __update_op_counters(cells, b, op_counters, op_index)
+
+    operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+
+    __plot_pie_chart(operations, op_counters, f'pareto_op_usage_B{b}')
+    __logger.info("Pareto op usage plot for b=%d written successfully", b)
+
+
+def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[str]'):
+    op_index, op_counters = __initialize_operation_usage_data(operations)
+
+    __logger.info("Analyzing operation usage for CNN children to train for b=%d", b)
+    op_counters = __update_op_counters(children_cnn, b, op_counters, op_index)
+
+    operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+
+    __plot_pie_chart(operations, op_counters, f'children_op_usage_B{b}')
+    __logger.info("Children op usage plot for b=%d written successfully", b)
 
 
 class BarInfo(NamedTuple):

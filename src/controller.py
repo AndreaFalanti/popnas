@@ -147,6 +147,7 @@ class ControllerManager:
         self.restore_controller = restore_controller
 
         # restore controller
+        # TODO: surely not working by beginning, it used csv files that don't exists!
         if self.restore_controller:
             self.b_ = checkpoint_B
             self._logger.info("Loading controller history!")
@@ -504,10 +505,7 @@ class ControllerManager:
 
         # TODO: pandas is used only to add 0s and remove headers? But this is already done in code...
         csv_path = log_service.build_path('csv', 'training_time.csv')
-        if self.b_ == 2:
-            df = pandas.read_csv(csv_path, skiprows=[1])
-        else:
-            df = pandas.read_csv(csv_path)
+        df = pandas.read_csv(csv_path)
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
