@@ -294,7 +294,7 @@ class StateSpace:
     def _prune_equivalent_cell_models(self, models):
         prime_models = []
         prime_cell_repr = []
-        pruned_models = []  # DEBUG only
+        #pruned_models = []  # DEBUG only
         pruned_count = 0
 
         for model in models:
@@ -304,7 +304,7 @@ class StateSpace:
             # check possible equivalence with other models already generated
             if self._check_model_equivalence(cell_repr, prime_cell_repr):
                 pruned_count += 1
-                pruned_models.append(model)     # DEBUG only
+                #pruned_models.append(model)     # DEBUG only
             else:
                 prime_cell_repr.append(cell_repr)
                 prime_models.append(model)
