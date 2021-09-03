@@ -241,7 +241,7 @@ def plot_predictions_error(B: int):
                                 'Predictions time errors overview (real - predicted)', 'Pred_time_errors_overview.png')
     __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy',
                                 'Predictions val accuracy errors overview (real - predicted)', 'Pred_acc_errors_overview.png')
-    __logger.info("Train time overview plot written successfully")
+    __logger.info("Prediction error overview plots written successfully")
 
 
 class BarInfo(NamedTuple):

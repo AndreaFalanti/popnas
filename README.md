@@ -80,9 +80,9 @@ use other blocks output as input of another block).
 - Equivalent blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality. Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
 - Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
+- Add plotter module, to analyze csv data saved and automatically producing relevant plots while running the algorithm.
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
-- Format code with pep8 and flake, to follow standard python conventions.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed
 only on console.
@@ -95,6 +95,7 @@ only on console.
 - Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
 - Fix tqdm bars of CNN training and add tqdm bars to LSTM training and model predictions procedure for better progress visualization.
 - Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
+- Format code with pep8 and flake, to follow standard python conventions.
 - General code fixes and improvements, especially improve readability of various code parts for better future maintainability. Many blob functions have been finely subdivided in multiple subfunctions and properly commented.
 
 
