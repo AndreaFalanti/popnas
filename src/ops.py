@@ -31,6 +31,8 @@ def depth_zero_pad_closure(desired_depth, op_layer):
     return depth_zero_pad_call
 
 
+# TODO: Convolution is spawned during call, which is not optimal for TF. For now it is abandoned, now pooling
+#  use the check directly in code and pre-instantiate the convolution
 def depth_pointwise_conv_closure(desired_depth, op_layer):
     '''
     Generate call for pooling operation. It adds a pointwise convolution to adapt the depth, if necessary.
@@ -130,6 +132,8 @@ class StackedConvolution(Model):
         return x
 
 
+# TODO: pointwise conv should be allocated only when necessary for best memory utilization and performances, change model code 
+# and the op classes to achieve this.
 class Pooling(Model):
 
     def __init__(self, filters, type, size, strides):
@@ -138,12 +142,20 @@ class Pooling(Model):
         the output depth to filters size, if they are not the same.
         '''
         super(Pooling, self).__init__()
+        
         if type == 'max':
             self.pool = MaxPooling2D(size, strides, padding='same')
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
 
-        self.pool_call = depth_pointwise_conv_closure(filters, self.pool)
+        self.pointwise_conv = Convolution(filters, (1, 1), (1, 1))
+        self.desired_depth = filters
 
     def call(self, inputs, training=None, mask=None):
-        return self.pool_call(inputs)
+        input_depth = inputs.get_shape().as_list()[3]
+
+        if input_depth != self.desired_depth:
+            output = self.pool(inputs)
+            return self.pointwise_conv(output)
+        else:
+            return self.pool(inputs)
