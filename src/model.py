@@ -29,6 +29,8 @@ class ModelGenerator():
         used_inputs = set(filter(lambda el: el >= 0, actions[::2]))
         self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
 
+        self.use_skip = -2 in actions[::2]
+
         if len(actions) > 0:
             self.action_list = [x for x in zip(*[iter(actions)]*2)]     # generate a list of tuples (pairs)
             self.M = 3
@@ -39,6 +41,8 @@ class ModelGenerator():
             self.N = 0
 
         self.filters = filters
+        # for depth adaptation purposes
+        self.prev_cell_filters = 0
 
     def __build_cell_util(self, filters, inputs, reduction=False):
         '''
@@ -54,8 +58,11 @@ class ModelGenerator():
         '''
 
         stride = (2, 2) if reduction else (1, 1)
-        cell_output = self.__build_cell(self.B, self.action_list, filters=filters, stride=stride, inputs=inputs)
+        adapt_depth = filters != self.prev_cell_filters
+
+        cell_output = self.__build_cell(self.B, self.action_list, filters, stride, inputs, adapt_depth)
         self.cell_index += 1
+        self.prev_cell_filters = filters
 
         # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
         # while -1 is the output of the created cell
@@ -71,6 +78,8 @@ class ModelGenerator():
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
         model_input = tf.keras.layers.Input(shape=(32, 32, 3))
+        # put prev filters = input depth
+        self.prev_cell_filters = 3
 
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is set to None to trigger a special case in build_cell (avoids input normalization)
@@ -98,7 +107,7 @@ class ModelGenerator():
 
         return tf.keras.Model(inputs=model_input, outputs=output)
 
-    def __build_cell(self, B, action_list, filters, stride, inputs):
+    def __build_cell(self, B, action_list, filters, stride, inputs, adapt_depth: bool):
         '''
         Generate cell from action list. Following PNAS paper, addition is used to combine block results.
 
@@ -107,24 +116,27 @@ class ModelGenerator():
             action_list (list<tuple<int, string>): List of tuples of 2 elements -> (input, action_name). Input can be either -1 (last cell output) or -2 (skip connection).
             filters (int): Initial filters to use
             stride (tuple<int, int>): (1, 1) for normal cells, (2, 2) for reduction cells
-            inputs (list<tf.keras.layers.Layer>): Possible layers to use as input (based on action_list index value)
+            inputs (list<tf.tensor>): Possible tensors to use as input (based on action_list index value)
+            adapt_depth (bool): True if there is a change in filter size, operations that don't alter depth must be addressed accordingly.
 
         Returns:
             (tf.keras.layers.Add | tf.keras.layers.Concatenate): [description]
         '''
-        # normalize inputs if necessary
-        inputs = self.__normalize_inputs(inputs)
+        # normalize inputs if necessary (also avoid normalization if model doesn't use -2 input)
+        # TODO: a refactor could also totally remove -2 from inputs in this case
+        if self.use_skip:
+            inputs = self.__normalize_inputs(inputs)
 
         # if cell size is 1 block only
         if B == 1:
-            return self.__build_block(action_list[0], action_list[1], filters, stride, inputs)
+            return self.__build_block(action_list[0], action_list[1], filters, stride, inputs, adapt_depth)
 
         # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
         total_inputs = inputs   # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i in range(B):
             self.block_index = i
-            block_out = self.__build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs)
+            block_out = self.__build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs, adapt_depth)
 
             # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
@@ -189,7 +201,7 @@ class ModelGenerator():
 
         return inputs
 
-    def __build_block(self, action_L, action_R, filters, stride, inputs):
+    def __build_block(self, action_L, action_R, filters, stride, inputs, adapt_depth: bool):
         '''
         Generate a block, following PNAS conventions.
 
@@ -199,9 +211,10 @@ class ModelGenerator():
             filters (int): [description]
             stride (tuple<int, int>): [description]
             inputs (list<tf.keras.layers.Layer>): [description]
+            adapt_depth (bool): [description]
 
         Returns:
-            (tf.keras.layers.Add): [description]
+            (tf.tensor): Output of Add keras layer
         '''
         input_index_L, action_name_L = action_L
         input_index_R, action_name_R = action_R
@@ -211,11 +224,11 @@ class ModelGenerator():
         stride_R = stride if input_index_R < 0 else (1, 1)
 
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.__parse_action(filters, action_name_L, strides=stride_L, tag='L')(inputs[input_index_L])
-        right_layer = self.__parse_action(filters, action_name_R, strides=stride_R, tag='R')(inputs[input_index_R])
+        left_layer = self.__parse_action(filters, action_name_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_index_L])
+        right_layer = self.__parse_action(filters, action_name_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_index_R])
         return tf.keras.layers.Add()([left_layer, right_layer])
 
-    def __parse_action(self, filters, action, strides=(1, 1), tag='L'):
+    def __parse_action(self, filters, action, adapt_depth: bool, strides=(1, 1), tag='L'):
         '''
         Generate correct custom layer for provided action. Certain cases are handled incorrectly,
         so that model can still be built, albeit not with original specification
@@ -223,6 +236,7 @@ class ModelGenerator():
         # Args:
             filters: number of filters
             action: action string
+            adapt_depth (bool): adapt depth of operations that don't alter it
             strides: stride to reduce spatial size
             tag (string): either L or R, identifing the block operation
 
@@ -272,13 +286,15 @@ class ModelGenerator():
 
         # applies a 3x3 maxpool
         if action == '3x3 maxpool':
-            x = ops.Pooling(filters, 'max', (3, 3), strides=strides)
+            x = ops.PoolingConv(filters, 'max', size=(3, 3), strides=strides) if adapt_depth \
+                    else ops.Pooling('max', size=(3, 3), strides=strides)
             x._name = f'3x3_maxpool_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
         # applies a 3x3 avgpool
         if action == '3x3 avgpool':
-            x = ops.Pooling(filters, 'avg', (3, 3), strides=strides)
+            x = ops.PoolingConv(filters, 'avg', size=(3, 3), strides=strides) if adapt_depth \
+                    else ops.Pooling('avg', size=(3, 3), strides=strides)
             x._name = f'3x3_avgpool_c{self.cell_index}b{self.block_index}{tag}'
             return x
 

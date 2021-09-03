@@ -136,10 +136,9 @@ class StackedConvolution(Model):
 # and the op classes to achieve this.
 class Pooling(Model):
 
-    def __init__(self, filters, type, size, strides):
+    def __init__(self, type, size, strides):
         '''
-        Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class) to adapt
-        the output depth to filters size, if they are not the same.
+        Constructs a standard pooling layer (average or max).
         '''
         super(Pooling, self).__init__()
         
@@ -148,14 +147,22 @@ class Pooling(Model):
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
 
-        self.pointwise_conv = Convolution(filters, (1, 1), (1, 1))
-        self.desired_depth = filters
+    def call(self, inputs, training=None, mask=None):
+        return self.pool(inputs)
+
+
+class PoolingConv(Model):
+
+    def __init__(self, filters, type, size, strides):
+        '''
+        Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
+        to adapt the output depth to filters size.
+        '''
+        super(PoolingConv, self).__init__()
+        
+        self.pool = Pooling(type, size, strides)
+        self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1))
 
     def call(self, inputs, training=None, mask=None):
-        input_depth = inputs.get_shape().as_list()[3]
-
-        if input_depth != self.desired_depth:
-            output = self.pool(inputs)
-            return self.pointwise_conv(output)
-        else:
-            return self.pool(inputs)
+        output = self.pool(inputs)
+        return self.pointwise_conv(output)
