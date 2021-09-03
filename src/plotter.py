@@ -135,13 +135,12 @@ def __initialize_operation_usage_data(operations):
     return op_index, op_counters
 
 
-def __prune_zero_values_and_labels(operations, op_counters):
+def __prune_zero_values_and_labels(operations, op_counters: np.ndarray):
     '''
     Prune labels associated to 0 values to avoid displaying them in plot
     '''
-    for index, val in enumerate(op_counters):
-        if val == 0:
-            operations.pop(index)
+    op_gather_indexes = np.flatnonzero(op_counters)
+    operations = [operations[i] for i in op_gather_indexes]
 
     # prune 0 values
     op_counters = op_counters[op_counters != 0]
