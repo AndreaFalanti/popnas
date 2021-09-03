@@ -365,4 +365,6 @@ class Train:
                 plotter.plot_children_op_usage(current_blocks + 1, operators, state_space.children)
 
         plotter.plot_training_info_per_block()
+        plotter.plot_predictions_error(self.blocks)
+        
         self._logger.info("Finished!")

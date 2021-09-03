@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from pandas.io.parsers import TextFileReader
+import statistics
 
 import log_service
 
@@ -193,6 +194,54 @@ def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[
 
     __plot_pie_chart(operations, op_counters, f'children_op_usage_B{b}')
     __logger.info("Children op usage plot for b=%d written successfully", b)
+
+
+def plot_predictions_error(B: int):
+    avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
+    avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
+
+    for b in range(2, B+1):
+        __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
+        pareto_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
+        training_csv_path = log_service.build_path('csv', 'training_results.csv')
+        pareto_df = pd.read_csv(pareto_csv_path)
+        training_df = pd.read_csv(training_csv_path)
+
+        # take only trained CNN with correct block length
+        training_df = training_df[training_df['# blocks'] == b]
+
+        # take first k CNN from pareto front (k can be found as the actual trained CNN count)
+        trained_cnn_count = len(training_df)
+        pareto_df = pareto_df.head(trained_cnn_count)
+
+        # now both dataframes have same length and they have the same CNN order. Confront items in order to get differences.
+        merge_df = pd.merge(training_df, pareto_df, on=['cell structure'], how='inner')
+        time_errors = merge_df['training time(seconds)'] - merge_df['time']
+        val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
+
+        avg_time_errors[b-2] = statistics.mean(time_errors)
+        max_time_errors[b-2] = max(time_errors)
+        min_time_errors[b-2] = min(time_errors)
+
+        avg_acc_errors[b-2] = statistics.mean(val_accuracy_errors)
+        max_acc_errors[b-2] = max(val_accuracy_errors)
+        min_acc_errors[b-2] = min(val_accuracy_errors)
+
+    x = np.arange(2, B+1)
+
+    bar_avg_t = BarInfo(avg_time_errors, 'b', 'avg') 
+    bar_max_t = BarInfo(max_time_errors, 'g', 'max')
+    bar_min_t = BarInfo(min_time_errors, 'r', 'min')
+
+    bar_avg_acc = BarInfo(avg_acc_errors, 'b', 'avg') 
+    bar_max_acc = BarInfo(max_acc_errors, 'g', 'max')
+    bar_min_acc = BarInfo(min_acc_errors, 'r', 'min')
+
+    __plot_multibar_histogram(x, [bar_avg_t, bar_max_t, bar_min_t], 0.15, 'Blocks', 'Time(s)',
+                                'Predictions time errors overview (real - predicted)', 'Pred_time_errors_overview.png')
+    __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy',
+                                'Predictions val accuracy errors overview (real - predicted)', 'Pred_acc_errors_overview.png')
+    __logger.info("Train time overview plot written successfully")
 
 
 class BarInfo(NamedTuple):
