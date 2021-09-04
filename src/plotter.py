@@ -32,6 +32,9 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name):
     plt.ylabel(y_label)
     plt.title(title)
 
+    # add y grid lines
+    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
+
     # beautify the x-labels
     # plt.gcf().autofmt_xdate()
 
@@ -57,6 +60,9 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
     ax.set_ylabel(y_label)
     ax.set_title(title)
     
+    # add y grid lines
+    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='silver')
+
     ax.legend()
     
     save_path = log_service.build_path('plots', save_name)
@@ -74,7 +80,7 @@ def __plot_pie_chart(labels, values, title, save_name):
     explode.fill(0.03)
 
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
-    legend_labels = [f'{label} - {total*val/100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
+    legend_labels = [f'{label} - {(val/total)*100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
     patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
@@ -229,6 +235,7 @@ def plot_predictions_error(B: int):
     avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
     avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
 
+    # TODO. maybe better to refactor to numpy arrays too
     pred_times, real_times = [], []
     pred_acc, real_acc = [], []
 
@@ -251,10 +258,10 @@ def plot_predictions_error(B: int):
         time_errors = merge_df['training time(seconds)'] - merge_df['time']
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
 
-        pred_times.append(merge_df['time'])
-        real_times.append(merge_df['training time(seconds)'])
-        pred_acc.append(merge_df['val accuracy'])
-        real_acc.append(merge_df['best val accuracy'])
+        pred_times += merge_df['time'].to_list()
+        real_times += merge_df['training time(seconds)'].to_list()
+        pred_acc += merge_df['val accuracy'].to_list()
+        real_acc += merge_df['best val accuracy'].to_list()
 
         avg_time_errors[b-2] = statistics.mean(time_errors)
         max_time_errors[b-2] = max(time_errors)
