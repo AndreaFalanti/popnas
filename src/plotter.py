@@ -33,7 +33,7 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name):
     plt.title(title)
 
     # beautify the x-labels
-    plt.gcf().autofmt_xdate()
+    # plt.gcf().autofmt_xdate()
 
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
@@ -62,18 +62,47 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
 
-def __plot_pie_chart(labels, values, save_name):
+
+def __plot_pie_chart(labels, values, title, save_name):
     total = sum(values)
-    def pct_val_formatter(x):
-        return '{:.3f}%\n({:.0f})'.format(x, total*x/100)
+    # def pct_val_formatter(x):
+    #     return '{:.3f}%\n({:.0f})'.format(x, total*x/100)
 
     fig1, ax1 = plt.subplots()
 
     explode = np.empty(len(labels)) # type: np.ndarray
-    explode.fill(0.1)
+    explode.fill(0.03)
 
-    ax1.pie(values, labels=labels, autopct=pct_val_formatter, explode=explode, startangle=90)
+    # label, percentage, value are written only in legend, to avoid overlapping texts in chart
+    legend_labels = [f'{label} - {total*val/100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
+
+    patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+    plt.title(title)
+    plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.05, 0.1))
+    plt.subplots_adjust(left=0.1, bottom=0.1, right=0.75)
+
+    save_path = log_service.build_path('plots', save_name)
+    plt.savefig(save_path, bbox_inches='tight')
+
+
+def __plot_squared_scatter_chart(x, y, x_label, y_label,  title, save_name, plot_reference = True):
+    fig, ax = plt.subplots()
+    plt.scatter(x, y)
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(title)
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    if plot_reference:
+        ax_lims = [
+            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+        ]
+
+        ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
@@ -178,9 +207,9 @@ def plot_operation_usage(b: int, operations: 'list[str]'):
 
     op_counters = __update_op_counters(cells, b, op_counters, op_index)
 
-    operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+    #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
-    __plot_pie_chart(operations, op_counters, f'pareto_op_usage_B{b}')
+    __plot_pie_chart(operations, op_counters, f'Operations usage in b={b} pareto front', f'pareto_op_usage_B{b}')
     __logger.info("Pareto op usage plot for b=%d written successfully", b)
 
 
@@ -190,15 +219,18 @@ def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[
     __logger.info("Analyzing operation usage for CNN children to train for b=%d", b)
     op_counters = __update_op_counters(children_cnn, b, op_counters, op_index)
 
-    operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+    #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
-    __plot_pie_chart(operations, op_counters, f'children_op_usage_B{b}')
+    __plot_pie_chart(operations, op_counters, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
     __logger.info("Children op usage plot for b=%d written successfully", b)
 
 
 def plot_predictions_error(B: int):
     avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
     avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
+
+    pred_times, real_times = [], []
+    pred_acc, real_acc = [], []
 
     for b in range(2, B+1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
@@ -219,6 +251,11 @@ def plot_predictions_error(B: int):
         time_errors = merge_df['training time(seconds)'] - merge_df['time']
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
 
+        pred_times.append(merge_df['time'])
+        real_times.append(merge_df['training time(seconds)'])
+        pred_acc.append(merge_df['val accuracy'])
+        real_acc.append(merge_df['best val accuracy'])
+
         avg_time_errors[b-2] = statistics.mean(time_errors)
         max_time_errors[b-2] = max(time_errors)
         min_time_errors[b-2] = min(time_errors)
@@ -238,9 +275,12 @@ def plot_predictions_error(B: int):
     bar_min_acc = BarInfo(min_acc_errors, 'r', 'min')
 
     __plot_multibar_histogram(x, [bar_avg_t, bar_max_t, bar_min_t], 0.15, 'Blocks', 'Time(s)',
-                                'Predictions time errors overview (real - predicted)', 'Pred_time_errors_overview.png')
+                                'Predictions time errors overview (real - predicted)', 'pred_time_errors_overview.png')
     __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy',
-                                'Predictions val accuracy errors overview (real - predicted)', 'Pred_acc_errors_overview.png')
+                                'Predictions val accuracy errors overview (real - predicted)', 'pred_acc_errors_overview.png')
+    __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview', 'time_pred_overview.png')
+    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview', 'acc_pred_overview.png')
+
     __logger.info("Prediction error overview plots written successfully")
 
 
