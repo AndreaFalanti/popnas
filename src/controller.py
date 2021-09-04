@@ -397,13 +397,6 @@ class ControllerManager:
             (Regressor): time regressor (aMLLibrary)
         '''
 
-        inputs = []
-        for b in range(1, (self.B+1)):
-            a = b*2
-            c = a-1
-            new_block = ["input_%d" % c, "input_%d" % a]
-            inputs.extend(new_block)
-
         # create the NNLS configuration file
         config = configparser.ConfigParser()
         config['General'] = {'run_num': 1,
@@ -412,8 +405,7 @@ class ControllerManager:
                              'validation': 'All',
                              'y': '"time"',
                              'generate_plots': 'True'}
-        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv'),
-                                     'skip_columns': inputs}
+        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
         config['NNLS'] = {'fit_intercept': [True, False]}
 
         with open(log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 'w') as f:
@@ -428,7 +420,7 @@ class ControllerManager:
 
     def estimate_time(self, regressor, child_encoding, headers, reindex_function):
         '''
-        Use regressor to estimate the time for training the model. Write also an entry in predicted_time_{b}.csv.
+        Use regressor to estimate the time for training the model.
 
         Args:
             regressor (Regressor): time regressor
@@ -446,25 +438,29 @@ class ControllerManager:
         reindexed_child = []
         for i, action_index in enumerate(concatenated_child):
             if i % 2 == 0:
-                # TODO: investigate this
+                # TODO: investigate this (probably avoids 0 for -2 input, as 0 is also used for null)
                 reindexed_child.append(action_index + 1)
             else:
                 reindexed_child.append(reindex_function(action_index))
                 
-        reindexed_child = np.concatenate(reindexed_child, axis=None).astype('int32')
-        array = np.append(np.array([0, self.b_]), [x for x in reindexed_child])
+        regressor_features = np.concatenate(reindexed_child, axis=None)
 
+        # add missing blocks num feature (see training_time.csv, all columns except time are needed)
+        regressor_features = np.append(np.array([self.b_]), [x for x in regressor_features])
+        headers = headers[1:]   # remove time, because it's the regressor output
+
+        # complete features with missing blocks (0 is for null)
         for _ in range(self.b_, self.B):
-            array = np.append(array, np.array([0, 0, 0, 0]))
+            regressor_features = np.append(regressor_features, np.array([0, 0, 0, 0]))
 
-        df_row = pandas.DataFrame([array], columns=headers)
+        df_row = pandas.DataFrame([regressor_features], columns=headers)
         predicted_time = regressor.predict(df_row)[0]
 
         return predicted_time
 
     def estimate_accuracy(self, child_encoding):
         '''
-        Use RNN controller to estimate the model accuracy. Write also an entry in predicted_accuracy_{b}.csv.
+        Use RNN controller to estimate the model accuracy.
 
         Args:
             child_encoding (list[str]): model encoding
