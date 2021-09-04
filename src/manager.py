@@ -11,7 +11,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.utils.vis_utils import plot_model   # per stampare modello
 
 from model import ModelGenerator
-from utils.TimingCallback import TimingCallback
+from utils.timing_callback import TimingCallback
 
 
 if not os.path.exists('temp_weights/'):
