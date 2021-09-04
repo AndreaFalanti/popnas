@@ -325,10 +325,10 @@ class ModelGenerator():
         # callbacks.append(ckpt_callback)
         
         # By default shows losses and metrics for both training and validation
-        # tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
-        #                                             profile_batch=0, histogram_freq=0, update_freq='epoch')
+        tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
+                                                    profile_batch=0, histogram_freq=0, update_freq='epoch')
 
-        # callbacks.append(tb_callback)
+        callbacks.append(tb_callback)
 
         # TODO: convert into a parameter
         early_stop = False
