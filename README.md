@@ -1,5 +1,5 @@
 # POPNASv2
-Fix and refactor of POPNAS, a neural architecture search method developed for a master thesis by Matteo Vantadori (Politecnico di Milano, academic year 2018-2019).
+Fix and refactor of POPNAS, a neural architecture search method developed for a master thesis by Matteo Vantadori (Politecnico di Milano, academic year 2018-2019), based on [PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
 
 ## Installation
 Virtual environment and dependecies are managed by *poetry*, check out its [repository](https://github.com/python-poetry/poetry) for installing it on your machine.
@@ -72,20 +72,28 @@ to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https:
 - **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation. This will make
 the computation extremely similar to PNAS algorithm.
 
+## Tensorboard
+Trained CNN have a callback for saving info to tensorboard log files. To access all the runs, run the command:
+```
+tensorboard --logdir {absolute_path_to_POPNAS_src}\logs\{date}\tensorboard_cnn --port 6096
+```
+In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
+
 ## Changelog from original version
-- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to
-use other blocks output as input of another block).
+- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
 - Equivalent blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality. Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
 - Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided to train the best model.
+- Add the input columns to regressor, as now inputs really are from different cells/blocks, unlike original implementation. Therefore, input values have a great
+influence on actual training time and must be used by regressor for accurate estimations.
+- Fix regressor features bug: dynamic reindexing was nullified by an int cast.
 - Add plotter module, to analyze csv data saved and automatically producing relevant plots while running the algorithm.
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
-- Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed
-only on console.
+- Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed only on console.
 - Add --cpu option to easily choose between running on cpu or gpu.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
 - Add --abc and -f options, to make cell structure more configurable and flexible.
@@ -100,5 +108,7 @@ only on console.
 
 
 ## TODO
-- Refactor parts of the code to better use the Tensorflow 2 API (i performed a lazy migration in many parts).
+- Refactor parts of the code to better use the Tensorflow 2 API (i performed a lazy migration in some parts).
 - Improve and tweak best model training script.
+- Improve plots generated.
+- Investigate the "Model failed to serialize as JSON. Ignoring... " warning triggered by tensorboard call. It seems to not alter the program flow, but it's worth a check.
