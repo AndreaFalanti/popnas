@@ -79,6 +79,14 @@ tensorboard --logdir {absolute_path_to_POPNAS_src}\logs\{date}\tensorboard_cnn -
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
 
+## Plot slideshow utility
+The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way. To use it, only the log folder must be provided.
+An example of the command usage (from src folder):
+```
+python .\utils\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(date)}
+```
+Close a plot overview to visualize the next one, the program terminates after showing all plots.
+
 ## Changelog from original version
 - Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
 - Fix blocks not having addition of the two operations output.
