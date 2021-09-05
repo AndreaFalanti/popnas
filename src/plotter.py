@@ -1,6 +1,7 @@
 from typing import Iterable, NamedTuple
 
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import pandas as pd
 import numpy as np
 
@@ -94,15 +95,30 @@ def __plot_pie_chart(labels, values, title, save_name):
     plt.savefig(save_path, bbox_inches='tight')
 
 
-def __plot_squared_scatter_chart(x, y, x_label, y_label,  title, save_name, plot_reference = True):
+def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_reference=True, legend_labels=None):
     fig, ax = plt.subplots()
-    plt.scatter(x, y)
+
+    # list of lists with same dimensions are required, or also flat lists with same dimensions
+    assert len(x) == len(y)
+
+    # list of lists case
+    if any(isinstance(el, list) for el in x):
+        assert len(x) == len(legend_labels)
+
+        colors = cm.rainbow(np.linspace(0, 1, len(x)))
+        for xs, ys, color, lab in zip(x, y, colors, legend_labels):
+            plt.scatter(xs, ys, color=color, label=lab)
+    else:
+        plt.scatter(x, y)
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.title(title)
     plt.gca().set_aspect('equal', adjustable='box')
 
+    plt.legend()
+
+    # add reference line (bisector line x = y)
     if plot_reference:
         ax_lims = [
             np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
@@ -179,6 +195,7 @@ def __initialize_operation_usage_data(operations):
     return op_index, op_counters
 
 
+# TODO: unused right now
 def __prune_zero_values_and_labels(operations, op_counters: np.ndarray):
     '''
     Prune labels associated to 0 values to avoid displaying them in plot
@@ -246,6 +263,7 @@ def plot_predictions_error(B: int):
     # TODO. maybe better to refactor to numpy arrays too
     pred_times, real_times = [], []
     pred_acc, real_acc = [], []
+    scatter_legend_labels = []
 
     for b in range(2, B+1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
@@ -266,10 +284,12 @@ def plot_predictions_error(B: int):
         time_errors = merge_df['training time(seconds)'] - merge_df['time']
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
 
-        pred_times += merge_df['time'].to_list()
-        real_times += merge_df['training time(seconds)'].to_list()
-        pred_acc += merge_df['val accuracy'].to_list()
-        real_acc += merge_df['best val accuracy'].to_list()
+        # list of lists
+        pred_times.append(merge_df['time'].to_list())
+        real_times.append(merge_df['training time(seconds)'].to_list())
+        pred_acc.append(merge_df['val accuracy'].to_list())
+        real_acc.append(merge_df['best val accuracy'].to_list())
+        scatter_legend_labels.append(f'B{b}')
 
         avg_time_errors[b-2] = statistics.mean(time_errors)
         max_time_errors[b-2] = max(time_errors)
@@ -293,8 +313,11 @@ def plot_predictions_error(B: int):
                                 'Predictions time errors overview (real - predicted)', 'pred_time_errors_overview.png')
     __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy',
                                 'Predictions val accuracy errors overview (real - predicted)', 'pred_acc_errors_overview.png')
-    __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview', 'time_pred_overview.png')
-    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview', 'acc_pred_overview.png')
+
+    __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
+                                    'time_pred_overview.png', legend_labels=scatter_legend_labels)
+    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
+                                    'acc_pred_overview.png', legend_labels=scatter_legend_labels)
 
     __logger.info("Prediction error overview plots written successfully")
 
