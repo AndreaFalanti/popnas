@@ -22,9 +22,11 @@ def display_plot_overview(plot_paths, columns, rows, title=None):
         axi.axis('off')
 
         if i < len(plot_paths):
-            with Image.open(plot_paths[i]) as img:
-                axi.axis('off')
-                axi.imshow(img)
+            try:
+                with Image.open(plot_paths[i]) as img:
+                    axi.imshow(img)
+            except FileNotFoundError:
+                axi.text(0.5, 0.5, s='Image not found', ha='center', va='center', fontsize='x-large', fontweight='semibold')
 
     plt.tight_layout()
 
