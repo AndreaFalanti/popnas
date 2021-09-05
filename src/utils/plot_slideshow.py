@@ -57,7 +57,7 @@ def main():
         display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png']), 2, 1, title=f'Operation usage overview (B={b})')
         b += 1
 
-    display_plot_overview(gen_paths(['train_time_overview.png']), 2, 1)
+    display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png']), 2, 1, title='CNN training per block overview')
 
 if __name__ == '__main__':
     main()

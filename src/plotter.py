@@ -36,7 +36,7 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name):
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
 
     # beautify the x-labels
-    # plt.gcf().autofmt_xdate()
+    plt.gcf().autofmt_xdate()
 
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
@@ -82,7 +82,7 @@ def __plot_pie_chart(labels, values, title, save_name):
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
     legend_labels = [f'{label} - {(val/total)*100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
-    patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90)
+    patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
     plt.title(title)
@@ -145,17 +145,24 @@ def plot_dynamic_reindex_related_blocks_info():
 
 
 def plot_training_info_per_block():
-    __logger.info("Analyzing avg_training_time.csv...")
-    csv_path = log_service.build_path('csv', 'avg_training_time.csv')
+    __logger.info("Analyzing training overview data...")
+    csv_path = log_service.build_path('csv', 'training_overview.csv')
     df = pd.read_csv(csv_path)
 
     x = df['# blocks']
-    bar_avg = BarInfo(df['avg training time(s)'], 'b', 'avg') 
-    bar_max = BarInfo(df['max time'], 'g', 'max')
-    bar_min = BarInfo(df['min time'], 'r', 'min')
 
-    __plot_multibar_histogram(x, [bar_avg, bar_max, bar_min], 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
-    __logger.info("Train time overview plot written successfully")
+    bar_avg_time = BarInfo(df['avg training time(s)'], 'b', 'avg') 
+    bar_max_time = BarInfo(df['max time'], 'g', 'max')
+    bar_min_time = BarInfo(df['min time'], 'r', 'min')
+
+    bar_avg_acc = BarInfo(df['avg val acc'], 'b', 'avg') 
+    bar_max_acc = BarInfo(df['max acc'], 'g', 'max')
+    bar_min_acc = BarInfo(df['min acc'], 'r', 'min')
+
+    __plot_multibar_histogram(x, [bar_avg_time, bar_max_time, bar_min_time], 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
+    __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview.png')
+
+    __logger.info("Training aggregated overview plots written successfully")
 
 
 def __initialize_operation_usage_data(operations):
