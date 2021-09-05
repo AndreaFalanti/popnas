@@ -6,7 +6,7 @@ import tensorflow as tf
 
 import configparser
 
-from encoder import StateSpace
+from encoder import StateSpace, CellEncoding
 from aMLLibrary import sequence_data_processing
 from tqdm import tqdm
 
@@ -512,15 +512,14 @@ class ControllerManager:
             model_estimations = []  # type: list[ModelEstimate]
 
             # closure that returns a function that returns the model generator for current generation step
-            # and a function that directly returns ALL valid models in oneshot
-            generate_models, get_unique_models = self.state_space.prepare_intermediate_children(self.b_)
+            generate_models = self.state_space.prepare_intermediate_children(self.b_)
 
             # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the 
-            # necessary ones and takes lot less time (instead of O(N^2) it becomes O(K^2))
-            next_models, pruned_count = get_unique_models()
-            self._logger.info('Pruned %d equivalent models', pruned_count)
+            # necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
+            # if you can make it more performant prune them before the evaluations again.
+            next_models = list(generate_models())
 
-            # TODO: previous method with generator (it generate also equivalent models)
+            # TODO: previous method with generator
             # pbar = tqdm(iterable=enumerate(generate_models()),
             #             unit='model', desc='Estimating models: ',
             #             total=self.state_space.get_current_step_total_models(self.b_))
@@ -557,9 +556,23 @@ class ControllerManager:
             if not self.pnas_mode:
                 self._logger.info('Building pareto front...')
                 pareto_front = [model_estimations[0]]
+
+                # for eqv check purposes
+                existing_model_reprs = []
+                pruned_count = 0
+
                 for model_est in model_estimations[1:]:
+                    # less time than last pareto element
                     if model_est.time <= pareto_front[-1].time:
-                        pareto_front.append(model_est)
+                        # check that model is not equivalent to another one present already in the pareto front
+                        cell_repr = CellEncoding(model_est.model_encoding)
+                        if not self.state_space.check_model_equivalence(cell_repr, existing_model_reprs):
+                            pareto_front.append(model_est)
+                            existing_model_reprs.append(cell_repr)
+                        else:
+                            pruned_count += 1
+
+                self._logger.info('Pruned %d equivalent models while building pareto front', pruned_count) 
 
                 with open(log_service.build_path('csv', f'pareto_front_B{self.b_}.csv'), mode='w', newline='') as f:
                     writer = csv.writer(f)
@@ -574,8 +587,14 @@ class ControllerManager:
             # account for case where there are fewer children than K
             children_count = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
 
-            # take only the K highest scoring children for next iteration
-            children = list(map(lambda child: child.model_encoding, pareto_front[:children_count]))
+            if not self.pnas_mode:
+                # take only the K highest scoring children for next iteration
+                children = list(map(lambda child: child.model_encoding, pareto_front[:children_count]))
+            else:
+                # remove equivalent models, not done already if running in pnas mode
+                models = list(map(lambda model_est: model_est.model_encoding, pareto_front))
+                children, pruned_count = self.state_space.prune_equivalent_cell_models(models, children_count)
+                self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)
 
             with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
                 writer = csv.writer(f)

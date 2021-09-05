@@ -11,6 +11,7 @@ import log_service
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
+# TODO: fix plots for pnas mode
 
 __logger = None
 

@@ -274,24 +274,21 @@ class StateSpace:
                     temp_child = list(child)
                     temp_child.extend(permutation)
                     yield temp_child
-
-        def get_all_unique_models():
-            '''
-            Produce directly all models and return them. It prunes equivalent models and also
-            returns the amount of models pruned.
-            '''
-            children = []
-            for _, child in enumerate(self.children):
-                for permutation in new_search_space:
-                    temp_child = list(child)
-                    temp_child.extend(permutation)
-                    children.append(temp_child)
-            
-            return self._prune_equivalent_cell_models(children)
  
-        return generate_models, get_all_unique_models
+        return generate_models
 
-    def _prune_equivalent_cell_models(self, models):
+
+    def prune_equivalent_cell_models(self, models, k: int):
+        '''
+        Prune equivalent models until k models have been obtained, then return them.
+
+        Args:
+            models ([type]): [description]
+            k ([type]): model count
+
+        Returns:
+            [type]: [description]
+        '''
         prime_models = []
         prime_cell_repr = []
         #pruned_models = []  # DEBUG only
@@ -302,16 +299,20 @@ class StateSpace:
             cell_repr = CellEncoding(model)
 
             # check possible equivalence with other models already generated
-            if self._check_model_equivalence(cell_repr, prime_cell_repr):
+            if self.check_model_equivalence(cell_repr, prime_cell_repr):
                 pruned_count += 1
                 #pruned_models.append(model)     # DEBUG only
             else:
                 prime_cell_repr.append(cell_repr)
                 prime_models.append(model)
 
+            # reached k models, return them without considering the rest
+            if len(prime_models) == k:
+                break
+
         return prime_models, pruned_count
 
-    def _check_model_equivalence(self, model, generated_models):
+    def check_model_equivalence(self, model, generated_models):
         for gen_model in generated_models:
             if model == gen_model:
                 return True
