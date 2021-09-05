@@ -164,18 +164,23 @@ class Train:
             writer = csv.writer(f)
             writer.writerow(data)
 
-    def write_average_training_time(self, blocks, timers):
-        with open(log_service.build_path('csv', 'avg_training_time.csv'), mode='a+', newline='') as f:
+    def write_overall_cnn_training_results(self, blocks, timers, rewards):
+        with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
 
             # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
             if f.tell() == 0:
-                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time'])
+                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val acc', 'max acc', 'min acc'])
             
             avg_time = statistics.mean(timers)
             max_time = max(timers)
             min_time = min(timers)
-            writer.writerow([blocks, avg_time, max_time, min_time])
+
+            avg_acc = statistics.mean(rewards)
+            max_acc = max(rewards)
+            min_acc = min(rewards)
+
+            writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
     def write_sliding_blocks_training_time(self, current_blocks, timer, listed_space,
                                             state_space, reindex_function):
@@ -352,7 +357,7 @@ class Train:
                     self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
                                                             state_space, reindex_function)
             
-            self.write_average_training_time(current_blocks, timers)
+            self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
             # avoid controller training, pareto front estimation and plot at final step
             if current_blocks != self.blocks:
