@@ -1,16 +1,16 @@
+import re
 import tensorflow as tf
 
 import ops
 import log_service
+from utils.func_utils import to_int_tuple
 
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
-
-# TODO: refactor this in a function, like the ones we have done in NN course. This will make this a lot more simple.
 
 
 class ModelGenerator():
 
-    def __init__(self, actions, filters=24, concat_only_unused=True):
+    def __init__(self, actions, filters=24, concat_only_unused=True, weight_norm=None):
         '''
         Utility class to build a CNN with structure provided in the action list.
 
@@ -21,6 +21,7 @@ class ModelGenerator():
         '''
 
         self._logger = log_service.get_logger(__name__)
+        self.op_regexes = self.__compile_op_regexes()
 
         self.B = len(actions) // 4
 
@@ -43,6 +44,24 @@ class ModelGenerator():
         self.filters = filters
         # for depth adaptation purposes
         self.prev_cell_filters = 0
+
+        self.weight_norm = tf.keras.regularizers.l2(weight_norm) if weight_norm is not None else None
+
+    def __compile_op_regexes(self):
+        '''
+        Build a dictionary with compiled regexes for each parametrized supported operation.
+
+        Returns:
+            (dict): Regex dictionary
+        '''
+        regex_dict = {}
+        regex_dict['conv'] = re.compile(r'(\d+)x(\d+) conv')
+        regex_dict['dconv'] = re.compile(r'(\d+)x(\d+) dconv')
+        regex_dict['stack_conv'] = re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv')
+        regex_dict['pool'] = re.compile(r'(\d+)x(\d+) (max|avg)pool')
+
+        return regex_dict
+
 
     def __build_cell_util(self, filters, inputs, reduction=False):
         '''
@@ -103,7 +122,7 @@ class ModelGenerator():
         last_output = cell_inputs[-1]
         gap = GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
-        output = Dense(10, activation='softmax', name='Softmax')(gap)  # only logits
+        output = Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
 
         return tf.keras.Model(inputs=model_input, outputs=output)
 
@@ -247,68 +266,57 @@ class ModelGenerator():
         # basically a huge switch case, python has no switch case because 'reasons'...
         # TODO: with python 3.10.0 match-case is available, it's worth to upgrade python for it?
 
-        # TODO: could be improved to generalize operations to different sizes, extrapolating them through regex.
-        # For example 3x3 dconv and 5x5 dconv as \dx\d dconv and setting accordingly the kernel size
 
-        # applies a 3x3 separable conv
-        if action == '3x3 dconv':
-            x = ops.SeperableConvolution(filters, (3, 3), strides)
-            x._name = f'3x3_dconv_c{self.cell_index}b{self.block_index}{tag}'
+        # check non parametrized operations first since they don't require a regex and are faster
+        if action == 'identity':
+            # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
+            if strides == (2, 2):
+                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, weight_norm=self.weight_norm)
+                x._name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
+                return x
+            else:
+                # else just submits a linear layer if shapes match
+                x = ops.Identity(filters, strides)
+                x._name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
+                return x
+
+        # check for separable conv
+        match = self.op_regexes['dconv'].match(action) #type: re.Match
+        if match:
+            x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides, weight_norm=self.weight_norm)
+            x._name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
-        # applies a 5x5 separable conv
-        if action == '5x5 dconv':
-            x = ops.SeperableConvolution(filters, (5, 5), strides)
-            x._name = f'5x5_dconv_c{self.cell_index}b{self.block_index}{tag}'
-            return x
-
-        # applies a 7x7 separable conv
-        if action == '7x7 dconv':
-            x = ops.SeperableConvolution(filters, (7, 7), strides)
-            x._name = f'7x7_dconv_c{self.cell_index}b{self.block_index}{tag}'
-            return x
-
-        # applies a 1x7 and then a 7x1 standard conv operation
-        if action == '1x7-7x1 conv':
+        # check for stacked conv operation
+        match = self.op_regexes['stack_conv'].match(action) #type: re.Match
+        if match:
             f = [filters, filters]
-            k = [(1, 7), (7, 1)]
-            s = [strides, 1]
+            k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
+            s = [strides, (1, 1)]
 
-            x = ops.StackedConvolution(f, k, s)
-            x._name = f'1x7-7x1_conv_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.StackedConvolution(f, k, s, weight_norm=self.weight_norm)
+            x._name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
-        # applies a 3x3 standard conv
-        if action == '3x3 conv':
-            x = ops.Convolution(filters, (3, 3), strides)
+        # check for standard conv
+        match = self.op_regexes['conv'].match(action) #type: re.Match
+        if match:
+            x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides, weight_norm=self.weight_norm)
             x._name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
-        # applies a 3x3 maxpool
-        if action == '3x3 maxpool':
-            x = ops.PoolingConv(filters, 'max', size=(3, 3), strides=strides) if adapt_depth \
-                    else ops.Pooling('max', size=(3, 3), strides=strides)
-            x._name = f'3x3_maxpool_c{self.cell_index}b{self.block_index}{tag}'
+        # check for pooling
+        match = self.op_regexes['pool'].match(action) #type: re.Match
+        if match:
+            size = to_int_tuple(match.group(1, 2))
+            pool_type = match.group(3)
+
+            x = ops.PoolingConv(filters, pool_type, size, strides, weight_norm=self.weight_norm) if adapt_depth \
+                    else ops.Pooling(pool_type, size, strides)
+            x._name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
             return x
 
-        # applies a 3x3 avgpool
-        if action == '3x3 avgpool':
-            x = ops.PoolingConv(filters, 'avg', size=(3, 3), strides=strides) if adapt_depth \
-                    else ops.Pooling('avg', size=(3, 3), strides=strides)
-            x._name = f'3x3_avgpool_c{self.cell_index}b{self.block_index}{tag}'
-            return x
-
-        # 'identity' action case, if using (2, 2) stride it's actually handled as a convolution
-        # attempts a linear operation (if size matches) or a strided linear conv projection to reduce spatial depth
-        if strides == (2, 2):
-            x = ops.Convolution(filters, (1, 1), strides)
-            x._name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
-            return x
-        else:
-            # else just submits a linear layer if shapes match
-            x = ops.Identity(filters, strides)
-            x._name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
-            return x
+        raise ValueError('Operation not covered by POPNAS algorithm')
 
     def define_callbacks(self, tb_logdir):
         '''

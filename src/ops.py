@@ -74,14 +74,15 @@ class Identity(Model):
 
 class SeperableConvolution(Model):
 
-    def __init__(self, filters, kernel, strides):
+    def __init__(self, filters, kernel, strides, weight_norm=None):
         '''
         Constructs a Seperable Convolution - Batch Normalization - Relu block.
         '''
         super(SeperableConvolution, self).__init__()
 
         self.conv = SeparableConv2D(filters, kernel, strides=strides, padding='same',
-                                    kernel_initializer='he_uniform')
+                                    depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
+                                    depthwise_regularizer=weight_norm, pointwise_regularizer=weight_norm)
         self.bn = BatchNormalization()
 
     def call(self, inputs, training=None, mask=None):
@@ -92,14 +93,14 @@ class SeperableConvolution(Model):
 
 class Convolution(Model):
 
-    def __init__(self, filters, kernel, strides):
+    def __init__(self, filters, kernel, strides, weight_norm=None):
         '''
         Constructs a Spatial Convolution - Batch Normalization - Relu block.
         '''
         super(Convolution, self).__init__()
 
         self.conv = Conv2D(filters, kernel, strides=strides, padding='same',
-                           kernel_initializer='he_uniform')
+                           kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
         self.bn = BatchNormalization()
 
     def call(self, inputs, training=None, mask=None):
@@ -110,7 +111,7 @@ class Convolution(Model):
 
 class StackedConvolution(Model):
 
-    def __init__(self, filter_list, kernel_list, stride_list):
+    def __init__(self, filter_list, kernel_list, stride_list, weight_norm=None):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
@@ -120,7 +121,7 @@ class StackedConvolution(Model):
 
         self.convs = []
         for (f, k, s) in zip(filter_list, kernel_list, stride_list):
-            conv = Convolution(f, k, s)
+            conv = Convolution(f, k, s, weight_norm=weight_norm)
             self.convs.append(conv)
 
     def call(self, inputs, training=None, mask=None):
@@ -153,7 +154,7 @@ class Pooling(Model):
 
 class PoolingConv(Model):
 
-    def __init__(self, filters, type, size, strides):
+    def __init__(self, filters, type, size, strides, weight_norm=None):
         '''
         Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
         to adapt the output depth to filters size.
@@ -161,7 +162,7 @@ class PoolingConv(Model):
         super(PoolingConv, self).__init__()
         
         self.pool = Pooling(type, size, strides)
-        self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1))
+        self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_norm=weight_norm)
 
     def call(self, inputs, training=None, mask=None):
         output = self.pool(inputs)

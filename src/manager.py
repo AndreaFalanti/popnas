@@ -26,7 +26,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24):
+    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24, weight_norm=None):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -49,6 +49,7 @@ class NetworkManager:
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
+        self.weight_norm = weight_norm
 
     def __compile_model(self, model_fn: ModelGenerator, actions: 'list[str]', concat_only_unused: bool, tb_logdir: str):
         '''
@@ -63,7 +64,7 @@ class NetworkManager:
         Returns:
             (tf.keras.Model, list(tf.keras.callbacks.Callback)): model and callbacks to use while training
         '''
-        model_gen = model_fn(actions, self.filters, concat_only_unused)  # type: ModelGenerator
+        model_gen = model_fn(actions, self.filters, concat_only_unused, self.weight_norm)  # type: ModelGenerator
         model = model_gen.build_model()
 
         loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
