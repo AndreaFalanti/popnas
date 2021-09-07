@@ -67,6 +67,7 @@ to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https:
 - **-c**: defines the checkpoint B value from which restart if the argument -r is specified in the input command.
 - **-d**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
 - **-f**: defines the initial number of filters to use. Defaults to 24.
+- **-wn**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
 - **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available. Must be specified if the host machine has no gpu.
 - **--abc**: short for "all blocks concatenation". If specified, all blocks' output of a cell will be used in concatenation at the end of a cell to build the cell output, instead of concatenating only block outputs not used by other blocks (that is the PNAS implementation behavior, enabled by default).
 - **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation. This will make
