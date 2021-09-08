@@ -59,11 +59,11 @@ def depth_pointwise_conv_closure(desired_depth, op_layer):
 
 class Identity(Model):
 
-    def __init__(self, filters, strides):
+    def __init__(self, filters, strides, name='identity'):
         '''
         Simply adds an identity connection, padding in depth with 0 if necessary to enable block add operator.
         '''
-        super(Identity, self).__init__()
+        super(Identity, self).__init__(name=name)
 
         self.op = Layer()   # Identity layer in Keras
         self.identity_call = depth_zero_pad_closure(filters, self.op)
@@ -74,11 +74,11 @@ class Identity(Model):
 
 class SeperableConvolution(Model):
 
-    def __init__(self, filters, kernel, strides, weight_norm=None):
+    def __init__(self, filters, kernel, strides, weight_norm=None, name='dconv'):
         '''
         Constructs a Seperable Convolution - Batch Normalization - Relu block.
         '''
-        super(SeperableConvolution, self).__init__()
+        super(SeperableConvolution, self).__init__(name=name)
 
         self.conv = SeparableConv2D(filters, kernel, strides=strides, padding='same',
                                     depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
@@ -93,11 +93,11 @@ class SeperableConvolution(Model):
 
 class Convolution(Model):
 
-    def __init__(self, filters, kernel, strides, weight_norm=None):
+    def __init__(self, filters, kernel, strides, weight_norm=None, name='conv'):
         '''
         Constructs a Spatial Convolution - Batch Normalization - Relu block.
         '''
-        super(Convolution, self).__init__()
+        super(Convolution, self).__init__(name=name)
 
         self.conv = Conv2D(filters, kernel, strides=strides, padding='same',
                            kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
@@ -111,11 +111,11 @@ class Convolution(Model):
 
 class StackedConvolution(Model):
 
-    def __init__(self, filter_list, kernel_list, stride_list, weight_norm=None):
+    def __init__(self, filter_list, kernel_list, stride_list, weight_norm=None, name='stack_conv'):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
-        super(StackedConvolution, self).__init__()
+        super(StackedConvolution, self).__init__(name=name)
 
         assert len(filter_list) == len(kernel_list) and len(kernel_list) == len(stride_list), "List lengths must match"
 
@@ -137,11 +137,11 @@ class StackedConvolution(Model):
 # and the op classes to achieve this.
 class Pooling(Model):
 
-    def __init__(self, type, size, strides):
+    def __init__(self, type, size, strides, name='pool'):
         '''
         Constructs a standard pooling layer (average or max).
         '''
-        super(Pooling, self).__init__()
+        super(Pooling, self).__init__(name=name)
         
         if type == 'max':
             self.pool = MaxPooling2D(size, strides, padding='same')
@@ -154,12 +154,12 @@ class Pooling(Model):
 
 class PoolingConv(Model):
 
-    def __init__(self, filters, type, size, strides, weight_norm=None):
+    def __init__(self, filters, type, size, strides, weight_norm=None, name='pool_conv'):
         '''
         Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
         to adapt the output depth to filters size.
         '''
-        super(PoolingConv, self).__init__()
+        super(PoolingConv, self).__init__(name=name)
         
         self.pool = Pooling(type, size, strides)
         self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_norm=weight_norm)

@@ -271,20 +271,21 @@ class ModelGenerator():
         if action == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2):
-                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, weight_norm=self.weight_norm)
-                x._name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
+                model_name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
+                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, name=model_name, weight_norm=self.weight_norm)
                 return x
             else:
                 # else just submits a linear layer if shapes match
-                x = ops.Identity(filters, strides)
-                x._name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
+                model_name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
+                x = ops.Identity(filters, strides, name=model_name)
                 return x
 
         # check for separable conv
         match = self.op_regexes['dconv'].match(action) #type: re.Match
         if match:
-            x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides, weight_norm=self.weight_norm)
-            x._name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
+            model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
+                                            name=model_name, weight_norm=self.weight_norm)
             return x
 
         # check for stacked conv operation
@@ -294,15 +295,16 @@ class ModelGenerator():
             k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
             s = [strides, (1, 1)]
 
-            x = ops.StackedConvolution(f, k, s, weight_norm=self.weight_norm)
-            x._name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
+            model_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.StackedConvolution(f, k, s, name=model_name, weight_norm=self.weight_norm)
             return x
 
         # check for standard conv
         match = self.op_regexes['conv'].match(action) #type: re.Match
         if match:
-            x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides, weight_norm=self.weight_norm)
-            x._name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
+            model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
+                                    name=model_name, weight_norm=self.weight_norm)          
             return x
 
         # check for pooling
@@ -311,9 +313,10 @@ class ModelGenerator():
             size = to_int_tuple(match.group(1, 2))
             pool_type = match.group(3)
 
-            x = ops.PoolingConv(filters, pool_type, size, strides, weight_norm=self.weight_norm) if adapt_depth \
-                    else ops.Pooling(pool_type, size, strides)
-            x._name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
+            model_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_norm=self.weight_norm) if adapt_depth \
+                    else ops.Pooling(pool_type, size, strides, name=model_name)
+            
             return x
 
         raise ValueError('Operation not covered by POPNAS algorithm')
