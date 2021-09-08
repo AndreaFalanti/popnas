@@ -55,7 +55,7 @@ def main():
                             title='Prediction errors overview')
 
     b = 2
-    while os.path.isfile(os.path.join(args.p, 'plots', f'pareto_op_usage_B{b}.png')):
+    while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
         display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png']), 2, 1, title=f'Operation usage overview (B={b})')
         b += 1
 

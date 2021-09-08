@@ -487,7 +487,7 @@ class ControllerManager:
         '''
         with open(log_service.build_path('csv', f'predictions_B{self.b_}.csv'), mode='w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['time', 'score', 'cell structure'])
+            writer.writerow(['time', 'val accuracy', 'cell structure'])
             writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
 
     def update_step(self, headers, reindex_function):
@@ -543,12 +543,11 @@ class ControllerManager:
                 if self.pnas_mode or estimated_time <= self.T:
                     model_estimations.append(ModelEstimate(intermediate_child, score, estimated_time))
 
+            # sort the children according to their score
+            model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
             self.__write_predictions_on_csv(model_estimations)
 
             self._logger.info('Model evaluation completed')
-
-            # sort the children according to their score
-            model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
 
             # start process by putting first model into pareto front (best score, ordered array),
             # then comparing the rest only by time because of ordering trick.

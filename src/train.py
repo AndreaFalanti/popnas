@@ -366,11 +366,14 @@ class Train:
                 self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
                 controller.update_step(headers, reindex_function)
-                plotter.plot_operation_usage(current_blocks + 1, operators)
+
+                # PNAS mode doesn't build pareto front
+                if not self.pnas_mode:
+                    plotter.plot_pareto_operation_usage(current_blocks + 1, operators)
                 # state_space.children are updated in controller.update_step, CNN to train in next step
                 plotter.plot_children_op_usage(current_blocks + 1, operators, state_space.children)
 
         plotter.plot_training_info_per_block()
-        plotter.plot_predictions_error(self.blocks)
+        plotter.plot_predictions_error(self.blocks, self.pnas_mode)
         
         self._logger.info("Finished!")

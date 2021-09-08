@@ -131,6 +131,25 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_
     plt.savefig(save_path, bbox_inches='tight')
 
 
+def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
+    '''
+    Build avg, max and min bars for multi-bar plots.
+
+    Args:
+        avg_vals ([type]): values to assign to avg bar
+        max_vals ([type]): values to assign to max bar
+        min_vals ([type]): values to assign to min bar
+
+    Returns:
+        (list[BarInfo, BarInfo, BarInfo]): BarInfos usable in multi-bar plots
+    '''
+    bar_avg = BarInfo(avg_vals, 'b', 'avg') 
+    bar_max = BarInfo(max_vals, 'g', 'max')
+    bar_min = BarInfo(min_vals, 'r', 'min')
+
+    return [bar_avg, bar_max, bar_min]
+
+
 def plot_dynamic_reindex_related_blocks_info():
     __logger.info("Analyzing training_results.csv...")
     csv_path = log_service.build_path('csv', 'training_results.csv')
@@ -168,16 +187,11 @@ def plot_training_info_per_block():
 
     x = df['# blocks']
 
-    bar_avg_time = BarInfo(df['avg training time(s)'], 'b', 'avg') 
-    bar_max_time = BarInfo(df['max time'], 'g', 'max')
-    bar_min_time = BarInfo(df['min time'], 'r', 'min')
+    time_bars = __generate_avg_max_min_bars(df['avg training time(s)'], df['max time'], df['min time'])
+    acc_bars = __generate_avg_max_min_bars(df['avg val acc'], df['max acc'], df['min acc'])
 
-    bar_avg_acc = BarInfo(df['avg val acc'], 'b', 'avg') 
-    bar_max_acc = BarInfo(df['max acc'], 'g', 'max')
-    bar_min_acc = BarInfo(df['min acc'], 'r', 'min')
-
-    __plot_multibar_histogram(x, [bar_avg_time, bar_max_time, bar_min_time], 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
-    __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview.png')
+    __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
+    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview.png')
 
     __logger.info("Training aggregated overview plots written successfully")
 
@@ -227,7 +241,7 @@ def __update_op_counters(cells, b, op_counters, op_index):
     return op_counters
 
 
-def plot_operation_usage(b: int, operations: 'list[str]'):
+def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
     op_index, op_counters = __initialize_operation_usage_data(operations)
 
     __logger.info("Analyzing operation usage for pareto front of b=%d", b)
@@ -256,44 +270,57 @@ def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[
     __logger.info("Children op usage plot for b=%d written successfully", b)
 
 
-def plot_predictions_error(B: int):
+def __build_prediction_dataframe(b: int, pnas_mode: bool):
+    # PNAS mode has no pareto front, use sorted predictions (by score)
+    pred_csv_path = log_service.build_path('csv', f'predictions_B{b}.csv') if pnas_mode \
+        else log_service.build_path('csv', f'pareto_front_B{b}.csv')
+    training_csv_path = log_service.build_path('csv', 'training_results.csv')
+
+    pred_df = pd.read_csv(pred_csv_path)
+    training_df = pd.read_csv(training_csv_path)
+
+    # take only trained CNN with correct block length
+    training_df = training_df[training_df['# blocks'] == b]
+
+    # take first k CNN from predictions / pareto front (k can be found as the actual trained CNN count)
+    trained_cnn_count = len(training_df)
+    pred_df = pred_df.head(trained_cnn_count)
+
+    # now both dataframes have same length and they have the same CNN order. Confront items in order to get differences.
+    return pd.merge(training_df, pred_df, on=['cell structure'], how='inner')
+
+
+def plot_predictions_error(B: int, pnas_mode: bool):
     avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
     avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
 
-    # TODO. maybe better to refactor to numpy arrays too
+    # TODO: maybe better to refactor these lists to numpy arrays too.
+    # They are used as list of lists for scatter plots.
     pred_times, real_times = [], []
     pred_acc, real_acc = [], []
     scatter_legend_labels = []
 
     for b in range(2, B+1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
-        pareto_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
-        training_csv_path = log_service.build_path('csv', 'training_results.csv')
-        pareto_df = pd.read_csv(pareto_csv_path)
-        training_df = pd.read_csv(training_csv_path)
+        merge_df = __build_prediction_dataframe(b, pnas_mode)
 
-        # take only trained CNN with correct block length
-        training_df = training_df[training_df['# blocks'] == b]
+        # compute time prediction errors (regressor)
+        if not pnas_mode:
+            time_errors = merge_df['training time(seconds)'] - merge_df['time']
+            
+            pred_times.append(merge_df['time'].to_list())
+            real_times.append(merge_df['training time(seconds)'].to_list())
+            
+            avg_time_errors[b-2] = statistics.mean(time_errors)
+            max_time_errors[b-2] = max(time_errors)
+            min_time_errors[b-2] = min(time_errors)
 
-        # take first k CNN from pareto front (k can be found as the actual trained CNN count)
-        trained_cnn_count = len(training_df)
-        pareto_df = pareto_df.head(trained_cnn_count)
-
-        # now both dataframes have same length and they have the same CNN order. Confront items in order to get differences.
-        merge_df = pd.merge(training_df, pareto_df, on=['cell structure'], how='inner')
-        time_errors = merge_df['training time(seconds)'] - merge_df['time']
+        # always compute accuracy prediction errors (LSTM controller)
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
 
-        # list of lists
-        pred_times.append(merge_df['time'].to_list())
-        real_times.append(merge_df['training time(seconds)'].to_list())
         pred_acc.append(merge_df['val accuracy'].to_list())
         real_acc.append(merge_df['best val accuracy'].to_list())
         scatter_legend_labels.append(f'B{b}')
-
-        avg_time_errors[b-2] = statistics.mean(time_errors)
-        max_time_errors[b-2] = max(time_errors)
-        min_time_errors[b-2] = min(time_errors)
 
         avg_acc_errors[b-2] = statistics.mean(val_accuracy_errors)
         max_acc_errors[b-2] = max(val_accuracy_errors)
@@ -301,21 +328,21 @@ def plot_predictions_error(B: int):
 
     x = np.arange(2, B+1)
 
-    bar_avg_t = BarInfo(avg_time_errors, 'b', 'avg') 
-    bar_max_t = BarInfo(max_time_errors, 'g', 'max')
-    bar_min_t = BarInfo(min_time_errors, 'r', 'min')
+    # write plots about time
+    if not pnas_mode:
+        time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
 
-    bar_avg_acc = BarInfo(avg_acc_errors, 'b', 'avg') 
-    bar_max_acc = BarInfo(max_acc_errors, 'g', 'max')
-    bar_min_acc = BarInfo(min_acc_errors, 'r', 'min')
-
-    __plot_multibar_histogram(x, [bar_avg_t, bar_max_t, bar_min_t], 0.15, 'Blocks', 'Time(s)',
+        __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
                                 'Predictions time errors overview (real - predicted)', 'pred_time_errors_overview.png')
-    __plot_multibar_histogram(x, [bar_avg_acc, bar_max_acc, bar_min_acc], 0.15, 'Blocks', 'Accuracy',
-                                'Predictions val accuracy errors overview (real - predicted)', 'pred_acc_errors_overview.png')
-
-    __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
+        __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
                                     'time_pred_overview.png', legend_labels=scatter_legend_labels)
+
+
+    acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
+
+    # write plots about accuracy
+    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
+                                'Predictions val accuracy errors overview (real - predicted)', 'pred_acc_errors_overview.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
                                     'acc_pred_overview.png', legend_labels=scatter_legend_labels)
 
