@@ -1,16 +1,20 @@
 import pandas
 import numpy as np
 import csv
+from tqdm import tqdm
 
 import tensorflow as tf
 
-import configparser
+from configparser import ConfigParser
+import os
+import sys
 
 from encoder import StateSpace, CellEncoding
 from aMLLibrary import sequence_data_processing
-from tqdm import tqdm
 
 import log_service
+from utils.stream_to_logger import StreamToLogger
+from contextlib import redirect_stderr, redirect_stdout
 
 
 class Controller(tf.keras.Model):
@@ -128,6 +132,7 @@ class ControllerManager:
                 upon construction.
         '''
         self._logger = log_service.get_logger(__name__)
+        self._amllibrary_logger = log_service.get_logger('aMLLibrary')
 
         self.state_space = state_space  # type: StateSpace
         self.state_size = self.state_space.size
@@ -145,6 +150,8 @@ class ControllerManager:
         self.input_B = input_B
         self.pnas_mode = pnas_mode
         self.restore_controller = restore_controller
+
+        self.build_regressor_config = True
 
         # restore controller
         # TODO: surely not working by beginning, it used csv files that don't exists!
@@ -389,34 +396,51 @@ class ControllerManager:
 
         return avg_loss
 
-    def setup_regressor(self):
+    def setup_regressor(self, techniques=['NNLS']):
         '''
         Generate time regressor configuration and build the regressor.
 
         Returns:
             (Regressor): time regressor (aMLLibrary)
         '''
+        # NNLS, SVR, XGBoost, LRRidge
 
-        # create the NNLS configuration file
-        config = configparser.ConfigParser()
-        config['General'] = {'run_num': 1,
-                             'techniques': ['NNLS'],
-                             'hp_selection': 'All',
-                             'validation': 'All',
-                             'y': '"time"',
-                             'generate_plots': 'True'}
-        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
-        config['NNLS'] = {'fit_intercept': [True, False]}
+        # create the regressor configuration file for aMLLibrary
+        # done only at first call of this function
+        if self.build_regressor_config:
+            config = ConfigParser()
+            config.read(os.path.join('configs', 'regressors.ini'))
 
-        with open(log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'), 'w') as f:
-            config.write(f)
+            for section in config.sections():
+                if section == 'General':
+                    continue
 
-        # a-MLLibrary
-        sequence_data_processor_NNLS = sequence_data_processing.SequenceDataProcessing(
-            log_service.build_path('ini', f'training_time_NNLS_{self.b_}.ini'),
-            output=log_service.build_path(f'output_NNLS_{self.b_}'))
+                # delete config section not relevant to selected techniques
+                if section not in techniques:
+                    del config[section]
 
-        return sequence_data_processor_NNLS.process()
+            # value in .ini must be a single string of format ['technique1', 'technique2', ...]
+            # note: '' are important for correct execution (see map)
+            techniques_iter = map(lambda s: f"'{s}'", techniques)
+            techniques_str = f"[{', '.join(techniques_iter)}]"
+            config['General']['techniques'] = techniques_str
+            config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
+
+            with open(log_service.build_path('ini', 'aMLLibrary_regressors.ini'), 'w') as f:
+                config.write(f)
+            self.build_regressor_config = False
+
+        # a-MLLibrary, redirect output to POPNAS logger (it uses stderr for output, see custom logger)
+        redir_logger = StreamToLogger(self._amllibrary_logger)
+        with redirect_stdout(redir_logger):
+            with redirect_stderr(redir_logger):
+                sequence_data_processor = sequence_data_processing.SequenceDataProcessing(
+                    log_service.build_path('ini', 'aMLLibrary_regressors.ini'),
+                    output=log_service.build_path(f'output_regressor_B{self.b_}'))
+
+                best_regressor = sequence_data_processor.process()
+
+        return best_regressor
 
     def estimate_time(self, regressor, child_encoding, headers, reindex_function):
         '''
@@ -454,6 +478,7 @@ class ControllerManager:
             regressor_features = np.append(regressor_features, np.array([0, 0, 0, 0]))
 
         df_row = pandas.DataFrame([regressor_features], columns=headers)
+        # array of single element (time prediction)
         predicted_time = regressor.predict(df_row)[0]
 
         return predicted_time
@@ -505,7 +530,7 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        regressor_NNLS = self.setup_regressor()
+        regressor_NNLS = self.setup_regressor(techniques=['NNLS'])
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
