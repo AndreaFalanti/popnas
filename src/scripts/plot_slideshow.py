@@ -1,6 +1,7 @@
 import argparse
 import os
 from sys import platform
+import math
 
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -60,6 +61,20 @@ def main():
         b += 1
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png']), 2, 1, title='CNN training per block overview')
+
+    # check if regressor test folder is present (regressor_testing.py output)
+    reg_test_path = os.path.join(args.p, 'regressors_test')
+    if os.path.isdir(reg_test_path):
+        subfolders_full_path = [f.path for f in os.scandir(reg_test_path) if f.is_dir()]
+        regressors_num = len(subfolders_full_path)
+
+        regressor_plot_paths = []
+        for subfolder in subfolders_full_path:
+            plot_path = os.path.join(subfolder, 'results.png')
+            regressor_plot_paths.append(plot_path)
+
+        display_plot_overview(regressor_plot_paths, regressors_num // 2, math.ceil(regressors_num / 2.0), title='Regressor testing overview')
+
 
 if __name__ == '__main__':
     main()
