@@ -398,6 +398,9 @@ class ControllerManager:
 
     def __write_regressor_config_file(self, techniques):
         config = ConfigParser()
+        # to keep casing in keys while reading / writing
+        config.optionxform = str
+        
         config.read(os.path.join('configs', 'regressors.ini'))
 
         for section in config.sections():

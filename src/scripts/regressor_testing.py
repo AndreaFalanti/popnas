@@ -82,7 +82,10 @@ def write_regressor_config_file(input_csv_path, log_path, techniques: 'list[str]
     Note: technique is a list of single element (taken from controller, use list type to avoid to refactor)
     '''
     config = ConfigParser()
-    files = config.read(os.path.join('src', 'configs', 'regressors.ini'))
+    # to keep casing in keys while reading / writing
+    config.optionxform = str
+    
+    config.read(os.path.join('src', 'configs', 'regressors.ini'))
 
     for section in config.sections():
         if section == 'General':
@@ -179,7 +182,7 @@ def main():
     args = parser.parse_args()
 
     # aMLLibrary techniques to test
-    regressor_techniques = ['NNLS', 'XGBoost', 'LRRidge']
+    regressor_techniques = ['SVR', 'NNLS', 'XGBoost', 'LRRidge']
 
     csv_path = os.path.join(args.p, 'csv')
     log_path = setup_folders(args.p, techniques=regressor_techniques)
