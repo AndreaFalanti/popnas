@@ -84,9 +84,18 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way. To use it, only the log folder must be provided.
 An example of the command usage (from src folder):
 ```
-python .\utils\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(date)}
+python .\scripts\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(date)}
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
+
+## Regressor testing utility
+An additional script is also provided to analyze the results of multiple regressors on the data gathered in a POPNAS run.
+The script creates an additional folder inside the log folder given as argument.
+Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
+```
+python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folder(date)}
+```
+It's a bit hacky but unfortunately i didn't find an alternative way to solve the issue.
 
 ## Changelog from original version
 - Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
