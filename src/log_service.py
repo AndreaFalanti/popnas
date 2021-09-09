@@ -65,14 +65,8 @@ def get_logger(name):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
-    logging.basicConfig(
-        level=logging.INFO,
-        #format="%(asctime)s - [%(name)s:%(levelname)s] %(message)s",
-        handlers=[
-            file_handler,
-            console_handler
-        ]
-    )
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler,console_handler])
+
     return logger
 
 
@@ -84,9 +78,8 @@ def create_critical_logger():
 
     return logger
 
+
 # Taken from: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python
-
-
 def make_exception_handler(logger):
     """
     Closure to make an exception handler, given a logger.

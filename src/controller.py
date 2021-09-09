@@ -396,6 +396,29 @@ class ControllerManager:
 
         return avg_loss
 
+    def __write_regressor_config_file(self, techniques):
+        config = ConfigParser()
+        config.read(os.path.join('configs', 'regressors.ini'))
+
+        for section in config.sections():
+            if section == 'General':
+                continue
+
+            # delete config section not relevant to selected techniques
+            if section not in techniques:
+                del config[section]
+
+        # value in .ini must be a single string of format ['technique1', 'technique2', ...]
+        # note: '' are important for correct execution (see map)
+        techniques_iter = map(lambda s: f"'{s}'", techniques)
+        techniques_str = f"[{', '.join(techniques_iter)}]"
+        config['General']['techniques'] = techniques_str
+        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
+
+        with open(log_service.build_path('ini', 'aMLLibrary_regressors.ini'), 'w') as f:
+            config.write(f)
+        self.build_regressor_config = False
+
     def setup_regressor(self, techniques=['NNLS']):
         '''
         Generate time regressor configuration and build the regressor.
@@ -408,27 +431,7 @@ class ControllerManager:
         # create the regressor configuration file for aMLLibrary
         # done only at first call of this function
         if self.build_regressor_config:
-            config = ConfigParser()
-            config.read(os.path.join('configs', 'regressors.ini'))
-
-            for section in config.sections():
-                if section == 'General':
-                    continue
-
-                # delete config section not relevant to selected techniques
-                if section not in techniques:
-                    del config[section]
-
-            # value in .ini must be a single string of format ['technique1', 'technique2', ...]
-            # note: '' are important for correct execution (see map)
-            techniques_iter = map(lambda s: f"'{s}'", techniques)
-            techniques_str = f"[{', '.join(techniques_iter)}]"
-            config['General']['techniques'] = techniques_str
-            config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
-
-            with open(log_service.build_path('ini', 'aMLLibrary_regressors.ini'), 'w') as f:
-                config.write(f)
-            self.build_regressor_config = False
+            self.__write_regressor_config_file(techniques)
 
         # a-MLLibrary, redirect output to POPNAS logger (it uses stderr for output, see custom logger)
         redir_logger = StreamToLogger(self._amllibrary_logger)

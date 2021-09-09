@@ -1,10 +1,7 @@
 import log_service
 
-from tqdm import tqdm
 import numpy as np
-
 import os
-import shutil
 
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -12,13 +9,6 @@ from keras.utils.vis_utils import plot_model   # per stampare modello
 
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
-
-
-if not os.path.exists('temp_weights/'):
-    os.makedirs('temp_weights/')
-else:
-    shutil.rmtree('temp_weights')
-    os.makedirs('temp_weights/', exist_ok=True)
 
 
 class NetworkManager:
@@ -136,6 +126,7 @@ class NetworkManager:
             a reward for training a model with the given actions
         '''
 
+        # TODO: don't know why it was called. Try to remove it and check if something is wrong.
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard
