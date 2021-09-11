@@ -12,9 +12,10 @@ import log_service
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
-# TODO: fix plots for pnas mode
 
 __logger = None
+# disable matplotlib info messages
+plt.set_loglevel('WARNING')
 
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
 def initialize_logger():
@@ -27,7 +28,7 @@ def __parse_cell_structures(cell_structures: Iterable):
     return  list(map(lambda cs: cs[1:-1].split(';'), cell_structures))
 
 
-def __plot_histogram(x, y, x_label, y_label, title, save_name):
+def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
     plt.figure()
     plt.bar(x, y)
     plt.xlabel(x_label)
@@ -37,8 +38,9 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name):
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
 
-    # beautify the x-labels
-    plt.gcf().autofmt_xdate()
+    # use inclined x-labels
+    if incline_labels:
+        plt.gcf().autofmt_xdate()
 
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
@@ -175,10 +177,10 @@ def plot_dynamic_reindex_related_blocks_info():
     y_flops = df['flops']
   
     __logger.info("Writing plots...")
-    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time.png')
-    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc.png')
-    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params.png')
-    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops.png')
+    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time.png', incline_labels=True)
+    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc.png', incline_labels=True)
+    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params.png', incline_labels=True)
+    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops.png', incline_labels=True)
     __logger.info("SMB plots written successfully")
 
 
@@ -295,6 +297,7 @@ def __build_prediction_dataframe(b: int, pnas_mode: bool):
 def plot_predictions_error(B: int, pnas_mode: bool):
     avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
     avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
+    time_mapes, acc_mapes = np.zeros(B-1), np.zeros(B-1)
 
     # TODO: maybe better to refactor these lists to numpy arrays too.
     # They are used as list of lists for scatter plots.
@@ -306,6 +309,8 @@ def plot_predictions_error(B: int, pnas_mode: bool):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
         merge_df = __build_prediction_dataframe(b, pnas_mode)
 
+        scatter_legend_labels.append(f'B{b}')
+
         # compute time prediction errors (regressor)
         if not pnas_mode:
             time_errors = merge_df['training time(seconds)'] - merge_df['time']
@@ -316,37 +321,42 @@ def plot_predictions_error(B: int, pnas_mode: bool):
             avg_time_errors[b-2] = statistics.mean(time_errors)
             max_time_errors[b-2] = max(time_errors)
             min_time_errors[b-2] = min(time_errors)
+            time_mapes[b-2] = ((time_errors / merge_df['training time(seconds)']).abs()).mean() * 100
+
 
         # always compute accuracy prediction errors (LSTM controller)
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
 
         pred_acc.append(merge_df['val accuracy'].to_list())
         real_acc.append(merge_df['best val accuracy'].to_list())
-        scatter_legend_labels.append(f'B{b}')
 
         avg_acc_errors[b-2] = statistics.mean(val_accuracy_errors)
         max_acc_errors[b-2] = max(val_accuracy_errors)
         min_acc_errors[b-2] = min(val_accuracy_errors)
+        acc_mapes[b-2] = ((val_accuracy_errors / merge_df['best val accuracy']).abs()).mean() * 100
 
     x = np.arange(2, B+1)
+    x_str = list(map(lambda x: str(x), x))
 
     # write plots about time
     if not pnas_mode:
         time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
 
         __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
-                                'Predictions time errors overview (real - predicted)', 'pred_time_errors_overview.png')
+                                'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
                                     'time_pred_overview.png', legend_labels=scatter_legend_labels)
+        __plot_histogram(x_str, time_mapes, 'Blocks', 'MAPE', 'Time predictions MAPE', 'time_pred_MAPE.png')
 
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
     # write plots about accuracy
     __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
-                                'Predictions val accuracy errors overview (real - predicted)', 'pred_acc_errors_overview.png')
+                                'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
                                     'acc_pred_overview.png', legend_labels=scatter_legend_labels)
+    __plot_histogram(x_str, acc_mapes, 'Blocks', 'MAPE', 'Validation accuracy predictions MAPE', 'acc_pred_MAPE.png')
 
     __logger.info("Prediction error overview plots written successfully")
 

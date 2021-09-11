@@ -16,6 +16,8 @@ def path_closure(log_folder):
 
 
 def display_plot_overview(plot_paths, columns, rows, title=None):
+    assert len(plot_paths) <= (columns * rows)
+
     fig, ax = plt.subplots(nrows=rows, ncols=columns)
 
     for i, axi in enumerate(ax.flat):
@@ -52,8 +54,8 @@ def main():
     gen_paths = path_closure(args.p)
 
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2, title='Specular mono blocks (input -1) overview')
-    display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'time_pred_overview.png', 'pred_time_errors_overview.png']), 2, 2,
-                            title='Prediction errors overview')
+    display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'acc_pred_MAPE.png', 'time_pred_overview.png',
+                                        'pred_time_errors_overview.png', 'time_pred_MAPE.png']), 3, 2, title='Prediction errors overview')
 
     b = 2
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
