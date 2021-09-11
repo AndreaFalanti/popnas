@@ -56,7 +56,7 @@ class Train:
 
         return (x_train_init, y_train_init), (x_test_init, y_test_init)
 
-    def prepare_dataset(self, x_train_init, y_train_init, x_test, y_test):
+    def prepare_dataset(self, x_train_init, y_train_init):
         """Build a validation set from training set and do some preprocessing
 
         Args:
@@ -70,10 +70,9 @@ class Train:
         """
         # normalize image RGB values into [0, 1] domain
         x_train_init = x_train_init.astype('float32') / 255.
-        x_test = x_test.astype('float32') / 255.
 
         dataset = []
-        # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or its possible to deprecate this feature?
+        # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or it's possible to deprecate this feature?
         # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
             # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
@@ -82,9 +81,8 @@ class Train:
             y_train_init = y_train_init[:limit]
 
             # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0)
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0, stratify=y_train_init)
 
-            # TODO: missing y_test to categorical or done somewhere else?
             if self.dataset == "cifar10":
                 # cifar10
                 y_train = to_categorical(y_train, 10)
@@ -278,10 +276,10 @@ class Train:
         # print the state space being searched
         state_space.print_state_space()
 
-        # load correct dataset (based on self.dataset)
-        (x_train_init, y_train_init), (x_test_init, y_test_init) = self.load_dataset()
+        # load correct dataset (based on self.dataset), test data is not used actually
+        (x_train_init, y_train_init), _ = self.load_dataset()
 
-        dataset = self.prepare_dataset(x_train_init, y_train_init, x_test_init, y_test_init)
+        dataset = self.prepare_dataset(x_train_init, y_train_init)
 
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
