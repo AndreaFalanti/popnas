@@ -34,7 +34,7 @@ def display_plot_overview(plot_paths, columns, rows, title=None):
     plt.tight_layout()
 
     if title is not None:
-        fig.suptitle(title, fontsize='x-large', fontweight='semibold')
+        fig.suptitle(title, fontsize='x-large', fontweight='semibold', y=1.0)
 
     # maximize graph
     mng  = plt.get_current_fig_manager()

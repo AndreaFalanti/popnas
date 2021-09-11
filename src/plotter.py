@@ -90,8 +90,8 @@ def __plot_pie_chart(labels, values, title, save_name):
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
     plt.title(title)
-    plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.05, 0.1))
-    plt.subplots_adjust(left=0.1, bottom=0.1, right=0.75)
+    plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.03, 0.04))
+    plt.subplots_adjust(right=0.7)
 
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
