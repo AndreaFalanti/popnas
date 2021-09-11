@@ -172,11 +172,13 @@ def plot_dynamic_reindex_related_blocks_info():
     y_time = df['training time(seconds)']
     y_acc = df['best val accuracy']
     y_params = df['total params']
+    y_flops = df['flops']
   
     __logger.info("Writing plots...")
-    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB -1 input training time', 'SMB_time.png')
-    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB -1 input validation accuracy', 'SMB_acc.png')
-    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB -1 input total parameters', 'SMB_params.png')
+    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time.png')
+    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc.png')
+    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params.png')
+    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops.png')
     __logger.info("SMB plots written successfully")
 
 

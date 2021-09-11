@@ -51,7 +51,7 @@ def main():
 
     gen_paths = path_closure(args.p)
 
-    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png']), 3, 1, title='Specular mono blocks (input -1) overview')
+    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2, title='Specular mono blocks (input -1) overview')
     display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'time_pred_overview.png', 'pred_time_errors_overview.png']), 2, 2,
                             title='Prediction errors overview')
 
