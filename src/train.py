@@ -102,7 +102,7 @@ class Train:
 
         return dataset
 
-    def generate_and_train_model_from_actions(self, state_space, manager, actions, model_index, total_models_for_step):
+    def generate_and_train_model_from_actions(self, state_space: StateSpace, manager: NetworkManager, actions, model_index, total_models_for_step):
         """
         Generate a model given the actions and train it to get reward and time
 
@@ -123,11 +123,14 @@ class Train:
         self._logger.info("\t%s", listed_space)
 
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
+        reward, timer, total_params, flops = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
         self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
+        # format is a workaround for thousands separator, since the python logger has no such feature 
+        self._logger.info("Total parameters: %s", format(total_params, ','))
+        self._logger.info("Total FLOPS: %s", format(flops, ','))
 
-        return reward, timer, total_params, listed_space
+        return reward, timer, total_params, flops, listed_space
 
     def generate_dynamic_reindex_function(self, operators, op_timers, t_max):
         '''
@@ -156,7 +159,7 @@ class Train:
             manager ([type]): [description]
         '''
 
-        _, timer, _, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
+        _, timer, _, _, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             data = [timer, 0]
@@ -308,7 +311,7 @@ class Train:
             timers = []
 
             for t, action in enumerate(actions):
-                reward, timer, total_params, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
+                reward, timer, total_params, flops, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
                 rewards.append(reward)
                 timers.append(timer)
 
@@ -337,10 +340,10 @@ class Train:
 
                     # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
                     if f.tell() == 0:
-                        writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', '# blocks', 'cell structure'])
+                        writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'cell structure'])
 
                     cell_structure = f"[{';'.join(map(lambda el: str(el), listed_space))}]"
-                    data = [reward, timer, total_params, current_blocks, cell_structure]
+                    data = [reward, timer, total_params, flops, current_blocks, cell_structure]
                     
                     writer.writerow(data)
 

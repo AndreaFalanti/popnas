@@ -5,6 +5,7 @@ import os
 
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 from keras.utils.vis_utils import plot_model   # per stampare modello
 
 from model import ModelGenerator
@@ -40,6 +41,38 @@ class NetworkManager:
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
         self.weight_norm = weight_norm
+
+    # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
+    # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
+    def get_model_flops(self, model, write_path):
+        '''
+        Get total flops of current compiled model.
+
+        Returns:
+            (int): number of FLOPS
+        '''
+        # temporarely disable warnings, a lot of them are print and they seems irrelevant
+        # TODO: investigate if something is actually wrong
+        tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+        concrete = tf.function(lambda inputs: model(inputs))
+        concrete_func = concrete.get_concrete_function([tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs])
+
+        frozen_func, graph_def = convert_variables_to_constants_v2_as_graph(concrete_func)
+
+        with tf.Graph().as_default() as graph:
+            tf.graph_util.import_graph_def(graph_def, name='')
+            run_meta = tf.compat.v1.RunMetadata()
+            opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
+            if write_path:
+                opts['output'] = 'file:outfile={}'.format(write_path)  # redirect output
+
+            flops = tf.compat.v1.profiler.profile(graph=graph, run_meta=run_meta, cmd="op", options=opts)
+
+        # enable again warnings
+        tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.WARN)
+
+        return flops.total_float_ops
 
     def __compile_model(self, model_fn: ModelGenerator, actions: 'list[str]', concat_only_unused: bool, tb_logdir: str):
         '''
@@ -136,6 +169,8 @@ class NetworkManager:
         os.makedirs(tb_logdir, exist_ok = True)
 
         # generate a submodel given predicted actions
+        # TODO: tests are now always done with data_num = 1, if > 1 it would be better to do the mean of the metrics computed.
+        #  Also, instead of rebuilding the model it should be better to just reset the weights.
         for index in range(self.data_num):
             if self.data_num > 1:
                 self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
@@ -158,20 +193,23 @@ class NetworkManager:
 
             timer = sum(time_cb.logs)
 
-            # display the structure of the child model on console if flag is true
-            if display_model_summary:
-                model.summary(line_length=140, print_fn=self._logger.info)
-                # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
-
-            # always write model summary to file
-            with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
-                # str casting is required since inputs are int
-                f.write('Model actions: ' + ','.join(map(lambda el: str(el), actions)) + '\n\n')
-                model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
 
         # compute the reward (best validation accuracy)
         reward = max(hist.history.get('val_accuracy'))
         total_params = model.count_params()
+        flops = self.get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
+
+        # display the structure of the child model on console if flag is true
+        if display_model_summary:
+            model.summary(line_length=140, print_fn=self._logger.info)
+            # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
+
+        # always write model summary to file
+        with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
+            # str casting is required since inputs are int
+            f.write('Model actions: ' + ','.join(map(lambda el: str(el), actions)) + '\n\n')
+            model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
+            f.write(f'\nFLOPS: {flops:,}')
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
@@ -186,4 +224,4 @@ class NetworkManager:
         # clean up resources and GPU memory
         del model
 
-        return reward, timer, total_params
+        return reward, timer, total_params, flops
