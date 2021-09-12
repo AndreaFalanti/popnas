@@ -107,9 +107,10 @@ It's a bit hacky but unfortunately i didn't find an alternative way to solve the
 - Add the input columns to regressor, as now inputs really are from different cells/blocks, unlike original implementation. Therefore, input values have a great
 influence on actual training time and must be used by regressor for accurate estimations.
 - Fix regressor features bug: dynamic reindexing was nullified by an int cast.
-- Add plotter module, to analyze csv data saved and automatically producing relevant plots while running the algorithm.
+- Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
 - Migrate code to Tensorflow 2.
-- CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
+- CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method. New training method supports ImageGenerators and allows
+to use weight regularization if --wn parameter is provided.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed only on console.
 - Add --cpu option to easily choose between running on cpu or gpu.

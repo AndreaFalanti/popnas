@@ -4,11 +4,6 @@ from collections import OrderedDict
 
 import log_service
 
-# TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
-# import them directly to enable intellisense
-import sys
-sys.path.insert(1, 'aMLLibrary')
-
 
 class StateSpace:
     '''

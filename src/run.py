@@ -1,6 +1,11 @@
 import argparse
 import sys
 
+# Deleting this would cause import failures inside aMLLibrary modules,
+# but in POPNAS modules its better to import them directly to enable intellisense.
+# Make sure this is executed before any module using aMLLibrary is imported.
+sys.path.append('aMLLibrary')
+
 import log_service
 from train import Train
 
@@ -8,7 +13,6 @@ import tensorflow as tf
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-b', metavar=('BLOCKS'), type=int, help="maximum number of blocks a cell can contain", required=True)
     parser.add_argument('-k', metavar=('CHILDREN'), type=int, help="number of top-K cells to expand at each iteration", required=True)
@@ -21,7 +25,7 @@ def main():
     parser.add_argument('-r', '--restore', help="restore a previous run", action="store_true")
     parser.add_argument('-t', metavar=('FOLDER'), type=str, help="log folder to restore", default="")
     parser.add_argument('-f', metavar=('FILTERS'), type=int, help="initial number of filters", default=24)
-    parser.add_argument('-wn', metavar=('WEIGHT_NORM'), type=float, help="L2 weight normalization factor, not applied if not specified", default=None)
+    parser.add_argument('-wn', metavar=('WEIGHT_REG'), type=float, help="L2 weight regularization factor, not applied if not specified", default=None)
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     parser.add_argument('--abc', help="concat all blocks output in a cell output, otherwise use unused only", action="store_true")
     parser.add_argument('--pnas', help="run in PNAS mode (no regressor, only LSTM controller)", action="store_true")
