@@ -61,7 +61,7 @@ class StateSpace:
         self._logger = log_service.get_logger(__name__)
 
         self.states = OrderedDict()
-        self.state_count_ = 0
+        self.__state_count = 0
 
         self.children = None
         self.intermediate_children = None
@@ -116,17 +116,17 @@ class StateSpace:
             value_map[val] = i
 
         metadata = {
-            'id': self.state_count_,
+            'id': self.__state_count,
             'name': name,
             'values': values,
             'size': len(values),
             'index_map_': index_map,
             'value_map_': value_map,
         }
-        self.states[self.state_count_] = metadata
-        self.state_count_ += 1
+        self.states[self.__state_count] = metadata
+        self.__state_count += 1
 
-        return self.state_count_ - 1
+        return metadata['id']
 
     def embedding_encode(self, id, value):
         '''
@@ -215,7 +215,7 @@ class StateSpace:
         self._logger.info("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
 
         search_space = [inputs, ops, inputs, ops]
-        self.children = list(self._construct_permutations(search_space))
+        self.children = list(self.__construct_permutations(search_space))
 
     def get_current_step_total_models(self, new_b):
         new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
@@ -258,7 +258,7 @@ class StateSpace:
         self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_child_count)
 
         search_space = [possible_input_values, ops, possible_input_values, ops]
-        new_search_space = list(self._construct_permutations(search_space))
+        new_search_space = list(self.__construct_permutations(search_space))
 
         def generate_models():
             '''
@@ -272,49 +272,7 @@ class StateSpace:
  
         return generate_models
 
-
-    def prune_equivalent_cell_models(self, models, k: int):
-        '''
-        Prune equivalent models until k models have been obtained, then return them.
-
-        Args:
-            models ([type]): [description]
-            k ([type]): model count
-
-        Returns:
-            [type]: [description]
-        '''
-        prime_models = []
-        prime_cell_repr = []
-        #pruned_models = []  # DEBUG only
-        pruned_count = 0
-
-        for model in models:
-            # build a better cell representation for equivalence purposes
-            cell_repr = CellEncoding(model)
-
-            # check possible equivalence with other models already generated
-            if self.check_model_equivalence(cell_repr, prime_cell_repr):
-                pruned_count += 1
-                #pruned_models.append(model)     # DEBUG only
-            else:
-                prime_cell_repr.append(cell_repr)
-                prime_models.append(model)
-
-            # reached k models, return them without considering the rest
-            if len(prime_models) == k:
-                break
-
-        return prime_models, pruned_count
-
-    def check_model_equivalence(self, model, generated_models):
-        for gen_model in generated_models:
-            if model == gen_model:
-                return True
-
-        return False
-
-    def _construct_permutations(self, search_space):
+    def __construct_permutations(self, search_space):
         '''
         State space is a 4-tuple (ip1, op1, ip2, op2).
         Equivalent blocks (example: [-2, A, -1, A] and [-1, A, -2, A]) are excluded from the search space.
@@ -356,72 +314,4 @@ class StateSpace:
 
     @property
     def size(self):
-        return self.state_count_
-
-
-# These classes are used for representing models in a more structured way, so that it's possible to compare
-# them more easily (trim specular cells and equivalent models in general).
-# TODO: name could be missleading, they are not actual encodings used by algorithm.
-
-class OpEncoding:
-    def __init__(self, input, op) -> None:
-        self.input = input  # input can be either a number or a BlockEncoding (if input >= 0, other block output)
-        self.op = op
-
-    def __eq__(self, o: object) -> bool:
-        if isinstance(o, OpEncoding):
-            return self.input == o.input and self.op == o.op
-        return False
-
-class BlockEncoding:
-    def __init__(self, block_spec) -> None:
-        self.L = OpEncoding(block_spec[0], block_spec[1])
-        self.R = OpEncoding(block_spec[2], block_spec[3])
-
-    def __eq__(self, o: object) -> bool:
-        if isinstance(o, BlockEncoding):
-            return (self.L == o.L and self.R == o.R) or \
-                (self.L == o.R and self.R == o.L)
-        return False
-
-class CellEncoding:
-    def __init__(self, model_list: list) -> None:
-        self.blocks = []
-        blocks_num = len(model_list) // 4
-
-        for i in range(blocks_num):
-            block_list = model_list[i*4:(i+1)*4]
-
-            # iterate the two inputs to substitute it in case it's from another block
-            inputs = block_list[::2]    # 0 and 2 index
-            for j, input in enumerate(inputs):
-                # use another block output as input, substitute input index with BlockEncoding
-                if input >= 0:
-                    block_list[j*2] = self.blocks[input]
-
-            self.blocks.append(BlockEncoding(block_list))
-
-    def __eq__(self, o: object) -> bool:
-        if isinstance(o, CellEncoding) and len(self.blocks) == len(o.blocks):
-            # each block must be equivalent to a not already eqv matched block for
-            # having a complete cell equivalence.
-            # The mask helps filtering already matched blocks.
-            blocks_mask = [True for _ in o.blocks]
-
-            for block_enc in self.blocks:
-                eqv_to_other_cell_block = False
-                # index produced by enumerate is required to update the boolean mask
-                for i, viable_block_enc in filter(lambda tuple: blocks_mask[tuple[0]], enumerate(o.blocks)):
-                    if block_enc == viable_block_enc:
-                        # this block is no more viable for further equalities
-                        blocks_mask[i] = False
-                        eqv_to_other_cell_block = True
-                        break
-
-                # if any block is not equivalent to a viable one, the cells are different
-                if not eqv_to_other_cell_block:
-                    return False
-
-            return True
-
-        return False
+        return self.__state_count

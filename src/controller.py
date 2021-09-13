@@ -7,9 +7,9 @@ import tensorflow as tf
 
 from configparser import ConfigParser
 import os
-import sys
 
-from encoder import StateSpace, CellEncoding
+import cell_pruning
+from encoder import StateSpace
 from aMLLibrary import sequence_data_processing
 
 import log_service
@@ -595,8 +595,8 @@ class ControllerManager:
                     # less time than last pareto element
                     if model_est.time <= pareto_front[-1].time:
                         # check that model is not equivalent to another one present already in the pareto front
-                        cell_repr = CellEncoding(model_est.model_encoding)
-                        if not self.state_space.check_model_equivalence(cell_repr, existing_model_reprs):
+                        cell_repr = cell_pruning.CellEncoding(model_est.model_encoding)
+                        if not cell_pruning.check_model_equivalence(cell_repr, existing_model_reprs):
                             pareto_front.append(model_est)
                             existing_model_reprs.append(cell_repr)
                         else:
@@ -623,7 +623,7 @@ class ControllerManager:
             else:
                 # remove equivalent models, not done already if running in pnas mode
                 models = list(map(lambda model_est: model_est.model_encoding, pareto_front))
-                children, pruned_count = self.state_space.prune_equivalent_cell_models(models, children_count)
+                children, pruned_count = cell_pruning.prune_equivalent_cell_models(models, children_count)
                 self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)
 
             with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
