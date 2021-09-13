@@ -79,12 +79,20 @@ class StateSpace:
 
         assert self.input_lookback_depth < 0, "Invalid lookback_depth value"
 
-        input_values = list(range(input_lookback_depth, self.B-1))  # -1 = Hc-1, 0-(B-1) = Hci
-        self.inputs_embedding_max = len(input_values)
-        self.operator_embedding_max = len(np.unique(self.operators))
+        # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
+        self.input_values = list(range(input_lookback_depth, self.B-1))
+        
+        self.inputs_embedding_max = len(self.input_values)
+        self.operator_embedding_max = len(self.operators)
 
-        self._add_state('inputs', values=input_values)
+        self._add_state('inputs', values=self.input_values)
         self._add_state('ops', values=self.operators)
+
+        # define all possible encoding values for inputs and operators
+        # example: B=4, lb_depth = -2 -> 5 possible inputs encodings {0, 1, 2, 3, 4}, representing (-2, -1, 0, 1, 2)
+        self.input_encodings = list(range(self.B - self.input_lookback_depth - 1))
+        self.op_encodings = list(range(len(self.operators)))  
+
         self.prepare_initial_children()
 
     def _add_state(self, name, values):
@@ -107,12 +115,17 @@ class StateSpace:
         # Returns:
             Global ID of the state. Can be used to refer to this state later.
         '''
+        # dictionary (map) for convertion encoding->value: int (0-indexed) -> str|int (operator value | input value)
+        # 0 will be mapped to {first operator | max_lookback_input}, 1 to {second op | max_lookback_input - 1}, and so on...
         index_map = {}
+
+        # dictionary (map) for convertion value->encoding: str|int (operator value | input value) -> int (0-indexed)
+        # {first operator | max_lookback_input} will be mapped to 0, {second op | max_lookback_input - 1} to 1, and so on...
+        # Inverse mapping compared to index_map (see above).
+        value_map = {}
+
         for i, val in enumerate(values):
             index_map[i] = val
-
-        value_map = {}
-        for i, val in enumerate(values):
             value_map[val] = i
 
         metadata = {
@@ -128,7 +141,7 @@ class StateSpace:
 
         return metadata['id']
 
-    def embedding_encode(self, id, value):
+    def get_encoding(self, id, value):
         '''
         Embedding index encode the specific state value
 
@@ -141,13 +154,10 @@ class StateSpace:
         '''
         state = self[id]
         value_map = state['value_map_']
-        value_idx = value_map[value]
-        encoding = np.zeros((1, 1), dtype=np.float32)
-        encoding[0, 0] = value_idx
 
-        return encoding
+        return value_map[value]
 
-    def get_state_value(self, id, index):
+    def get_original_value(self, id, index):
         '''
         Retrieves the state value from the state value ID
 
@@ -160,9 +170,8 @@ class StateSpace:
         '''
         state = self[id]
         index_map = state['index_map_']
-        value = index_map[index]
 
-        return value
+        return index_map[index]
 
     def parse_state_space_list(self, state_list):
         '''
@@ -174,13 +183,7 @@ class StateSpace:
         # Returns:
             list of state values
         '''
-        state_values = []
-        for id, state_value in enumerate(state_list):
-            state_val_idx = state_value[0, 0]
-            value = self.get_state_value(id % 2, state_val_idx)
-            state_values.append(value)
-
-        return state_values
+        return [self.get_original_value(i % 2, state_value) for i, state_value in enumerate(state_list)]
 
     def entity_encode_child(self, child):
         '''
@@ -194,7 +197,7 @@ class StateSpace:
         '''
         encoded_child = []
         for i, val in enumerate(child):
-            encoded_child.append(self.embedding_encode(i % 2, val))
+            encoded_child.append(self.get_encoding(i % 2, val))
         return encoded_child
 
     def prepare_initial_children(self):
@@ -202,14 +205,16 @@ class StateSpace:
         Prepare the initial set of child models which must
         all be trained to obtain the initial set of scores
         '''
-        # set of all operations
-        ops = list(range(len(self.operators)))
-        inputs = list(range(self.input_lookback_depth, 0))
+        # set of all operations. Use encodings to allow easier specular blocks check in _construct_permutations
+        # They will be converted in actual values (strings) in permutations
+        ops = self.op_encodings
+        # Take only first elements that refers to lookback values
+        inputs = self.input_values[:abs(self.input_lookback_depth)]
 
         # if input_lookback_depth == 0, then we need to adjust to have at least
-        # one input (generally 0)
+        # one input (generally -1, previous cell)
         if len(inputs) == 0:
-            inputs = [0]
+            inputs = [-1]
 
         self._logger.info("Obtaining search space for b = 1")
         self._logger.info("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
@@ -294,16 +299,16 @@ class StateSpace:
         for id, state in self.states.items():
             self._logger.info(pp.pformat(state))
 
-        self._logger.info('%s', '*' * 90)
+        self._logger.info('%s', '*' * 91)
 
     def print_actions(self, actions):
         ''' Print the action space properly '''
         self._logger.info('Actions:')
 
         for id, action in enumerate(actions):
-            state = self[id]
+            state = self[id % 2]
             name = state['name']
-            vals = [(self.get_state_value(id % 2, p), p) for n, p in zip(state['values'], *action)]
+            vals = [(self.get_original_value(id % 2, action), action)]
             self._logger.info("%s : %s", name, vals)
 
     def update_children(self, children):

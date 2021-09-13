@@ -49,7 +49,10 @@ class Controller(tf.keras.Model):
         self.rnn_score = tf.keras.layers.Dense(1, activation='sigmoid')
 
     def call(self, inputs_operators, states=None, training=None, mask=None):
-        inputs, operators = self._get_inputs_and_operators(inputs_operators)  # extract the data
+        # add batch size = 1 basically
+        inputs_operators = tf.expand_dims(inputs_operators, 0)
+        inputs, operators = self._get_inputs_and_operators(inputs_operators)
+
         if states is None:  # initialize the state vectors
             states = self.rnn.get_initial_state(inputs)
             states = [tf.cast(state, tf.float32) for state in states]
@@ -59,7 +62,7 @@ class Controller(tf.keras.Model):
         embed_ops = self.operators_embedding(operators)
 
         # concatenate the embeddings
-        embed = tf.concat([embed_inputs, embed_ops], axis=-1)  # concatenate the embeddings
+        embed = tf.concat([embed_inputs, embed_ops], axis=-1)
 
         # run over the LSTM
         out = self.rnn(embed, initial_state=states)
@@ -359,7 +362,6 @@ class ControllerManager:
                 for _, (child, score) in pbar:
                     child = child.tolist()
                     state_list = self.state_space.entity_encode_child(child)
-                    state_list = np.concatenate(state_list, axis=-1).astype('int32')
 
                     state_list = tf.convert_to_tensor(state_list)
 
@@ -464,9 +466,9 @@ class ControllerManager:
   
         # TODO: the f** is happening here?
         encoded_child = self.state_space.entity_encode_child(child_encoding)
-        concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
+
         reindexed_child = []
-        for i, action_index in enumerate(concatenated_child):
+        for i, action_index in enumerate(encoded_child):
             if i % 2 == 0:
                 # TODO: investigate this (probably avoids 0 for -2 input, as 0 is also used for null)
                 reindexed_child.append(action_index + 1)
@@ -501,10 +503,10 @@ class ControllerManager:
         '''
 
         state_list = self.state_space.entity_encode_child(child_encoding)
-        state_list = np.concatenate(state_list, axis=-1).astype('int32')
         state_list = tf.convert_to_tensor(state_list)
 
         score, _ = self.controller(state_list, states=None)
+        # score is a tensor of a single element, take the value directly
         score = score[0, 0].numpy()
 
         return score

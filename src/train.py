@@ -211,9 +211,8 @@ class Train:
 
                 # add reindexed block encoding
                 encoded_child = state_space.entity_encode_child(listed_space)
-                concatenated_child = np.concatenate(encoded_child, axis=None).astype('int32')
                 reindexed_child = []
-                for j, action_index in enumerate(concatenated_child):
+                for j, action_index in enumerate(encoded_child):
                     if j % 2 == 0:
                         # TODO: investigate this
                         reindexed_child.append(action_index + 1)
