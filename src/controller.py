@@ -4,6 +4,7 @@ import csv
 from tqdm import tqdm
 
 import tensorflow as tf
+from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, Model
 
 from configparser import ConfigParser
 import os
@@ -15,79 +16,6 @@ from aMLLibrary import sequence_data_processing
 import log_service
 from utils.stream_to_logger import StreamToLogger
 from contextlib import redirect_stderr, redirect_stdout
-
-
-class Controller(tf.keras.Model):
-
-    def __init__(self, controller_cells, embedding_dim,
-                 input_embedding_max, operator_embedding_max):
-        '''
-        LSTM Controller model which accepts encoded sequence describing the
-        architecture of the model and predicts a singular value describing
-        its probably validation accuracy.
-
-        # Args:
-            controller_cells: number of cells of the Controller LSTM.
-            embedding_dim: size of the embedding dimension.
-            input_embedding_max: maximum input dimension of the input embedding.
-            operator_embedding_max: maximum input dimension of the operator encoding.
-        '''
-        super(Controller, self).__init__(name='EncoderRNN')
-        self.controller_cells = controller_cells
-        self.embedding_dim = embedding_dim
-        self.input_embedding_max = input_embedding_max
-        self.operator_embedding_max = operator_embedding_max
-
-        # Layers
-        self.input_embedding = tf.keras.layers.Embedding(input_embedding_max + 1, embedding_dim)
-        self.operators_embedding = tf.keras.layers.Embedding(operator_embedding_max + 1, embedding_dim)
-
-        # Tensorflow2 now automatically use CuDNNLSTM if using GPU and LSTM has the right parameters (default ones are good)
-        # check this url for more info: https://www.tensorflow.org/api_docs/python/tf/keras/layers/LSTM
-        self.rnn = tf.keras.layers.LSTM(controller_cells, return_state=True)
-
-        self.rnn_score = tf.keras.layers.Dense(1, activation='sigmoid')
-
-    def call(self, inputs_operators, states=None, training=None, mask=None):
-        # add batch size = 1 basically
-        inputs_operators = tf.expand_dims(inputs_operators, 0)
-        inputs, operators = self._get_inputs_and_operators(inputs_operators)
-
-        if states is None:  # initialize the state vectors
-            states = self.rnn.get_initial_state(inputs)
-            states = [tf.cast(state, tf.float32) for state in states]
-
-        # map the sparse inputs and operators into dense embeddings
-        embed_inputs = self.input_embedding(inputs)
-        embed_ops = self.operators_embedding(operators)
-
-        # concatenate the embeddings
-        embed = tf.concat([embed_inputs, embed_ops], axis=-1)
-
-        # run over the LSTM
-        out = self.rnn(embed, initial_state=states)
-        out, h, c = out  # unpack the outputs and states
-
-        # get the predicted validation accuracy
-        score = self.rnn_score(out)
-
-        return [score, [h, c]]
-
-    def _get_inputs_and_operators(self, inputs_operators):
-        '''
-        Splits the joint inputs and operators into seperate inputs
-        and operators list for convenience of the SearchSpace.
-
-        # Args:
-            inputs_operators: interleaved [input; operator] pairs.
-
-        # Returns:
-            list of inputs and list of operators.
-        '''
-        inputs = inputs_operators[:, 0::2]  # even place data
-        operators = inputs_operators[:, 1::2]  # odd place data
-
-        return inputs, operators
 
 
 class ControllerManager:
@@ -249,6 +177,89 @@ class ControllerManager:
 
         return actions
 
+    def __prepare_rnn_inputs(self, cell_spec):
+        '''
+        Splits a cell specification (list of [in, op]) into seperate inputs
+        and operators tensors to be used in LSTM.
+
+        # Args:
+            cell_spec: interleaved [input; operator] pairs, not encoded.
+
+        # Returns:
+            (tuple): contains list of inputs and list of operators.
+        '''
+        cell_encoding = self.state_space.entity_encode_child(cell_spec)
+
+        # transform to tensor and add single item dimension (shape is (1, x)),
+        # so that they are processed one at a time by the LSTM
+        cell_tensor = tf.convert_to_tensor(cell_encoding)
+        cell_tensor = tf.expand_dims(cell_tensor, 0)
+
+        inputs = cell_tensor[:, 0::2]  # even place data
+        operators = cell_tensor[:, 1::2]  # odd place data
+
+        return [inputs, operators]
+
+    def __build_rnn_dataset(self, cell_specs: list, rewards: 'list[float]'=None) -> tf.data.Dataset:
+        '''
+        Build a dataset to be used in the RNN controller.
+
+        Args:
+            cell_specs (list): List of lists of inputs and operators, specification of cells in value form (no encoding). 
+            rewards (list[float], optional): List of rewards (y labels). Defaults to None, provide it for building
+                a dataset for training purposes.
+
+        Returns:
+            tf.data.Dataset: [description]
+        '''
+        rnn_inputs = list(map(lambda child: self.__prepare_rnn_inputs(child), cell_specs))
+        # fit function actually wants two distinct lists, instead of a list of tuples. This does the trick.
+        rnn_in = np.array([inputs for inputs, _ in rnn_inputs], dtype=np.int32)
+        rnn_ops = np.array([ops for _, ops in rnn_inputs], dtype=np.int32)
+
+        # build dataset for training (y labels are present)
+        if rewards is not None:
+            rewards = np.array(rewards, dtype=np.float32)
+            rewards = np.expand_dims(rewards, -1)
+            return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}, rewards))
+        # build dataset for predictions (no y labels)
+        else:
+            return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}))
+
+
+    def build_controller_model(self, weight_reg):
+        # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
+        # since the length varies, None is given as dimension
+        inputs = layers.Input(shape=(None,))
+        ops = layers.Input(shape=(None,))
+
+        # input dim is the max integer value present in the embedding + 1.
+        inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim)(inputs)
+        ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim)(ops)
+
+        embed = layers.Concatenate()([inputs_embed, ops_embed])
+        lstm = layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg)(embed)
+        score = layers.Dense(1, activation='sigmoid', kernel_regularizer=weight_reg)(lstm)
+
+        return Model(inputs=[inputs, ops], outputs=score)
+
+    def define_callbacks(self, tb_logdir):
+        '''
+        Define callbacks used in model training.
+
+        Returns:
+            (tf.keras.Callback[]): Keras callbacks
+        '''
+        callbacks = []
+        
+        # By default shows losses and metrics for both training and validation
+        tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
+                                                    profile_batch=0, histogram_freq=0, update_freq='epoch')
+
+        callbacks.append(tb_callback)
+
+        return callbacks
+
     def build_policy_network(self):
         '''
         Construct the RNN controller network with the provided settings.
@@ -256,22 +267,17 @@ class ControllerManager:
         Also constructs saver and restorer to the RNN controller if required.
         '''
 
-        if self.restore_controller and self.input_B is not None:
-            input_B = self.input_B
-        else:
-            input_B = self.state_space.inputs_embedding_max
-
         self.global_step = tf.compat.v1.train.get_or_create_global_step()
         #learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
 
-        self.controller = Controller(self.controller_cells,
-                                        self.embedding_dim,
-                                        input_B,
-                                        self.state_space.operator_embedding_max)
+        # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
+        reg = regularizers.l1(self.reg_strength)
+        self.controller = self.build_controller_model(reg)
+        self.controller.summary()
 
         # PNAS paper specifies different learning rates, one for b=1 and another for other b values
-        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.002)
-        self.optimizer_b1 = tf.compat.v1.train.AdamOptimizer(learning_rate=0.01)
+        self.optimizer = optimizers.Adam(learning_rate=0.002)
+        self.optimizer_b1 = optimizers.Adam(learning_rate=0.01)
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,
@@ -285,33 +291,6 @@ class ControllerManager:
                 self._logger.info("Loading controller checkpoint!")
                 self.saver.restore(path)
 
-    def loss(self, real_acc, rnn_scores):
-        '''
-        Computes the surrogate losses to train the controller.
-
-        - rnn score loss is the MSE between the real validation acc and the
-        predicted acc of the rnn.
-
-        - reg loss is the L2 regularization loss on the parameters of the controller.
-
-        # Args:
-            real_acc: actual validation accuracy obtained by child models.
-            rnn_scores: predicted validation accuracy obtained by child models.
-
-        # Returns:
-            weighted sum of rnn score loss + reg loss.
-        '''
-        # RNN predicted accuracies
-        rnn_score_loss = tf.losses.mean_squared_error(real_acc, rnn_scores)
-
-        # Regularization of model
-        params = self.controller.trainable_variables
-        reg_loss = tf.reduce_sum([tf.nn.l2_loss(x) for x in params])
-
-        total_loss = rnn_score_loss + self.reg_strength * reg_loss
-
-        return total_loss
-
     def train_step(self, rewards):
         '''
         Perform a single train step on the Controller RNN
@@ -319,75 +298,39 @@ class ControllerManager:
         # Returns:
             final training loss
         '''
-        children = np.array(self.state_space.children, dtype=np.object)  # take all the children
-        rewards = np.array(rewards, dtype=np.float32)
-        self._logger.info("Rewards : %s", rewards)
+        rnn_dataset = self.__build_rnn_dataset(self.state_space.children, rewards)
 
-        if self.children_history is None:
-            self.children_history = [children]
-            self.score_history = [rewards]
-            batchsize = rewards.shape[0]
-        else:
-            self.children_history.append(children)
-            self.score_history.append(rewards)
-            batchsize = sum([data.shape[0] for data in self.score_history])
+        # create the datasets as list of lists
+        # if self.children_history is None:
+        #     self.children_history = [rnn_inputs]
+        #     self.score_history = [rewards]
+        #     batchsize = rewards.shape[0]
+        # else:
+        #     self.children_history.append(rnn_inputs)
+        #     self.score_history.append(rewards)
+        #     batchsize = sum([data.shape[0] for data in self.score_history])
 
-        train_size = batchsize * self.train_iterations
+        train_size = len(rewards) * self.train_iterations
         self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
         # logs
-        self.logdir = log_service.build_path('controller')
-        summary_writer = tf.summary.create_file_writer(self.logdir)
-        summary_writer.set_as_default()
+        logdir = log_service.build_path('controller')
 
-        for current_epoch in range(1, self.train_iterations + 1):
-            self._logger.info("Controller: Begin training epoch %d", current_epoch)
+        loss = losses.MeanSquaredError()
+        train_metrics = [metrics.MeanAbsolutePercentageError()]
+        optimizer = self.optimizer_b1 if self.b_ == 1 else self.optimizer
+        callbacks = self.define_callbacks(logdir)
 
-            self.global_epoch = self.global_epoch
+        self.controller.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
 
-            for current_b in range(1, self.b_ + 1):
-                children = self.children_history[current_b - 1]
-                scores = self.score_history[current_b - 1]
-                ids = np.array(list(range(len(scores))))
-                np.random.shuffle(ids)
-
-                self._logger.info("Controller: Begin training - B = %d", current_b)
-                epoch_losses = np.array([])
-
-                pbar = tqdm(iterable=enumerate(zip(children[ids], scores[ids])),
-                        unit='child',
-                        desc=f'Training LSTM (B={current_b}, epoch={current_epoch}): ',
-                        total=len(children[ids]))
-
-                for _, (child, score) in pbar:
-                    child = child.tolist()
-                    state_list = self.state_space.entity_encode_child(child)
-
-                    state_list = tf.convert_to_tensor(state_list)
-
-                    with tf.GradientTape() as tape:
-                        rnn_scores, states = self.controller(state_list, states=None)
-                        acc_scores = score.reshape((1, 1))
-
-                        loss = self.loss(acc_scores, rnn_scores)
-
-                    grads = tape.gradient(loss, self.controller.trainable_variables)
-                    grad_vars = zip(grads, self.controller.trainable_variables)
-
-                    optimizer = self.optimizer_b1 if current_b == 1 else self.optimizer
-                    optimizer.apply_gradients(grad_vars, self.global_step)
-
-                    epoch_losses = np.append(epoch_losses, loss.numpy())
-
-                avg_loss = np.mean(epoch_losses)
-
-                self._logger.info("Controller: Finished training epoch %d / %d of B = %d / %d, loss: %0.6f",
-                                  current_epoch, self.train_iterations, current_b, self.b_, avg_loss)
-
-            # add accuracy to Tensorboard
-            with summary_writer.as_default():
-                tf.summary.scalar("average_accuracy", rewards.mean(), description="controller", step=self.global_epoch)
-                tf.summary.scalar("average_loss", avg_loss, description="controller", step=self.global_epoch)
+        # train only on last trained CNN batch.
+        # Controller starts from the weights trained on previous CNNs, so retraining on them would cause overfitting on previous samples.
+        hist = self.controller.fit(
+            x=rnn_dataset,
+            batch_size=1,
+            epochs=self.train_iterations,
+            callbacks=callbacks
+        )
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -396,7 +339,8 @@ class ControllerManager:
         # save weights
         self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
 
-        return avg_loss
+        final_loss = hist.history['loss'][-1]
+        return final_loss
 
     def __write_regressor_config_file(self, techniques):
         config = ConfigParser()
@@ -501,15 +445,13 @@ class ControllerManager:
         Returns:
             (float): estimated accuracy predicted
         '''
+        # TODO: Dataset of single element, maybe not much efficient...
+        pred_dataset = self.__build_rnn_dataset([child_encoding])
 
-        state_list = self.state_space.entity_encode_child(child_encoding)
-        state_list = tf.convert_to_tensor(state_list)
-
-        score, _ = self.controller(state_list, states=None)
-        # score is a tensor of a single element, take the value directly
-        score = score[0, 0].numpy()
-
-        return score
+        score = self.controller.predict(x=pred_dataset)
+        # score is a numpy array of shape (1, 1) since model has a single output and dataset has a single item
+        # simply return the plain element
+        return score[0, 0]
 
     def __write_predictions_on_csv(self, model_estimates):
         '''
