@@ -7,6 +7,7 @@ import numpy as np
 
 from pandas.io.parsers import TextFileReader
 import statistics
+import re
 
 import log_service
 
@@ -24,8 +25,14 @@ def initialize_logger():
 
 
 def __parse_cell_structures(cell_structures: Iterable):
-    # parse cell structure (trim square brackets and split by ;)
-    return  list(map(lambda cs: cs[1:-1].split(';'), cell_structures))
+    # remove set of chars { []()'" } for easier parsing
+    cell_structures = list(map(lambda cell_str: re.sub(r'[\[\]\'\"\(\)]', '', cell_str), cell_structures))
+    # parse cell structure into multiple strings, each one representing a tuple
+    list_of_tuple_str_lists = list(map(lambda cs: cs.split(';'), cell_structures))
+
+    # parse tuple structure (trim round brackets and split by ,)
+    return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list))) \
+        for tuple_str_list in list_of_tuple_str_lists]
 
 
 def __compute_spearman_rank_correlation_coefficient(df: pd.DataFrame, x_col: str, y_col: str):
@@ -175,12 +182,11 @@ def plot_dynamic_reindex_related_blocks_info():
     df = df[df['# blocks'] == 1]
 
     cells = __parse_cell_structures(df['cell structure'])
+    # cells have a single block, extrapolate the tuple instead of using the list of blocks
+    first_block_iter = map(lambda blocks: blocks[0], cells)
 
-    # TODO: refactor this mess if you find a more intelligent way
-    df['in1'] = [x for x, _, _, _ in cells]
-    df['op1'] = [x for _, x, _, _ in cells]
-    df['in2'] = [x for _, _, x, _ in cells]
-    df['op2'] = [x for _, _, _, x in cells]
+    # unpack values into separate columns
+    df['in1'], df['op1'], df['in2'], df['op2'] = zip(*first_block_iter)
 
     df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == '-1')]
 
@@ -218,13 +224,12 @@ def __initialize_operation_usage_data(operations):
     '''
     Create dictionary with indexes and initialize counters.
     '''
-    op_index = {}
-    op_counters = np.zeros(len(operations)) # type: np.ndarray
+    op_counters = {}
 
-    for index, op in enumerate(operations):
-        op_index[op] = index
+    for op in operations:
+        op_counters[op] = 0
 
-    return op_index, op_counters
+    return op_counters
 
 
 # TODO: unused right now
@@ -241,26 +246,26 @@ def __prune_zero_values_and_labels(operations, op_counters: np.ndarray):
     return operations, op_counters
 
 
-def __update_op_counters(cells, b, op_counters, op_index):
+def __update_op_counters(cells, op_counters):
     '''
     Iterate cell structures and increment operation counters when the operation is encountered. 
     '''
     # iterate all cells (models selected for training)
     for cell in cells:
-        # iterate on blocks (in1, op1, in2, op2)
-        for i in range(b):
-            # get indices for operation in dict 
-            op1_index = op_index[cell[(i*4) + 1]]
-            op2_index = op_index[cell[(i*4) + 3]]
-
-            op_counters[op1_index] += 1
-            op_counters[op2_index] += 1
+        # iterate on blocks tuple(in1, op1, in2, op2)
+        for _, op1, _, op2 in cell:
+            op_counters[op1] += 1
+            op_counters[op2] += 1
 
     return op_counters
 
 
+def __generate_value_list_from_counters_dict(op_counters: 'dict[str, int]', operations: 'list[str]'):
+    return [op_counters[op] for op in operations]
+
+
 def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
-    op_index, op_counters = __initialize_operation_usage_data(operations)
+    op_counters = __initialize_operation_usage_data(operations)
 
     __logger.info("Analyzing operation usage for pareto front of b=%d", b)
     csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
@@ -268,23 +273,25 @@ def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
 
     cells = __parse_cell_structures(df['cell structure'])
 
-    op_counters = __update_op_counters(cells, b, op_counters, op_index)
+    op_counters = __update_op_counters(cells, op_counters)
+    values = __generate_value_list_from_counters_dict(op_counters, operations)
 
     #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
-    __plot_pie_chart(operations, op_counters, f'Operations usage in b={b} pareto front', f'pareto_op_usage_B{b}')
+    __plot_pie_chart(operations, values, f'Operations usage in b={b} pareto front', f'pareto_op_usage_B{b}')
     __logger.info("Pareto op usage plot for b=%d written successfully", b)
 
 
 def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[str]'):
-    op_index, op_counters = __initialize_operation_usage_data(operations)
+    op_counters = __initialize_operation_usage_data(operations)
 
     __logger.info("Analyzing operation usage for CNN children to train for b=%d", b)
-    op_counters = __update_op_counters(children_cnn, b, op_counters, op_index)
+    op_counters = __update_op_counters(children_cnn, op_counters)
+    values = __generate_value_list_from_counters_dict(op_counters, operations)
 
     #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
-    __plot_pie_chart(operations, op_counters, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
+    __plot_pie_chart(operations, values, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
     __logger.info("Children op usage plot for b=%d written successfully", b)
 
 

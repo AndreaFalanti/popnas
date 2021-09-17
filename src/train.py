@@ -71,7 +71,7 @@ class Train:
         # normalize image RGB values into [0, 1] domain
         x_train_init = x_train_init.astype('float32') / 255.
 
-        dataset = []
+        datasets = []
         # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or it's possible to deprecate this feature?
         # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
@@ -96,68 +96,68 @@ class Train:
             # TODO: if custom dataset is used, all works fine or some logic is missing?
 
             # pack the dataset for the NetworkManager
-            dataset.append([x_train, y_train, x_validation, y_validation])
+            datasets.append([x_train, y_train, x_validation, y_validation])
 
-        return dataset
+        return datasets
 
-    def generate_and_train_model_from_actions(self, state_space: StateSpace, manager: NetworkManager, actions, model_index, total_models_for_step):
+    def generate_and_train_model_from_spec(self, state_space: StateSpace, manager: NetworkManager, cell_spec: list):
         """
         Generate a model given the actions and train it to get reward and time
 
         Args:
             state_space (StateSpace): ...
             manager (NetworkManager): ...
-            actions (type): actions embedding (oneHot)
-            model_index (int): model number (for logging only)
-            total_models_for_step (int): total amount of models to train in this step (for logging only)
+            cell_spec (list): plain cell specification
 
         Returns:
-            tuple: reward, timer, listed_space(parsed actions embedding)
+            tuple: reward, timer, params, flops of trained CNN
         """
-        # print the action probabilities
-        state_space.print_actions(actions)
-        listed_space = state_space.parse_state_space_list(actions)
-        self._logger.info("Model #%d / #%d", model_index, total_models_for_step)
-        self._logger.info("\t%s", listed_space)
-
+        # print the cell in a more comprehensive way
+        state_space.print_cell_spec(cell_spec)
+        
+        # save model if it's the last training batch (full blocks)
+        last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params, flops = manager.get_rewards(ModelGenerator, listed_space, self.concat_only_unused, save_best_model=(len(actions) // 4 == self.blocks))
+        reward, timer, total_params, flops = manager.get_rewards(ModelGenerator, cell_spec, self.concat_only_unused, save_best_model=last_block_train)
+
         self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
         # format is a workaround for thousands separator, since the python logger has no such feature 
         self._logger.info("Total parameters: %s", format(total_params, ','))
         self._logger.info("Total FLOPS: %s", format(flops, ','))
 
-        return reward, timer, total_params, flops, listed_space
+        return reward, timer, total_params, flops
 
-    def generate_dynamic_reindex_function(self, operators, op_timers, t_max):
+    def generate_dynamic_reindex_function(self, operators, op_timers: 'dict[str, float]'):
         '''
         Closure for generating a function to easily apply dynamic reindex where necessary.
 
         Args:
             operators (list<str>): allowed operations
             op_timers (list<float>): timers for each block with same operations, in order
-            t_max (float): max time between op_timers
 
         Returns:
-            Callable(int): dynamic reindex function
+            Callable[[str], float]: dynamic reindex function
         '''
+        t_max = max(op_timers.values())
 
-        def apply_dynamic_reindex(op_index):
-            return len(operators) * op_timers[op_index] / t_max
+        def apply_dynamic_reindex(op_value: str):
+            # TODO: remove len(operators) to normalize in 0-1?
+            return len(operators) * op_timers[op_value] / t_max
 
         return apply_dynamic_reindex
 
-    def perform_initial_thrust(self, state_space, manager):
+    def perform_initial_thrust(self, state_space: StateSpace, manager: NetworkManager):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
 
         Args:
-            state_space ([type]): [description]
-            manager ([type]): [description]
+            state_space (StateSpace): [description]
+            manager (NetworkManager): [description]
         '''
 
-        _, timer, _, _, _ = self.generate_and_train_model_from_actions(state_space, manager, [], 1, 1)
+        self._logger.info('Performing initial thrust with empty cell')
+        _, timer, _, _ = self.generate_and_train_model_from_spec(state_space, manager, [])
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             data = [timer, 0]
@@ -184,18 +184,16 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def write_sliding_blocks_training_time(self, current_blocks, timer, listed_space,
-                                            state_space, reindex_function):
+    def write_sliding_blocks_training_time(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
         '''
         Write on csv the training time, that will be used for regressor training.
         Use sliding blocks mechanism to multiple the entries.
 
         Args:
-            current_blocks ([type]): [description]
-            timer ([type]): [description]
-            listed_space ([type]): [description]
-            state_space ([type]): [description]
-            reindex_function ([type]): [description]
+            current_blocks (int): [description]
+            timer (float): [description]
+            cell_spec (list): [description]
+            state_space (StateSpace): [description]
         '''
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -210,15 +208,8 @@ class Train:
                     data.extend([0, 0, 0, 0])
 
                 # add reindexed block encoding
-                encoded_child = state_space.entity_encode_child(listed_space)
-                reindexed_child = []
-                for j, action_index in enumerate(encoded_child):
-                    if j % 2 == 0:
-                        # TODO: investigate this
-                        reindexed_child.append(action_index + 1)
-                    else:
-                        reindexed_child.append(reindex_function(action_index))
-                data.extend(reindexed_child)
+                encoded_child = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
+                data.extend(encoded_child)
 
                 # extend with empty blocks, if necessary
                 for _ in range(i+1, self.blocks + 1):
@@ -233,8 +224,8 @@ class Train:
 
         # create the complete headers row of the CSV files
         headers = ["time", "blocks"]
-        op_timers = []
-        t_max = 0
+        # dictionary to store specular monoblock (-1 input) times for dynamic reindex
+        op_timers = {}
         reindex_function = None
 
         # TODO: restore search space
@@ -248,12 +239,10 @@ class Train:
             with open(log_service.build_path('csv', 'reindex_op_times.csv')) as f:
                 reader = csv.reader(f)
                 for row in reader:
-                    op_time = float(row[0])
-                    op_timers.append(op_time)
-                    if op_time >= t_max:
-                        t_max = op_time
+                    # row is [time, op]
+                    op_timers[row[1]] = float(row[0])
 
-            reindex_function = self.generate_dynamic_reindex_function(operators, op_timers, t_max)
+            reindex_function = self.generate_dynamic_reindex_function(operators, op_timers)
         else:
             starting_B = 0
 
@@ -290,46 +279,48 @@ class Train:
         manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
                                  learning_rate=self.learning_rate, filters=self.filters, weight_norm=self.weight_norm)
 
+        # add dynamic reindex
+        if self.restore:
+            state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_B == 0:
-            k = None
-            self.perform_initial_thrust(state_space, manager)
-            
+            self.perform_initial_thrust(state_space, manager) 
             starting_B = 1
-        else:
-            k = self.children
 
         monoblock_times = []
 
         # train the child CNN networks for each number of blocks
         for current_blocks in range(starting_B, self.blocks + 1):
-            actions = controller.get_actions(top_k=k)  # get all actions for the previous state
             rewards = []
             timers = []
 
-            for t, action in enumerate(actions):
-                reward, timer, total_params, flops, listed_space = self.generate_and_train_model_from_actions(state_space, manager, action, t+1, len(actions))
+            cell_specs = state_space.get_cells_to_train()
+
+            for model_index, cell_spec in enumerate(cell_specs):
+                self._logger.info("Model #%d / #%d", model_index+1, len(cell_specs))
+                self._logger.debug("\t%s", cell_spec)
+
+                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(state_space, manager, cell_spec)
                 rewards.append(reward)
                 timers.append(timer)
 
                 if current_blocks == 1:
-                    monoblock_times.append([timer, listed_space])
+                    monoblock_times.append([timer, cell_spec])
+                    # unpack the block (only tuple present in the list) into its components
+                    in1, op1, in2, op2 = cell_spec[0]
 
                     # get required data for dynamic reindex
                     # op_timers will contain timers for blocks with both same operation and input -1, for each operation, in order
-                    same_inputs = listed_space[0] == listed_space[2]
-                    same_op = listed_space[1] == listed_space[3]
-                    if (same_inputs and same_op and listed_space[0] == -1):
+                    same_inputs = in1 == in2
+                    same_op = op1 == op2
+                    if same_inputs and same_op and in1 == -1:
                         with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
                             writer = csv.writer(f)
-                            op_considered = listed_space[1]
-                            writer.writerow([timer, op_considered])
-                            op_timers.append(timer)
+                            writer.writerow([timer, op1])
+                            op_timers[op1] = timer
 
-                            if timer >= t_max:
-                                t_max = timer
-
-                self._logger.info("Finished %d out of %d models!", (t + 1), len(actions))
+                self._logger.info("Finished %d out of %d models!", (model_index + 1), len(cell_specs))
 
                 # write the results of this trial into a file
                 with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
@@ -339,24 +330,23 @@ class Train:
                     if f.tell() == 0:
                         writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'cell structure'])
 
-                    cell_structure = f"[{';'.join(map(lambda el: str(el), listed_space))}]"
+                    cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
                     data = [reward, timer, total_params, flops, current_blocks, cell_structure]
                     
                     writer.writerow(data)
 
                 # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
                 if current_blocks > 1:
-                    self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
-                                                            state_space, reindex_function)
+                    self.write_sliding_blocks_training_time(current_blocks, timer, cell_spec, state_space)
 
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
-                reindex_function = self.generate_dynamic_reindex_function(operators, op_timers, t_max)
+                reindex_function = self.generate_dynamic_reindex_function(operators, op_timers)
+                state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
-                for timer, listed_space in monoblock_times:
-                    self.write_sliding_blocks_training_time(current_blocks, timer, listed_space,
-                                                            state_space, reindex_function)
+                for timer, cell_spec in monoblock_times:
+                    self.write_sliding_blocks_training_time(current_blocks, timer, cell_spec, state_space)
             
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
@@ -365,7 +355,7 @@ class Train:
                 loss = controller.train_step(rewards)
                 self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
-                controller.update_step(headers, reindex_function)
+                controller.update_step(headers)
 
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:

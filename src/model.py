@@ -3,14 +3,14 @@ import tensorflow as tf
 
 import ops
 import log_service
-from utils.func_utils import to_int_tuple
+from utils.func_utils import to_int_tuple, list_flatten
 
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
 
 
 class ModelGenerator():
 
-    def __init__(self, actions, filters=24, concat_only_unused=True, weight_norm=None):
+    def __init__(self, cell_spec, filters=24, concat_only_unused=True, weight_norm=None):
         '''
         Utility class to build a CNN with structure provided in the action list.
 
@@ -23,17 +23,20 @@ class ModelGenerator():
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
-        self.B = len(actions) // 4
+        # it's a list of tuples, so already grouped by 4
+        self.B = len(cell_spec)
+        # TODO: flat the list to use old logic, with a refactor it could be avoided
+        cell_spec = list_flatten(cell_spec)
 
         self.concat_only_unused = concat_only_unused
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_inputs = set(filter(lambda el: el >= 0, actions[::2]))
+        used_inputs = set(filter(lambda el: el >= 0, cell_spec[::2]))
         self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
 
-        self.use_skip = -2 in actions[::2]
+        self.use_skip = -2 in cell_spec[::2]
 
-        if len(actions) > 0:
-            self.action_list = [x for x in zip(*[iter(actions)]*2)]     # generate a list of tuples (pairs)
+        if len(cell_spec) > 0:
+            self.action_list = [x for x in zip(*[iter(cell_spec)]*2)]     # generate a list of tuples (pairs)
             self.M = 3
             self.N = 2
         else:

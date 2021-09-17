@@ -1,8 +1,7 @@
-import numpy as np
-import pprint
-from collections import OrderedDict
-
+from typing import Any, Callable
 import log_service
+from utils.rstr import rstr
+from utils.func_utils import list_flatten
 
 
 class StateSpace:
@@ -60,132 +59,61 @@ class StateSpace:
         '''
         self._logger = log_service.get_logger(__name__)
 
-        self.states = OrderedDict()
-        self.__state_count = 0
-
         self.children = None
         self.intermediate_children = None
+        
+        self.input_encoders = {}    # type: dict[str, Encoder]
+        self.operator_encoders = {} # type: dict[str, Encoder]
 
         self.B = B
-
-        if operators is None:
-            self.operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv',
-                              '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        else:
-            self.operators = operators
-
         self.input_lookback_depth = input_lookback_depth
         self.input_lookforward_depth = input_lookforward_depth
-
         assert self.input_lookback_depth < 0, "Invalid lookback_depth value"
 
+        # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
         self.input_values = list(range(input_lookback_depth, self.B-1))
+        if operators is None:
+            self.operator_values = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv',
+                              '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        else:
+            self.operator_values = operators         
         
+        # for embedding (see LSTM controller)
         self.inputs_embedding_max = len(self.input_values)
-        self.operator_embedding_max = len(self.operators)
+        self.operator_embedding_max = len(self.operator_values)
 
-        self._add_state('inputs', values=self.input_values)
-        self._add_state('ops', values=self.operators)
-
-        # define all possible encoding values for inputs and operators
-        # example: B=4, lb_depth = -2 -> 5 possible inputs encodings {0, 1, 2, 3, 4}, representing (-2, -1, 0, 1, 2)
-        self.input_encodings = list(range(self.B - self.input_lookback_depth - 1))
-        self.op_encodings = list(range(len(self.operators)))  
+        # generate categorical encoders for both inputs and operators
+        self.input_encoders['cat'] = Encoder('cat', values=self.input_values)
+        self.operator_encoders['cat'] = Encoder('cat', values=self.operator_values)
 
         self.prepare_initial_children()
 
-    def _add_state(self, name, values):
-        '''
-        Adds a "state" to the state manager, along with some metadata for efficient
-        packing and unpacking of information required by the RNN ControllerManager.
+    def add_input_encoder(self, name: str, fn: Callable[[int], Any]):
+        assert fn is not None
+        self.input_encoders[name] = Encoder(name, values=self.input_values, fn=fn)
 
-        Stores metadata such as:
-        -   Global ID
-        -   Name
-        -   Valid Values
-        -   Number of valid values possible
-        -   Map from value ID to state value
-        -   Map from state value to value ID
+    def add_operator_encoder(self, name: str, fn: Callable[[str], Any]):
+        assert fn is not None
+        self.operator_encoders[name] = Encoder(name, values=self.operator_values, fn=fn)
+
+    def decode_cell_spec(self, encoded_cell, input_enc_name='cat', op_enc_name='cat'):
+        '''
+        Parses a list of encoded states to retrieve a list of state values
 
         # Args:
-            name: name of the state / action
-            values: valid values that this state can take
-
-        # Returns:
-            Global ID of the state. Can be used to refer to this state later.
-        '''
-        # dictionary (map) for convertion encoding->value: int (0-indexed) -> str|int (operator value | input value)
-        # 0 will be mapped to {first operator | max_lookback_input}, 1 to {second op | max_lookback_input - 1}, and so on...
-        index_map = {}
-
-        # dictionary (map) for convertion value->encoding: str|int (operator value | input value) -> int (0-indexed)
-        # {first operator | max_lookback_input} will be mapped to 0, {second op | max_lookback_input - 1} to 1, and so on...
-        # Inverse mapping compared to index_map (see above).
-        value_map = {}
-
-        for i, val in enumerate(values):
-            index_map[i] = val
-            value_map[val] = i
-
-        metadata = {
-            'id': self.__state_count,
-            'name': name,
-            'values': values,
-            'size': len(values),
-            'index_map_': index_map,
-            'value_map_': value_map,
-        }
-        self.states[self.__state_count] = metadata
-        self.__state_count += 1
-
-        return metadata['id']
-
-    def get_encoding(self, id, value):
-        '''
-        Embedding index encode the specific state value
-
-        # Args:
-            id: global id of the state
-            value: state value
-
-        # Returns:
-            embedding encoded representation of the state value
-        '''
-        state = self[id]
-        value_map = state['value_map_']
-
-        return value_map[value]
-
-    def get_original_value(self, id, index):
-        '''
-        Retrieves the state value from the state value ID
-
-        # Args:
-            id: global id of the state
-            index: index of the state value (usually from argmax)
-
-        # Returns:
-            The actual state value at given value index
-        '''
-        state = self[id]
-        index_map = state['index_map_']
-
-        return index_map[index]
-
-    def parse_state_space_list(self, state_list):
-        '''
-        Parses a list of one hot encoded states to retrieve a list of state values
-
-        # Args:
-            state_list: list of one hot encoded states
+            state_list: list of encoded states
 
         # Returns:
             list of state values
         '''
-        return [self.get_original_value(i % 2, state_value) for i, state_value in enumerate(state_list)]
+        assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
+        decode_i = self.input_encoders[input_enc_name].decode
+        decode_o = self.operator_encoders[op_enc_name].decode
 
-    def entity_encode_child(self, child):
+        return [(decode_i(in1), decode_o(op1), decode_i(in2), decode_o(op2)) for in1, op1, in2, op2 in encoded_cell]
+
+    def encode_cell_spec(self, cell_spec, input_enc_name='cat', op_enc_name='cat', flatten=True):
         '''
         Perform encoding for all blocks in a cell
 
@@ -195,41 +123,40 @@ class StateSpace:
         # Returns:
             list of entity encoded blocks of the cell
         '''
-        encoded_child = []
-        for i, val in enumerate(child):
-            encoded_child.append(self.get_encoding(i % 2, val))
-        return encoded_child
+        assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
+        encode_i = self.input_encoders[input_enc_name].encode
+        encode_o = self.operator_encoders[op_enc_name].encode
+
+        encoded_cell = [(encode_i(in1), encode_o(op1), encode_i(in2), encode_o(op2)) for in1, op1, in2, op2 in cell_spec]
+        return list_flatten(encoded_cell) if flatten else encoded_cell
 
     def prepare_initial_children(self):
         '''
         Prepare the initial set of child models which must
         all be trained to obtain the initial set of scores
         '''
-        # set of all operations. Use encodings to allow easier specular blocks check in _construct_permutations
-        # They will be converted in actual values (strings) in permutations
-        ops = self.op_encodings
-        # Take only first elements that refers to lookback values
+        # Take only first elements that refers to lookback values, which are the only allowed values initially.
         inputs = self.input_values[:abs(self.input_lookback_depth)]
 
-        # if input_lookback_depth == 0, then we need to adjust to have at least
-        # one input (generally -1, previous cell)
+        # if input_lookback_depth == 0, then we need to adjust to have at least one input (generally -1, previous cell)
         if len(inputs) == 0:
             inputs = [-1]
 
         self._logger.info("Obtaining search space for b = 1")
-        self._logger.info("Search space size : %d", (len(inputs) * (len(self.operators) ** 2)))
+        self._logger.info("Search space size : %d", (len(inputs) * (len(self.operator_values) ** 2)))
 
-        search_space = [inputs, ops, inputs, ops]
+        search_space = (inputs, self.operator_values)
         self.children = list(self.__construct_permutations(search_space))
 
+    # TODO: not necessary?
     def get_current_step_total_models(self, new_b):
         new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
             else min(self.input_lookforward_depth, new_b)
 
         possible_input_values = new_b_dash - self.input_lookback_depth
 
-        total_new_child_count = (possible_input_values ** 2) * (len(self.operators) ** 2)
-        symmetric_child_count = possible_input_values * len(self.operators)
+        total_new_child_count = (possible_input_values ** 2) * (len(self.operator_values) ** 2)
+        symmetric_child_count = possible_input_values * len(self.operator_values)
         non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
 
         return len(self.children) * non_specular_child_count
@@ -250,11 +177,10 @@ class StateSpace:
         new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
             else min(self.input_lookforward_depth, new_b)
 
-        possible_input_values = list(range(self.input_lookback_depth, new_b_dash))
-        ops = list(range(len(self.operators)))
+        allowed_input_values = list(range(self.input_lookback_depth, new_b_dash))
 
-        total_new_child_count = (len(possible_input_values) ** 2) * (len(self.operators) ** 2)
-        symmetric_child_count = len(possible_input_values) * len(self.operators)
+        total_new_child_count = (len(allowed_input_values) ** 2) * (len(self.operator_values) ** 2)
+        symmetric_child_count = len(allowed_input_values) * len(self.operator_values)
         non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
 
         self._logger.info("Obtaining search space for b = %d", new_b)
@@ -262,61 +188,101 @@ class StateSpace:
 
         self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_child_count)
 
-        search_space = [possible_input_values, ops, possible_input_values, ops]
+        search_space = (allowed_input_values, self.operator_values)
         new_search_space = list(self.__construct_permutations(search_space))
 
         def generate_models():
             '''
             The generator produce also models with equivalent cells.
             '''
-            for _, child in enumerate(self.children):
+            for child in self.children:
                 for permutation in new_search_space:
-                    temp_child = list(child)
-                    temp_child.extend(permutation)
-                    yield temp_child
+                    yield child + permutation   # list concat
  
         return generate_models
 
     def __construct_permutations(self, search_space):
         '''
-        State space is a 4-tuple (ip1, op1, ip2, op2).
+        State space is a 2-tuple (inputs set, operators set).
         Equivalent blocks (example: [-2, A, -1, A] and [-1, A, -2, A]) are excluded from the search space.
         '''
-        for input1 in search_space[0]:
-            for operation1 in search_space[1]:
-                for input2 in search_space[2]:
-                    if input2 >= input1: # added to avoid repeated permutations (equivalent blocks)
-                        for operation2 in search_space[3]:
-                            if input2 != input1 or operation2 >= operation1: # added to avoid repeated permutations (equivalent blocks)
-                                yield (input1, self.operators[operation1], input2, self.operators[operation2])
+        inputs, ops = search_space
+
+        # Use int categorical encodings for operators to allow easier specular blocks check.
+        # They are reconverted in actual values (strings) when returned.
+        op_enc = self.operator_encoders['cat']
+        ops = op_enc.encodings
+
+        for in1 in inputs:
+            for op1 in ops:
+                for in2 in inputs:
+                    if in2 >= in1: # added to avoid repeated permutations (equivalent blocks)
+                        for op2 in ops:
+                            if in2 != in1 or op2 >= op1: # added to avoid repeated permutations (equivalent blocks)
+                                yield [(in1, op_enc.decode(op1), in2, op_enc.decode(op2))]
 
 
     def print_state_space(self):
         ''' Pretty print the state space '''
-        self._logger.info('%s', '*' * 40 + 'STATE SPACE' + '*' * 40)
+        self._logger.info('%s', '*' * 30 + 'STATE SPACE' + '*' * 30)
+        self._logger.info('Block values: %s', rstr(list(range(1, self.B + 1))))
+        self._logger.info('Inputs: %s', rstr(self.input_values))
+        self._logger.info('Operators: %s', rstr(self.operator_values))
+        self._logger.info('%s', '*' * 71)
 
-        pp = pprint.PrettyPrinter(indent=2, width=100)
-        for id, state in self.states.items():
-            self._logger.info(pp.pformat(state))
+    def print_cell_spec(self, cell_spec):
+        ''' Print the cell specification space properly '''
+        self._logger.info('Cell specification:')
 
-        self._logger.info('%s', '*' * 91)
-
-    def print_actions(self, actions):
-        ''' Print the action space properly '''
-        self._logger.info('Actions:')
-
-        for id, action in enumerate(actions):
-            state = self[id % 2]
-            name = state['name']
-            vals = [(self.get_original_value(id % 2, action), action)]
-            self._logger.info("%s : %s", name, vals)
+        # each block is a tuple of 4 elements
+        for i, block in enumerate(cell_spec):
+            self._logger.info("Block %d: %s", i + 1, rstr(block))
 
     def update_children(self, children):
         self.children = children
 
-    def __getitem__(self, id):
-        return self.states[id % self.size]
+    def get_cells_to_train(self):
+        return self.children
 
-    @property
-    def size(self):
-        return self.__state_count
+
+class Encoder:
+    def __init__(self, name, values: list, fn: Callable=None) -> None:
+        self.name = name
+        self.values = values
+        self.encodings = []
+
+        # dictionary (map) for convertion encoding->value
+        self.__index_map = {}
+
+        # dictionary (map) for convertion value->encoding
+        # Inverse mapping compared to index_map (see above).
+        self.__value_map = {}
+
+        # if encoding function is not provided, use categorical
+        for i, val in enumerate(values):
+            val_encoding = i+1 if fn is None else fn(val)
+            self.__index_map[val_encoding] = val
+            self.__value_map[val] = val_encoding
+            self.encodings.append(val_encoding)
+
+    def return_metadata(self):
+        return {
+            'name': self.name,
+            'values': self.values,
+            'encodings': self.encodings,
+            'size': len(self.values),
+            'index_map': self.__index_map,
+            'value_map': self.__value_map,
+        }
+
+    def encode(self, value):
+        '''
+        Embed value to categorical
+        '''
+        return self.__value_map[value]
+
+    def decode(self, index):
+        '''
+        Decode categorical to original value
+        '''
+        return self.__index_map[index]

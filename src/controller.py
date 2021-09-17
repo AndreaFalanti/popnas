@@ -8,6 +8,7 @@ from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, 
 
 from configparser import ConfigParser
 import os
+from aMLLibrary.regressor import Regressor
 
 import cell_pruning
 from encoder import StateSpace
@@ -28,7 +29,7 @@ class ControllerManager:
     training.
     '''
 
-    def __init__(self, state_space,
+    def __init__(self, state_space: StateSpace,
                  checkpoint_B,
                  B=5, K=256, T=np.inf,
                  train_iterations=10,
@@ -66,7 +67,6 @@ class ControllerManager:
         self._amllibrary_logger = log_service.get_logger('aMLLibrary')
 
         self.state_space = state_space  # type: StateSpace
-        self.state_size = self.state_space.size
 
         self.global_epoch = 0
 
@@ -87,6 +87,7 @@ class ControllerManager:
         # restore controller
         # TODO: surely not working by beginning, it used csv files that don't exists!
         if self.restore_controller:
+            #region fix_restore_mess
             self.b_ = checkpoint_B
             self._logger.info("Loading controller history!")
 
@@ -146,36 +147,13 @@ class ControllerManager:
             self.children_history = children
 
             self.score_history = rewards
-
+            #endregion
         else:
             self.b_ = 1
             self.children_history = None
             self.score_history = None
 
         self.build_policy_network()
-
-    def get_actions(self, top_k=None):
-        '''
-        Gets a one hot encoded action list, either from random sampling or from
-        the ControllerManager RNN
-
-        # Args:
-            top_k: Number of models to return
-
-        # Returns:
-            A one hot encoded action list
-        '''
-        models = self.state_space.children
-
-        if top_k is not None:
-            models = models[:top_k]
-
-        actions = []
-        for model in models:
-            encoded_model = self.state_space.entity_encode_child(model)
-            actions.append(encoded_model)
-
-        return actions
 
     def __prepare_rnn_inputs(self, cell_spec):
         '''
@@ -188,7 +166,7 @@ class ControllerManager:
         # Returns:
             (tuple): contains list of inputs and list of operators.
         '''
-        cell_encoding = self.state_space.entity_encode_child(cell_spec)
+        cell_encoding = self.state_space.encode_cell_spec(cell_spec)
 
         # transform to tensor and add single item dimension (shape is (1, x)),
         # so that they are processed one at a time by the LSTM
@@ -394,7 +372,7 @@ class ControllerManager:
 
         return best_regressor
 
-    def estimate_time(self, regressor, child_encoding, headers, reindex_function):
+    def estimate_time(self, regressor: Regressor, child_encoding: list, headers: 'list[str]'):
         '''
         Use regressor to estimate the time for training the model.
 
@@ -402,27 +380,15 @@ class ControllerManager:
             regressor (Regressor): time regressor
             child_encoding (list[str]): model encoding
             headers ([type]): [description]
-            reindex_function ([type]): [description]
 
         Returns:
             (float): estimated time predicted
         '''
-  
-        # TODO: the f** is happening here?
-        encoded_child = self.state_space.entity_encode_child(child_encoding)
-
-        reindexed_child = []
-        for i, action_index in enumerate(encoded_child):
-            if i % 2 == 0:
-                # TODO: investigate this (probably avoids 0 for -2 input, as 0 is also used for null)
-                reindexed_child.append(action_index + 1)
-            else:
-                reindexed_child.append(reindex_function(action_index))
-                
-        regressor_features = np.concatenate(reindexed_child, axis=None)
+        # regressor uses dynamic reindex for operations, instead of categorical
+        encoded_child = self.state_space.encode_cell_spec(child_encoding, op_enc_name='dynamic_reindex')
 
         # add missing blocks num feature (see training_time.csv, all columns except time are needed)
-        regressor_features = np.append(np.array([self.b_]), [x for x in regressor_features])
+        regressor_features = np.append(np.array([self.b_]), encoded_child)
         headers = headers[1:]   # remove time, because it's the regressor output
 
         # complete features with missing blocks (0 is for null)
@@ -465,7 +431,7 @@ class ControllerManager:
             writer.writerow(['time', 'val accuracy', 'cell structure'])
             writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
 
-    def update_step(self, headers, reindex_function):
+    def update_step(self, headers):
         '''
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
@@ -507,7 +473,7 @@ class ControllerManager:
             for intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
-                    else self.estimate_time(regressor_NNLS, intermediate_child, headers, reindex_function)
+                    else self.estimate_time(regressor_NNLS, intermediate_child, headers)
 
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
