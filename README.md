@@ -111,6 +111,8 @@ influence on actual training time and must be used by regressor for accurate est
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method. New training method supports ImageGenerators and allows
 to use weight regularization if --wn parameter is provided.
+- LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method. This make the whole procedure easier to interpret and also more flexible to further changes and additions
+- Encoder has been totally changed as it was a total mess, causing also a lot of confusion inside the other modules. Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2). The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders at runtime and using them easily when needed. The default encoders are now categorical, so 1-indexed integers, instead of the 0-indexed used before.
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before text logs where printed only on console.
 - Add --cpu option to easily choose between running on cpu or gpu.
