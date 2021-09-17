@@ -446,7 +446,7 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        regressor_NNLS = self.setup_regressor(techniques=['NNLS'])
+        regressor_NNLS = self.setup_regressor(techniques=['NNLS', 'SVR', 'XGBoost', 'LRRidge'])
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
