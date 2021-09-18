@@ -128,14 +128,17 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     return best_regressor
 
 
-def initialize_scatter_plot_dict(techniques):
+def initialize_scatter_plot_dict(techniques: 'list[str]') -> 'dict[str, dict]':
     # dictionary of dictionaries to store values for each regressor technique
     # each technique will have x and y fields, that are list of lists
+    # and MAPE and spearman fields, which are plain lists (of len = B)
     scatter_values = {}
     for technique in techniques:
         scatter_values[technique] = {}
         scatter_values[technique]['x'] = []
         scatter_values[technique]['y'] = []
+        scatter_values[technique]['MAPE'] = []
+        scatter_values[technique]['spearman'] = []
 
     return scatter_values
 
@@ -161,7 +164,7 @@ def plot_squared_scatter_chart(x, y, technique, log_path, plot_reference=True, l
     plt.title(f'Time predictions overview ({technique})')
     plt.gca().set_aspect('equal', adjustable='box')
 
-    plt.legend()
+    plt.legend(fontsize='x-small')
 
     # add reference line (bisector line x = y)
     if plot_reference:
@@ -219,16 +222,23 @@ def main():
                 scatter_x.append(real_time)
                 scatter_y.append(predicted_time)
 
+            comparison_df = pd.DataFrame({'real_time': scatter_x, 'pred_time': scatter_y})
             scatter_values[technique]['x'].append(scatter_x)
             scatter_values[technique]['y'].append(scatter_y)
+            scatter_values[technique]['MAPE'].append((((comparison_df['real_time'] - comparison_df['pred_time']) / comparison_df['real_time']).abs()).mean() * 100)
+            scatter_values[technique]['spearman'].append(comparison_df['real_time'].corr(comparison_df['pred_time'], method='spearman'))
 
             logger.info('--------------------------------------------------------------')
 
     logger.info('Built plots for each regressor')
     for technique in regressor_techniques:
         technique_log_path = os.path.join(log_path, technique)
+        # add MAPE and spearman to legend
+        technique_legend_labels = list(map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}', \
+            scatter_plot_legends, scatter_values[technique]['MAPE'], scatter_values[technique]['spearman']))
+
         plot_squared_scatter_chart(scatter_values[technique]['x'], scatter_values[technique]['y'], technique,
-                                        technique_log_path, legend_labels=scatter_plot_legends)
+                                        technique_log_path, legend_labels=technique_legend_labels)
 
     logger.info('Script completed successfully')
 
