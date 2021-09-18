@@ -1,14 +1,13 @@
 import log_service
+import plotter
 from model import ModelGenerator
 from manager import NetworkManager
 from controller import ControllerManager
 from encoder import StateSpace
-import plotter
 
 from tensorflow.keras.utils import to_categorical
 from tensorflow.python.keras.datasets import cifar100
 from tensorflow.python.keras.datasets import cifar10
-import numpy as np
 from sklearn.model_selection import train_test_split
 
 import importlib.util
@@ -184,7 +183,52 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def write_sliding_blocks_training_time(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+    # TODO: not really necessary, even b=1 could use the more powerful generate_eqv_cells_encodings. Keep it or not?
+    def generate_sliding_block_encodings(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+        '''
+        Usable for cells with b = 1. Simply slide the block in different positions. Very fast since it doesn't need to
+        build all possible permutations.
+
+        Returns:
+            (list): encoded cells with additional data, to write in csv (list of lists)
+        '''
+
+        encoded_cell = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
+        csv_rows = []
+
+        for i in range(current_blocks, self.blocks + 1):
+            data = [timer, current_blocks]
+
+            # slide block forward
+            for _ in range(current_blocks, i):
+                data.extend([0, 0, 0, 0])
+
+            # add reindexed block encoding (encoded cell is actually a single block)
+            data.extend(encoded_cell)
+
+            # extend with empty blocks, if necessary
+            for _ in range(i+1, self.blocks + 1):
+                data.extend([0, 0, 0, 0])
+
+            csv_rows.append(data)
+
+        return csv_rows
+
+    def generate_eqv_cells_encodings(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+        '''
+        Needed for cells with b > 1, compared to sliding blocks it also builds the allowed permutations of the blocks
+        present in the cell.
+
+        Returns:
+            (list): encoded cells with additional data, to write in csv (list of lists)
+        '''
+
+        # equivalent cells can be useful to train better the regressor
+        eqv_cells, _ = state_space.generate_eqv_cells(cell_spec, size=self.blocks)
+        # encode cell spec, using dynamic reindex for operators, but keep it as a list of tuples
+        return list(map(lambda cell: [timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex'), eqv_cells))
+
+    def write_training_time(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
         '''
         Write on csv the training time, that will be used for regressor training.
         Use sliding blocks mechanism to multiple the entries.
@@ -196,26 +240,12 @@ class Train:
             state_space (StateSpace): [description]
         '''
 
+        csv_rows = self.generate_sliding_block_encodings(current_blocks, timer, cell_spec, state_space) if current_blocks == 1 \
+            else self.generate_eqv_cells_encodings(current_blocks, timer, cell_spec, state_space)
+
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
-
-            # generate all possible 'sliding blocks' combinations
-            for i in range(current_blocks, self.blocks + 1):
-                data = [timer, current_blocks]
-
-                # slide block forward
-                for _ in range(current_blocks, i):
-                    data.extend([0, 0, 0, 0])
-
-                # add reindexed block encoding
-                encoded_child = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
-                data.extend(encoded_child)
-
-                # extend with empty blocks, if necessary
-                for _ in range(i+1, self.blocks + 1):
-                    data.extend([0, 0, 0, 0])
-
-                writer.writerow(data)
+            writer.writerows(csv_rows)
 
     def process(self):
         '''
@@ -337,7 +367,7 @@ class Train:
 
                 # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
                 if current_blocks > 1:
-                    self.write_sliding_blocks_training_time(current_blocks, timer, cell_spec, state_space)
+                    self.write_training_time(current_blocks, timer, cell_spec, state_space)
 
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
@@ -346,7 +376,7 @@ class Train:
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
                 for timer, cell_spec in monoblock_times:
-                    self.write_sliding_blocks_training_time(current_blocks, timer, cell_spec, state_space)
+                    self.write_training_time(current_blocks, timer, cell_spec, state_space)
             
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 

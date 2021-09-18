@@ -1,4 +1,7 @@
 from typing import Any, Callable
+
+import itertools
+
 import log_service
 from utils.rstr import rstr
 from utils.func_utils import list_flatten
@@ -221,6 +224,35 @@ class StateSpace:
                             if in2 != in1 or op2 >= op1: # added to avoid repeated permutations (equivalent blocks)
                                 yield [(in1, op_enc.decode(op1), in2, op_enc.decode(op2))]
 
+    def generate_eqv_cells(self, cell_spec: list, size: int=None):
+        cell_inputs = list_flatten(cell_spec)[::2]
+        # that is basically the 'fixed blocks' index list
+        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
+
+        # a block is swappable (can change position inside the cell) if its output is not used by other blocks
+        swappable_blocks_mask = [i not in used_block_outputs for i in range(len(cell_inputs))]
+        swappable_blocks = [block for block, flag in zip(cell_spec, swappable_blocks_mask) if flag]
+
+        # add NULL blocks (all None) to swappable blocks, to reach the given cell size
+        if size != None:
+            assert size - len(cell_spec) >= 0
+            for _ in range(size - len(cell_spec)):
+                swappable_blocks.append((None, None, None, None))
+
+        # generate all possible permutations of the swappable blocks
+        eqv_swap_only_set = set(itertools.permutations(swappable_blocks))
+       
+        eqv_cells = []
+        for cell in eqv_swap_only_set:
+            # cell is a tuple containing the block tuples, it must be converted into a list of tuples
+            cell = [*cell]
+
+             # add the non-swappable blocks in their correct positions
+            for block_index in used_block_outputs:
+                cell.insert(block_index, cell_spec[block_index])
+            eqv_cells.append(cell)
+
+        return eqv_cells, used_block_outputs
 
     def print_state_space(self):
         ''' Pretty print the state space '''
@@ -246,7 +278,7 @@ class StateSpace:
 
 
 class Encoder:
-    def __init__(self, name, values: list, fn: Callable=None) -> None:
+    def __init__(self, name, values: list, fn: Callable=None, none_val=0) -> None:
         self.name = name
         self.values = values
         self.encodings = []
@@ -258,12 +290,17 @@ class Encoder:
         # Inverse mapping compared to index_map (see above).
         self.__value_map = {}
 
-        # if encoding function is not provided, use categorical
         for i, val in enumerate(values):
-            val_encoding = i+1 if fn is None else fn(val)
-            self.__index_map[val_encoding] = val
-            self.__value_map[val] = val_encoding
-            self.encodings.append(val_encoding)
+            # if encoding function is not provided, use categorical
+            encoding = i+1 if fn is None else fn(val)
+
+            self.__index_map[encoding] = val
+            self.__value_map[val] = encoding
+            self.encodings.append(encoding)
+
+        # for generate_eqv_cells purposes, an encoding to None must be provided.
+        self.__value_map[None] = none_val
+        self.__index_map[none_val] = None
 
     def return_metadata(self):
         return {
