@@ -21,14 +21,13 @@ def initialize_log_folders():
     log_path = os.path.join('logs', timestr)
     os.mkdir(log_path)
 
-    # TODO: folders not listed here are created through "tf.contrib.summary.create_file_writer" function,
-    #  but their content is very strange, investigate
     os.mkdir(os.path.join(log_path, 'csv'))  # create .csv path
     os.mkdir(os.path.join(log_path, 'ini'))  # create .ini folder
-    os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
+    os.mkdir(os.path.join(log_path, 'controller'))  # create controller folder
     os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
     os.mkdir(os.path.join(log_path, 'tensorboard_cnn'))  # create folder for saving tensorboard logs
     os.mkdir(os.path.join(log_path, 'plots'))  # create folder for saving data plots
+    os.mkdir(os.path.join(log_path, 'regressors'))  # create folder for saving regressor outputs
 
 
 def initialize_log_folders_best_model_script():

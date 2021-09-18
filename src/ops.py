@@ -2,8 +2,6 @@ import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
 
-# TODO: could use a pointwise convolution, like pooling. Experiment which one is better.
-
 def depth_zero_pad_closure(desired_depth, op_layer):
     '''
     Pad depth of a Keras layer with zeros, if it has not already the right depth for performing addition at the end of the block.

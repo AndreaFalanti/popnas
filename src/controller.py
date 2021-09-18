@@ -4,7 +4,7 @@ import csv
 from tqdm import tqdm
 
 import tensorflow as tf
-from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, Model
+from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, callbacks, Model
 
 from configparser import ConfigParser
 import os
@@ -204,7 +204,6 @@ class ControllerManager:
         else:
             return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}))
 
-
     def build_controller_model(self, weight_reg):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
         # since the length varies, None is given as dimension
@@ -228,15 +227,13 @@ class ControllerManager:
         Returns:
             (tf.keras.Callback[]): Keras callbacks
         '''
-        callbacks = []
+        model_callbacks = []
         
         # By default shows losses and metrics for both training and validation
-        tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
-                                                    profile_batch=0, histogram_freq=0, update_freq='epoch')
+        tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
+        model_callbacks.append(tb_callback)
 
-        callbacks.append(tb_callback)
-
-        return callbacks
+        return model_callbacks
 
     def build_policy_network(self):
         '''
@@ -263,7 +260,7 @@ class ControllerManager:
                                          global_step=self.global_step)
 
         if self.restore_controller:
-            path = tf.train.latest_checkpoint(log_service.build_path('weights'))
+            path = tf.train.latest_checkpoint(log_service.build_path('controller', 'weights'))
 
             if path is not None and tf.train.checkpoint_exists(path):
                 self._logger.info("Loading controller checkpoint!")
@@ -297,7 +294,7 @@ class ControllerManager:
         loss = losses.MeanSquaredError()
         train_metrics = [metrics.MeanAbsolutePercentageError()]
         optimizer = self.optimizer_b1 if self.b_ == 1 else self.optimizer
-        callbacks = self.define_callbacks(logdir)
+        model_callbacks = self.define_callbacks(logdir)
 
         self.controller.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
 
@@ -307,7 +304,7 @@ class ControllerManager:
             x=rnn_dataset,
             batch_size=1,
             epochs=self.train_iterations,
-            callbacks=callbacks
+            callbacks=model_callbacks
         )
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
@@ -315,7 +312,7 @@ class ControllerManager:
             writer.writerows(map(lambda x: [x], rewards))
 
         # save weights
-        self.saver.save(log_service.build_path('weights', 'controller.ckpt'))
+        self.saver.save(log_service.build_path('controller', 'weights', 'controller.ckpt'))
 
         final_loss = hist.history['loss'][-1]
         return final_loss
@@ -366,7 +363,7 @@ class ControllerManager:
             with redirect_stderr(redir_logger):
                 sequence_data_processor = sequence_data_processing.SequenceDataProcessing(
                     log_service.build_path('ini', 'aMLLibrary_regressors.ini'),
-                    output=log_service.build_path(f'output_regressor_B{self.b_}'))
+                    output=log_service.build_path('regressors', f'B{self.b_}'))
 
                 best_regressor = sequence_data_processor.process()
 

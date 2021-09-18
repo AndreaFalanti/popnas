@@ -5,7 +5,7 @@ import ops
 import log_service
 from utils.func_utils import to_int_tuple, list_flatten
 
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model
 
 
 class ModelGenerator():
@@ -48,7 +48,7 @@ class ModelGenerator():
         # for depth adaptation purposes
         self.prev_cell_filters = 0
 
-        self.weight_norm = tf.keras.regularizers.l2(weight_norm) if weight_norm is not None else None
+        self.weight_norm = regularizers.l2(weight_norm) if weight_norm is not None else None
 
     def __compile_op_regexes(self):
         '''
@@ -99,7 +99,7 @@ class ModelGenerator():
 
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
-        model_input = tf.keras.layers.Input(shape=(32, 32, 3))
+        model_input = layers.Input(shape=(32, 32, 3))
         # put prev filters = input depth
         self.prev_cell_filters = 3
 
@@ -123,11 +123,11 @@ class ModelGenerator():
 
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
-        gap = GlobalAveragePooling2D(name='GAP')(last_output)
+        gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
-        output = Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
+        output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
 
-        return tf.keras.Model(inputs=model_input, outputs=output)
+        return Model(inputs=model_input, outputs=output)
 
     def __build_cell(self, B, action_list, filters, stride, inputs, adapt_depth: bool):
         '''
@@ -171,7 +171,7 @@ class ModelGenerator():
         # reduce depth to filters value, otherwise concatenation would lead to (b * filters) tensor depth
         if len(block_outputs) > 1:
             # concatenate all 'Add' layers, outputs of each single block
-            concat_layer = tf.keras.layers.Concatenate(axis=-1)(block_outputs)
+            concat_layer = layers.Concatenate(axis=-1)(block_outputs)
             x = ops.Convolution(filters, (1, 1), (1, 1))
             x._name = f'concat_pointwise_conv_c{self.cell_index}'
             return x(concat_layer)
@@ -248,7 +248,7 @@ class ModelGenerator():
         # parse_action returns a custom layer model, that is then called with chosen input
         left_layer = self.__parse_action(filters, action_name_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_index_L])
         right_layer = self.__parse_action(filters, action_name_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_index_R])
-        return tf.keras.layers.Add()([left_layer, right_layer])
+        return layers.Add()([left_layer, right_layer])
 
     def __parse_action(self, filters, action, adapt_depth: bool, strides=(1, 1), tag='L'):
         '''
@@ -331,30 +331,28 @@ class ModelGenerator():
         Returns:
             (tf.keras.Callback[]): Keras callbacks
         '''
-        callbacks = []
+        model_callbacks = []
 
         # TODO: Save best weights, not really necessary? Was used only to get best val_accuracy...
-        # ckpt_callback = tf.keras.callbacks.ModelCheckpoint(filepath=log_service.build_path('temp_weights', 'cp_e{epoch:02d}_vl{val_accuracy:.2f}.ckpt'),
+        # ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('temp_weights', 'cp_e{epoch:02d}_vl{val_accuracy:.2f}.ckpt'),
         #                                                     save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max', verbose=1)
-        # callbacks.append(ckpt_callback)
+        # model_callbacks.append(ckpt_callback)
         
         # By default shows losses and metrics for both training and validation
-        tb_callback = tf.keras.callbacks.TensorBoard(log_dir=tb_logdir,
-                                                    profile_batch=0, histogram_freq=0, update_freq='epoch')
-
-        callbacks.append(tb_callback)
+        tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
+        model_callbacks.append(tb_callback)
 
         # TODO: convert into a parameter
         early_stop = False
         if early_stop:
-            es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
-            callbacks.append(es_callback)
+            es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
+            model_callbacks.append(es_callback)
 
-        return callbacks
+        return model_callbacks
 
     def define_training_hyperparams_and_metrics(self, lr=0.01):
-        loss = tf.keras.losses.CategoricalCrossentropy()
-        optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+        loss = losses.CategoricalCrossentropy()
+        optimizer = optimizers.Adam(learning_rate=lr)
         metrics = ['accuracy']
 
         # TODO: pnas used cosine decay with SGD, instead of Adam. Investigate which alternative is better

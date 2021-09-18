@@ -92,7 +92,7 @@ class Train:
                 y_train = to_categorical(y_train, 100)
                 y_validation = to_categorical(y_validation, 100)
 
-            # TODO: if custom dataset is used, all works fine or some logic is missing?
+            # TODO: logic is missing for custom dataset usage
 
             # pack the dataset for the NetworkManager
             datasets.append([x_train, y_train, x_validation, y_validation])
@@ -117,7 +117,7 @@ class Train:
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params, flops = manager.get_rewards(ModelGenerator, cell_spec, self.concat_only_unused, save_best_model=last_block_train)
+        reward, timer, total_params, flops = manager.get_rewards(cell_spec, self.concat_only_unused, save_best_model=last_block_train)
 
         self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)

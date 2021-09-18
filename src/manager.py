@@ -6,7 +6,7 @@ import os
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
-from keras.utils.vis_utils import plot_model   # per stampare modello
+from keras.utils.vis_utils import plot_model
 
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
@@ -31,6 +31,8 @@ class NetworkManager:
         '''
         self._logger = log_service.get_logger(__name__)
 
+        assert data_num > 0
+
         self.data_num = data_num
         self.dataset = dataset
         self.epochs = epochs
@@ -51,7 +53,7 @@ class NetworkManager:
         Returns:
             (int): number of FLOPS
         '''
-        # temporarely disable warnings, a lot of them are print and they seems irrelevant
+        # temporarily disable warnings, a lot of them are print and they seems irrelevant
         # TODO: investigate if something is actually wrong
         tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -74,7 +76,7 @@ class NetworkManager:
 
         return flops.total_float_ops
 
-    def __compile_model(self, model_fn: ModelGenerator, actions: 'list[str]', concat_only_unused: bool, tb_logdir: str):
+    def __compile_model(self, actions: 'list[tuple]', concat_only_unused: bool, tb_logdir: str):
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
@@ -87,7 +89,7 @@ class NetworkManager:
         Returns:
             (tf.keras.Model, list(tf.keras.callbacks.Callback)): model and callbacks to use while training
         '''
-        model_gen = model_fn(actions, self.filters, concat_only_unused, self.weight_norm)  # type: ModelGenerator
+        model_gen = ModelGenerator(actions, self.filters, concat_only_unused, self.weight_norm)  # type: ModelGenerator
         model = model_gen.build_model()
 
         loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
@@ -127,36 +129,18 @@ class NetworkManager:
 
         return train_dataset, validation_dataset, train_batches, val_batches
 
-    def get_rewards(self, model_fn, actions, concat_only_unused=True, save_best_model=False, display_model_summary=False):
+    def get_rewards(self, cell_spec: 'list[tuple]', concat_only_unused: bool=True, save_best_model: bool=False):
         '''
         Creates a CNN given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
 
-        # Args:
-            model_fn: a function which accepts one argument, a list of
-                parsed actions, obtained via an inverse mapping from the
-                StateSpace.
+        Args:
+            cell_spec (list[tuple]): plain cell specification. Used to build the CNN.
+            concat_only_unused (bool, optional): concat only unused block outputs in the cell output. Defaults to True.
+            save_best_model (bool, optional): [description]. Defaults to False.
 
-            actions: a list of parsed actions obtained via an inverse mapping
-                from the StateSpace. It is in a specific order as given below:
-
-                Consider 4 states were added to the StateSpace via the `add_state`
-                method. Then the `actions` array will be of length 4, with the
-                values of those states in the order that they were added.
-
-                If number of layers is greater than one, then the `actions` array
-                will be of length `4 * number of layers` (in the above scenario).
-                The index from [0:4] will be for layer 0, from [4:8] for layer 1,
-                etc for the number of layers.
-
-                These action values are for direct use in the construction of models.
-
-            concat_only_unused (bool): concat only unused block outputs in the cell output
-
-            display_model_summary: Display the child model summary at the end of training.
-
-        # Returns:
-            a reward for training a model with the given actions
+        Returns:
+            (tuple): (reward, timer, total_params, flops) of trained network
         '''
 
         # TODO: don't know why it was called. Try to remove it and check if something is wrong.
@@ -165,7 +149,7 @@ class NetworkManager:
         # create children folder on Tensorboard
         self.num_child = self.num_child + 1
         # grouped for block count and enumerated progressively
-        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(actions) // 4}', str(self.num_child))
+        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.num_child))
         os.makedirs(tb_logdir, exist_ok = True)
 
         # generate a submodel given predicted actions
@@ -176,7 +160,7 @@ class NetworkManager:
                 self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
 
             # build the model, given the actions
-            model, callbacks = self.__compile_model(model_fn, actions, concat_only_unused, tb_logdir)
+            model, callbacks = self.__compile_model(cell_spec, concat_only_unused, tb_logdir)
             # add callback to register as accurate as possible the training time
             time_cb = TimingCallback()
             callbacks.append(time_cb)
@@ -193,23 +177,21 @@ class NetworkManager:
 
             timer = sum(time_cb.logs)
 
-
         # compute the reward (best validation accuracy)
         reward = max(hist.history.get('val_accuracy'))
         total_params = model.count_params()
         flops = self.get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
 
-        # display the structure of the child model on console if flag is true
-        if display_model_summary:
-            model.summary(line_length=140, print_fn=self._logger.info)
-            # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
-
-        # always write model summary to file
+        # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
             # str casting is required since inputs are int
-            f.write('Model actions: ' + ','.join(map(lambda el: str(el), actions)) + '\n\n')
+            f.write('Model actions: ' + ','.join(map(lambda el: str(el), cell_spec)) + '\n\n')
             model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
             f.write(f'\nFLOPS: {flops:,}')
+
+        # save also an overview diagram of the network
+        # TODO: needs additional packages, see later
+        #plot_model(model, to_file=os.path.join(tb_logdir, 'model.png'), show_shapes=True, show_layer_names=True)
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
@@ -219,7 +201,6 @@ class NetworkManager:
             self._logger.info('Saving model...')
             model.save(log_service.build_path('best_model'))
             self._logger.info('Model saved successfully')
-
 
         # clean up resources and GPU memory
         del model
