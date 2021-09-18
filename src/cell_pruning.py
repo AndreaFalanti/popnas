@@ -13,9 +13,9 @@ class OpEncoding:
         return False
 
 class BlockEncoding:
-    def __init__(self, block_spec) -> None:
-        self.L = OpEncoding(block_spec[0], block_spec[1])
-        self.R = OpEncoding(block_spec[2], block_spec[3])
+    def __init__(self, in1, op1, in2, op2) -> None:
+        self.L = OpEncoding(in1, op1)
+        self.R = OpEncoding(in2, op2)
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, BlockEncoding):
@@ -24,21 +24,16 @@ class BlockEncoding:
         return False
 
 class CellEncoding:
-    def __init__(self, model_list: list) -> None:
+    def __init__(self, model_list: 'list[tuple]') -> None:
         self.blocks = []
-        blocks_num = len(model_list) // 4
 
-        for i in range(blocks_num):
-            block_list = model_list[i*4:(i+1)*4]
+        for in1, op1, in2, op2 in model_list:
+            # use another block output as input if input >=0
+            # substitute input index with BlockEncoding in that case, otherwise keep it as int
+            in1 = self.blocks[in1] if in1 >= 0 else in1
+            in2 = self.blocks[in2] if in2 >= 0 else in2
 
-            # iterate the two inputs to substitute it in case it's from another block
-            inputs = block_list[::2]    # 0 and 2 index
-            for j, input in enumerate(inputs):
-                # use another block output as input, substitute input index with BlockEncoding
-                if input >= 0:
-                    block_list[j*2] = self.blocks[input]
-
-            self.blocks.append(BlockEncoding(block_list))
+            self.blocks.append(BlockEncoding(in1, op1, in2, op2))
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, CellEncoding) and len(self.blocks) == len(o.blocks):
@@ -68,7 +63,7 @@ class CellEncoding:
 
 # Pruning functions
 
-def prune_equivalent_cell_models(models, k: int):
+def prune_equivalent_cell_models(models: list, k: int):
         '''
         Prune equivalent models from given models list until k models have been obtained, then return them.
         Useful for pruning eqv models during PNAS mode children selection.
@@ -78,7 +73,7 @@ def prune_equivalent_cell_models(models, k: int):
             k ([type]): model count
 
         Returns:
-            [type]: [description]
+            (tuple): prime models list and int counter of total pruned models
         '''
         prime_models = []
         prime_cell_repr = []
@@ -102,6 +97,7 @@ def prune_equivalent_cell_models(models, k: int):
                 break
 
         return prime_models, pruned_count
+
 
 def check_model_equivalence(model: CellEncoding, generated_models: 'list[CellEncoding]'):
     '''

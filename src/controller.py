@@ -469,7 +469,7 @@ class ControllerManager:
                         unit='model', desc='Estimating models: ',
                         total=len(next_models))
 
-            # iterate through all the intermediate children (intermediate_child is an array of repeated [input,action,input,action] blocks)
+            # iterate through all the intermediate children (intermediate_child is a list of repeated (input,action,input,action) tuple blocks)
             for intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
