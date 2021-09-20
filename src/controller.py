@@ -150,8 +150,8 @@ class ControllerManager:
             #endregion
         else:
             self.b_ = 1
-            self.children_history = None
-            self.score_history = None
+            self.children_history = []
+            self.score_history = []
 
         self.build_policy_network()
 
@@ -178,7 +178,7 @@ class ControllerManager:
 
         return [inputs, operators]
 
-    def __build_rnn_dataset(self, cell_specs: list, rewards: 'list[float]'=None) -> tf.data.Dataset:
+    def __build_rnn_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]'=None):
         '''
         Build a dataset to be used in the RNN controller.
 
@@ -190,19 +190,32 @@ class ControllerManager:
         Returns:
             tf.data.Dataset: [description]
         '''
-        rnn_inputs = list(map(lambda child: self.__prepare_rnn_inputs(child), cell_specs))
+        # generate also equivalent cell specifications. This provides a data augmentation mechanism that
+        # can help the LSTM to lea
+        eqv_cell_specs, eqv_rewards = [], []
+
+        # build dataset for predictions (no y labels), simply rename the list without doing data augmentation
+        if rewards is None:
+            eqv_cell_specs = cell_specs
+        # build dataset for training (y labels are present)
+        else:
+            for cell_spec, reward in zip(cell_specs, rewards):
+                eqv_cells, _ = self.state_space.generate_eqv_cells(cell_spec)
+
+                # add {len(eqv_cells)} repeated elements into the reward list
+                eqv_rewards.extend([reward] * len(eqv_cells))
+                eqv_cell_specs.extend(eqv_cells)
+
+            rewards = np.array(eqv_rewards, dtype=np.float32)
+            rewards = np.expand_dims(rewards, -1)
+
+        rnn_inputs = list(map(lambda child: self.__prepare_rnn_inputs(child), eqv_cell_specs))
         # fit function actually wants two distinct lists, instead of a list of tuples. This does the trick.
         rnn_in = np.array([inputs for inputs, _ in rnn_inputs], dtype=np.int32)
         rnn_ops = np.array([ops for _, ops in rnn_inputs], dtype=np.int32)
 
-        # build dataset for training (y labels are present)
-        if rewards is not None:
-            rewards = np.array(rewards, dtype=np.float32)
-            rewards = np.expand_dims(rewards, -1)
-            return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}, rewards))
-        # build dataset for predictions (no y labels)
-        else:
-            return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}))
+        return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops})) if rewards is None \
+            else tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}, rewards))
 
     def build_controller_model(self, weight_reg):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
@@ -242,7 +255,6 @@ class ControllerManager:
         Also constructs saver and restorer to the RNN controller if required.
         '''
 
-        self.global_step = tf.compat.v1.train.get_or_create_global_step()
         #learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
 
         # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
@@ -256,13 +268,12 @@ class ControllerManager:
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,
-                                         optimizer_b1=self.optimizer_b1,
-                                         global_step=self.global_step)
+                                         optimizer_b1=self.optimizer_b1)
 
         if self.restore_controller:
             path = tf.train.latest_checkpoint(log_service.build_path('controller', 'weights'))
 
-            if path is not None and tf.train.checkpoint_exists(path):
+            if path is not None and tf.train.latest_checkpoint(path):
                 self._logger.info("Loading controller checkpoint!")
                 self.saver.restore(path)
 
@@ -275,17 +286,12 @@ class ControllerManager:
         '''
         rnn_dataset = self.__build_rnn_dataset(self.state_space.children, rewards)
 
-        # create the datasets as list of lists
-        # if self.children_history is None:
-        #     self.children_history = [rnn_inputs]
-        #     self.score_history = [rewards]
-        #     batchsize = rewards.shape[0]
-        # else:
-        #     self.children_history.append(rnn_inputs)
-        #     self.score_history.append(rewards)
-        #     batchsize = sum([data.shape[0] for data in self.score_history])
+        # TODO: create the datasets as list of lists, if want to reuse also previous data.
+        #  PNAS used only the data of the current CNN generation
+        # self.children_history.append(rnn_inputs)
+        # self.score_history.append(rewards)
 
-        train_size = len(rewards) * self.train_iterations
+        train_size = len(rnn_dataset) * self.train_iterations
         self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
         # logs
@@ -296,6 +302,7 @@ class ControllerManager:
         optimizer = self.optimizer_b1 if self.b_ == 1 else self.optimizer
         model_callbacks = self.define_callbacks(logdir)
 
+        # TODO: recompiling will reset optimizer values, don't know if optimizer for b > 1 should be reset or not.
         self.controller.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
 
         # train only on last trained CNN batch.
