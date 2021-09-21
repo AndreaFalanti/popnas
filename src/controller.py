@@ -85,7 +85,7 @@ class ControllerManager:
         self.build_regressor_config = True
 
         # restore controller
-        # TODO: surely not working by beginning, it used csv files that don't exists!
+        # TODO: surely not working by beginning, it used csv files that don't exist!
         if self.restore_controller:
             #region fix_restore_mess
             self.b_ = checkpoint_B
@@ -157,7 +157,7 @@ class ControllerManager:
 
     def __prepare_rnn_inputs(self, cell_spec):
         '''
-        Splits a cell specification (list of [in, op]) into seperate inputs
+        Splits a cell specification (list of [in, op]) into separate inputs
         and operators tensors to be used in LSTM.
 
         # Args:
@@ -168,13 +168,16 @@ class ControllerManager:
         '''
         cell_encoding = self.state_space.encode_cell_spec(cell_spec)
 
-        # transform to tensor and add single item dimension (shape is (1, x)),
-        # so that they are processed one at a time by the LSTM
-        cell_tensor = tf.convert_to_tensor(cell_encoding)
-        cell_tensor = tf.expand_dims(cell_tensor, 0)
+        cell_tensor = tf.convert_to_tensor(cell_encoding)   # type: tf.Tensor
+        #cell_tensor = tf.expand_dims(cell_tensor, 0)
 
-        inputs = cell_tensor[:, 0::2]  # even place data
-        operators = cell_tensor[:, 1::2]  # odd place data
+        inputs = cell_tensor[0::2]  # even place data
+        operators = cell_tensor[1::2]  # odd place data
+
+        # transform to tensor and add sequence dimension (final shape is (len / 2, 2)),
+        # to process blocks one at a time by the LSTM (2 inputs, 2 operators)
+        inputs = tf.reshape(inputs, shape=(inputs.shape[0] // 2, 2))
+        operators = tf.reshape(operators, shape=(operators.shape[0] // 2, 2))
 
         return [inputs, operators]
 
@@ -214,20 +217,30 @@ class ControllerManager:
         rnn_in = np.array([inputs for inputs, _ in rnn_inputs], dtype=np.int32)
         rnn_ops = np.array([ops for _, ops in rnn_inputs], dtype=np.int32)
 
-        return tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops})) if rewards is None \
+        ds = tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops})) if rewards is None \
             else tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}, rewards))
+
+        # add batch size (MUST be done here, if specified in .fit function it doesn't work!)
+        ds = ds.batch(1)
+
+        return ds
 
     def build_controller_model(self, weight_reg):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
         # since the length varies, None is given as dimension
-        inputs = layers.Input(shape=(None,))
-        ops = layers.Input(shape=(None,))
+        inputs = layers.Input(shape=(None, 2))
+        ops = layers.Input(shape=(None, 2))
 
         # input dim is the max integer value present in the embedding + 1.
         inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim)(inputs)
         ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim)(ops)
 
         embed = layers.Concatenate()([inputs_embed, ops_embed])
+        # pass from (None, None, 2, 60) to (None, None, 120), indicating [batch_size, serie_length, features(embedding)]
+        # -1 is for inheriting a dimension
+        embed = layers.Reshape((-1, 120))(embed)
+
+        # many-to-one, so must have return_sequences = False (it is by default)
         lstm = layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg)(embed)
         score = layers.Dense(1, activation='sigmoid', kernel_regularizer=weight_reg)(lstm)
 
@@ -309,7 +322,6 @@ class ControllerManager:
         # Controller starts from the weights trained on previous CNNs, so retraining on them would cause overfitting on previous samples.
         hist = self.controller.fit(
             x=rnn_dataset,
-            batch_size=1,
             epochs=self.train_iterations,
             callbacks=model_callbacks
         )
@@ -419,8 +431,8 @@ class ControllerManager:
         pred_dataset = self.__build_rnn_dataset([child_encoding])
 
         score = self.controller.predict(x=pred_dataset)
-        # score is a numpy array of shape (1, 1) since model has a single output and dataset has a single item
-        # simply return the plain element
+        # score is a numpy array of shape (1, 1) since model has a single output (return_sequences=False)
+        # and dataset has a single item. Simply return the plain element.
         return score[0, 0]
 
     def __write_predictions_on_csv(self, model_estimates):
@@ -450,7 +462,7 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        regressor_NNLS = self.setup_regressor(techniques=['NNLS', 'SVR', 'XGBoost', 'LRRidge'])
+        regressor_NNLS = self.setup_regressor(techniques=['NNLS'])
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
