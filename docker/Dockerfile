@@ -1,5 +1,9 @@
 FROM tensorflow/tensorflow:2.6.0rc0-gpu
 
+# Install graphviz
+RUN apt-get update
+RUN apt-get install graphviz -y
+
 # Install extras
 COPY requirements.txt /requirements.txt
 RUN /bin/bash -c "pip install -r requirements.txt"
@@ -8,5 +12,4 @@ RUN /bin/bash -c "pip install -r requirements.txt"
 WORKDIR /exp
 COPY . .
 
-#CMD ["python", "run.py", "-b", "5", "-k", "2", "-e", "1"]
 CMD ["bash"]
