@@ -265,7 +265,7 @@ class Train:
         if self.restore:
             starting_B = self.checkpoint  # change the starting point of B
 
-            self._logger.info("Loading operator indeces!")
+            self._logger.info("Loading operator indexes!")
             with open(log_service.build_path('csv', 'reindex_op_times.csv')) as f:
                 reader = csv.reader(f)
                 for row in reader:

@@ -6,7 +6,7 @@ import os
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
-from keras.utils.vis_utils import plot_model
+from tensorflow.keras.utils import plot_model
 
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
@@ -190,8 +190,7 @@ class NetworkManager:
             f.write(f'\nFLOPS: {flops:,}')
 
         # save also an overview diagram of the network
-        # TODO: needs additional packages, see later
-        #plot_model(model, to_file=os.path.join(tb_logdir, 'model.png'), show_shapes=True, show_layer_names=True)
+        plot_model(model, to_file=os.path.join(tb_logdir, 'model.png'), show_shapes=True, show_layer_names=True)
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on

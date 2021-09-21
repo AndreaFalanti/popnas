@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 import tensorflow as tf
 from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, callbacks, Model
+from tensorflow.keras.utils import plot_model
 import catboost
 
 from configparser import ConfigParser
@@ -69,6 +70,7 @@ class ControllerManager:
         self._logger = log_service.get_logger(__name__)
         self._amllibrary_logger = log_service.get_logger('aMLLibrary')
         self._catboost_logger = log_service.get_logger('CatBoost')
+        self.log_path = log_service.build_path('controller')
 
         self.state_space = state_space  # type: StateSpace
 
@@ -277,7 +279,11 @@ class ControllerManager:
         # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
         reg = regularizers.l1(self.reg_strength)
         self.controller = self.build_controller_model(reg)
-        self.controller.summary()
+
+        with open(os.path.join(self.log_path, 'summary.txt'), 'w') as f:
+            self.controller.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
+
+        plot_model(self.controller, to_file=os.path.join(self.log_path, 'model.png'), show_shapes=True, show_layer_names=True)
 
         # PNAS paper specifies different learning rates, one for b=1 and another for other b values
         self.optimizer = optimizers.Adam(learning_rate=0.002)
@@ -288,7 +294,7 @@ class ControllerManager:
                                          optimizer_b1=self.optimizer_b1)
 
         if self.restore_controller:
-            path = tf.train.latest_checkpoint(log_service.build_path('controller', 'weights'))
+            path = tf.train.latest_checkpoint(os.path.join(self.log_path, 'weights'))
 
             if path is not None and tf.train.latest_checkpoint(path):
                 self._logger.info("Loading controller checkpoint!")
@@ -311,13 +317,10 @@ class ControllerManager:
         train_size = len(rnn_dataset) * self.train_iterations
         self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
 
-        # logs
-        logdir = log_service.build_path('controller')
-
         loss = losses.MeanSquaredError()
         train_metrics = [metrics.MeanAbsolutePercentageError()]
         optimizer = self.optimizer_b1 if self.b_ == 1 else self.optimizer
-        model_callbacks = self.define_callbacks(logdir)
+        model_callbacks = self.define_callbacks(self.log_path)
 
         # TODO: recompiling will reset optimizer values, don't know if optimizer for b > 1 should be reset or not.
         self.controller.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
@@ -369,11 +372,11 @@ class ControllerManager:
     def setup_regressor(self, techniques=['NNLS']):
         '''
         Generate time regressor configuration and build the regressor (aMLLibrary).
+        Supported techniques: NNLS, SVR, XGBoost, LRRidge
 
         Returns:
             (Regressor): time regressor (aMLLibrary)
         '''
-        # NNLS, SVR, XGBoost, LRRidge
 
         # create the regressor configuration file for aMLLibrary
         # done only at first call of this function
@@ -478,9 +481,6 @@ class ControllerManager:
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
         '''
-
-        # plot controller architecture
-        # plot_model(self.controller, to_file='%s/controller_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
         # TODO: pandas is used only to add 0s and remove headers? But this is already done in code...
         csv_path = log_service.build_path('csv', 'training_time.csv')
