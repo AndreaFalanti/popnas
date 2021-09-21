@@ -18,6 +18,7 @@ mlxtend = "0.18.0"
 matplotlib = "3.3.4"
 eli5 = "0.11.0"
 mypy = "0.910"
+catboost = "0.26.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.7"

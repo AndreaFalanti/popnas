@@ -77,6 +77,23 @@ optional = false
 python-versions = "~=3.5"
 
 [[package]]
+name = "catboost"
+version = "0.26.1"
+description = "Catboost Python Package"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+graphviz = "*"
+matplotlib = "*"
+numpy = ">=1.16.0"
+pandas = ">=0.24.0"
+plotly = "*"
+scipy = "*"
+six = "*"
+
+[[package]]
 name = "certifi"
 version = "2021.5.30"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -509,6 +526,18 @@ optional = false
 python-versions = ">=3.6"
 
 [[package]]
+name = "plotly"
+version = "5.3.1"
+description = "An open-source, interactive data visualization library for Python"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+six = "*"
+tenacity = ">=6.2.0"
+
+[[package]]
 name = "protobuf"
 version = "3.17.3"
 description = "Protocol Buffers"
@@ -700,6 +729,17 @@ python-versions = "*"
 
 [package.extras]
 widechars = ["wcwidth"]
+
+[[package]]
+name = "tenacity"
+version = "8.0.1"
+description = "Retry code until it succeeds"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.extras]
+doc = ["reno", "sphinx", "tornado (>=4.5)"]
 
 [[package]]
 name = "tensorboard"
@@ -897,7 +937,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6.9, 3.7.4"
-content-hash = "4df5f15c1d51824c302c3bc9bcb4167d8aa23e04d1f76e67ad034feb6eefbf6f"
+content-hash = "25a3feb5717ca7125f09b5ec4492c9e632bb6bd97690263257118d385badc03b"
 
 [metadata.files]
 absl-py = [
@@ -927,6 +967,26 @@ cached-property = [
 cachetools = [
     {file = "cachetools-4.2.2-py3-none-any.whl", hash = "sha256:2cc0b89715337ab6dbba85b5b50effe2b0c74e035d83ee8ed637cf52f12ae001"},
     {file = "cachetools-4.2.2.tar.gz", hash = "sha256:61b5ed1e22a0924aed1d23b478f37e8d52549ff8a961de2909c69bf950020cff"},
+]
+catboost = [
+    {file = "catboost-0.26.1-cp27-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:ec6b9dedd31dd308cdfd5145c8813278be00cdb0616aef1c478cd8cc5e5bdfbc"},
+    {file = "catboost-0.26.1-cp27-none-manylinux1_x86_64.whl", hash = "sha256:ec6bbdb835fc9109ec7c13235515f2a1c4a7a69f314800bdebf0990d89e149a2"},
+    {file = "catboost-0.26.1-cp27-none-win_amd64.whl", hash = "sha256:9b05f562d8adbe7473380d8c298fff544858cb2d6838629e5acf431ae24f8401"},
+    {file = "catboost-0.26.1-cp35-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:179d8928d844b2b2e2d3792846e3347d42c07e47b53d3198c66ba7cd19964837"},
+    {file = "catboost-0.26.1-cp35-none-manylinux1_x86_64.whl", hash = "sha256:dc4f62b7ebf536694779ded54c874b1b8a3e9ccee7cb4a55c787df1bbf5fb5e7"},
+    {file = "catboost-0.26.1-cp35-none-win_amd64.whl", hash = "sha256:789d2d51254b7ebe6009f7c19fc09023b34e56e0452882ad7e44b27d169be670"},
+    {file = "catboost-0.26.1-cp36-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:5108498f3418ecedbb6b65128a0035f79a87924e74e91d76f5b7d4fab5af19e3"},
+    {file = "catboost-0.26.1-cp36-none-manylinux1_x86_64.whl", hash = "sha256:cb4e7181e9fc5c366787391eea2310c51a36f4a02875b055af651e5bf56c8839"},
+    {file = "catboost-0.26.1-cp36-none-win_amd64.whl", hash = "sha256:771f4d5daff6501aba0bbe1a9a11d3137df6f83dff6a0440abc57b6d4573002e"},
+    {file = "catboost-0.26.1-cp37-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:4f29888bbb9857397f9746d554c9c321759e7087f248d25585d5981a14121b5c"},
+    {file = "catboost-0.26.1-cp37-none-manylinux1_x86_64.whl", hash = "sha256:499390ec497a8b83856111a58369ee06f51f4a4b07519beb7585d6aa15875d1b"},
+    {file = "catboost-0.26.1-cp37-none-win_amd64.whl", hash = "sha256:85179002b51f5172e7548126130c52ebe87887aa7d8a2667a6b57feab02dc7c6"},
+    {file = "catboost-0.26.1-cp38-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:0e450f136a9297719ce141f2cf1a9a90548fd1743d832ebddc0172497083aa94"},
+    {file = "catboost-0.26.1-cp38-none-manylinux1_x86_64.whl", hash = "sha256:292efc39c8ba42e278a84ae16ab6c1ea34161b4c3ee65e3955b57fc4b5e79f3b"},
+    {file = "catboost-0.26.1-cp38-none-win_amd64.whl", hash = "sha256:48b3a270db5146f88463d8603d64d80e64175cb4d8172bce137b1c14a29845a5"},
+    {file = "catboost-0.26.1-cp39-none-macosx_10_6_intel.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:b3f46f2ea3ac9bc71111d54b1908803a1efa1bdc3fa6c844416514ec293cdf1f"},
+    {file = "catboost-0.26.1-cp39-none-manylinux1_x86_64.whl", hash = "sha256:b142ce1a076fbd4a71033dff886c0250ad147f4bc8b4d92f05815996a3604f72"},
+    {file = "catboost-0.26.1-cp39-none-win_amd64.whl", hash = "sha256:008f1652ee28a39e2f62290d6db36e12bc344c51f1aac5ce52ca2d0f403be1be"},
 ]
 certifi = [
     {file = "certifi-2021.5.30-py2.py3-none-any.whl", hash = "sha256:50b1e4f8446b06f41be7dd6338db18e0990601dce795c2b1686458aa7e8fa7d8"},
@@ -1344,6 +1404,10 @@ pillow = [
     {file = "Pillow-8.3.1-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:1c03e24be975e2afe70dfc5da6f187eea0b49a68bb2b69db0f30a61b7031cee4"},
     {file = "Pillow-8.3.1.tar.gz", hash = "sha256:2cac53839bfc5cece8fdbe7f084d5e3ee61e1303cccc86511d351adcb9e2c792"},
 ]
+plotly = [
+    {file = "plotly-5.3.1-py2.py3-none-any.whl", hash = "sha256:c3da90d41cab36722048eaa5d0eee7a286a55982835980e5f183e5536b823f07"},
+    {file = "plotly-5.3.1.tar.gz", hash = "sha256:6598393e898a9c5ae78397f76f07002ec41fd92e5f746d3b9806248d53885643"},
+]
 protobuf = [
     {file = "protobuf-3.17.3-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:ab6bb0e270c6c58e7ff4345b3a803cc59dbee19ddf77a4719c5b635f1d547aa8"},
     {file = "protobuf-3.17.3-cp27-cp27mu-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:13ee7be3c2d9a5d2b42a1030976f760f28755fcf5863c55b1460fd205e6cd637"},
@@ -1506,6 +1570,10 @@ sklearn = [
 tabulate = [
     {file = "tabulate-0.8.9-py3-none-any.whl", hash = "sha256:d7c013fe7abbc5e491394e10fa845f8f32fe54f8dc60c6622c6cf482d25d47e4"},
     {file = "tabulate-0.8.9.tar.gz", hash = "sha256:eb1d13f25760052e8931f2ef80aaf6045a6cceb47514db8beab24cded16f13a7"},
+]
+tenacity = [
+    {file = "tenacity-8.0.1-py3-none-any.whl", hash = "sha256:f78f4ea81b0fabc06728c11dc2a8c01277bfc5181b321a4770471902e3eb844a"},
+    {file = "tenacity-8.0.1.tar.gz", hash = "sha256:43242a20e3e73291a28bcbcacfd6e000b02d3857a9a9fff56b297a27afdc932f"},
 ]
 tensorboard = [
     {file = "tensorboard-2.6.0-py3-none-any.whl", hash = "sha256:f7dac4cdfb52d14c9e3f74585ce2aaf8e6203620a864e51faf84988b09f7bbdb"},

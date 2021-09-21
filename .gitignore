@@ -137,3 +137,6 @@ dmypy.json
 # POPNAS outputs
 logs
 temp_weights
+
+# catboost logs
+/catboost_info/
