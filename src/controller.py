@@ -1,3 +1,5 @@
+from typing import Union
+
 import pandas
 import numpy as np
 import csv
@@ -5,6 +7,7 @@ from tqdm import tqdm
 
 import tensorflow as tf
 from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, callbacks, Model
+import catboost
 
 from configparser import ConfigParser
 import os
@@ -65,6 +68,7 @@ class ControllerManager:
         '''
         self._logger = log_service.get_logger(__name__)
         self._amllibrary_logger = log_service.get_logger('aMLLibrary')
+        self._catboost_logger = log_service.get_logger('CatBoost')
 
         self.state_space = state_space  # type: StateSpace
 
@@ -364,7 +368,7 @@ class ControllerManager:
 
     def setup_regressor(self, techniques=['NNLS']):
         '''
-        Generate time regressor configuration and build the regressor.
+        Generate time regressor configuration and build the regressor (aMLLibrary).
 
         Returns:
             (Regressor): time regressor (aMLLibrary)
@@ -388,7 +392,23 @@ class ControllerManager:
 
         return best_regressor
 
-    def estimate_time(self, regressor: Regressor, child_encoding: list, headers: 'list[str]'):
+    def train_catboost_model(self, input_csv_path: str):
+        # first feature is the one used as y (time)
+        train_pool = catboost.Pool(input_csv_path,
+                                   delimiter=',',
+                                   has_header=True)
+
+        redir_logger = StreamToLogger(self._catboost_logger)
+        with redirect_stdout(redir_logger):
+            with redirect_stderr(redir_logger):
+                # specify the training parameters
+                regressor = catboost.CatBoostRegressor()
+                # train the model
+                regressor.fit(train_pool)
+
+        return regressor
+
+    def estimate_time(self, regressor: Union[Regressor, catboost.CatBoostRegressor], child_encoding: list, headers: 'list[str]'):
         '''
         Use regressor to estimate the time for training the model.
 
@@ -412,8 +432,14 @@ class ControllerManager:
             regressor_features = np.append(regressor_features, np.array([0, 0, 0, 0]))
 
         df_row = pandas.DataFrame([regressor_features], columns=headers)
-        # array of single element (time prediction)
-        predicted_time = regressor.predict(df_row)[0]
+
+        # TODO: could be made more "elegant", but right now is the best way to avoid more sophisticated changes
+        if isinstance(regressor, catboost.CatBoostRegressor):
+            features_pool = catboost.Pool(df_row)
+            predicted_time = regressor.predict(features_pool)[0]
+        else:
+            # array of single element (time prediction)
+            predicted_time = regressor.predict(df_row)[0]
 
         return predicted_time
 
@@ -462,7 +488,9 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        regressor_NNLS = self.setup_regressor(techniques=['NNLS'])
+        # TODO: see what to do with aMLLibrary
+        # regressor = self.setup_regressor(techniques=['NNLS'])
+        regressor = self.train_catboost_model(csv_path)
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
@@ -489,7 +517,7 @@ class ControllerManager:
             for intermediate_child in pbar:
                 # Regressor (aMLLibrary, estimates time)
                 estimated_time = None if self.pnas_mode \
-                    else self.estimate_time(regressor_NNLS, intermediate_child, headers)
+                    else self.estimate_time(regressor, intermediate_child, headers)
 
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)

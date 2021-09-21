@@ -139,4 +139,4 @@ logs
 temp_weights
 
 # catboost logs
-/catboost_info/
+catboost_info
