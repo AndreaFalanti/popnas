@@ -18,6 +18,8 @@ def path_closure(log_folder):
 def display_plot_overview(plot_paths, columns, rows, title=None):
     assert len(plot_paths) <= (columns * rows)
 
+    # force TkAgg for maximizing the window with code below
+    plt.switch_backend('TkAgg')
     fig, ax = plt.subplots(nrows=rows, ncols=columns)
 
     for i, axi in enumerate(ax.flat):
@@ -36,8 +38,8 @@ def display_plot_overview(plot_paths, columns, rows, title=None):
     if title is not None:
         fig.suptitle(title, fontsize='x-large', fontweight='semibold', y=1.0)
 
-    # maximize graph
-    mng  = plt.get_current_fig_manager()
+    # maximize graph (TKAgg backend)
+    mng = plt.get_current_fig_manager()
     if platform == 'win32':
         mng.window.state('zoomed')
     else:
@@ -75,7 +77,7 @@ def main():
             plot_path = os.path.join(subfolder, 'results.png')
             regressor_plot_paths.append(plot_path)
 
-        display_plot_overview(regressor_plot_paths, regressors_num // 2, math.ceil(regressors_num / 2.0), title='Regressor testing overview')
+        display_plot_overview(regressor_plot_paths, math.ceil(regressors_num / 2.0), regressors_num // 2, title='Regressor testing overview')
 
 
 if __name__ == '__main__':

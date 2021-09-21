@@ -9,14 +9,15 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import pandas as pd
 import numpy as np
+import catboost
 
 from ..utils.stream_to_logger import StreamToLogger
 from contextlib import redirect_stdout, redirect_stderr
 
 # TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
 # import them directly to enable intellisense
-ammlibrary_path = os.path.join(os.getcwd(), 'src', 'aMLLibrary')
-sys.path.append(ammlibrary_path)
+amllibrary_path = os.path.join(os.getcwd(), 'src', 'aMLLibrary')
+sys.path.append(amllibrary_path)
 
 from ..aMLLibrary import sequence_data_processing
 
@@ -44,7 +45,7 @@ def create_logger(name, log_path):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler,console_handler])
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 
     return logger
 
@@ -84,7 +85,7 @@ def write_regressor_config_file(input_csv_path, log_path, techniques: 'list[str]
     config = ConfigParser()
     # to keep casing in keys while reading / writing
     config.optionxform = str
-    
+
     config.read(os.path.join('src', 'configs', 'regressors.ini'))
 
     for section in config.sections():
@@ -119,13 +120,28 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     # a-MLLibrary, redirect output to script logger (it uses stderr for output, see custom logger)
     redir_logger = StreamToLogger(logger)
 
-
     with redirect_stdout(redir_logger):
         with redirect_stderr(redir_logger):
-            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path,output=save_path)
+            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path, output=save_path)
             best_regressor = sequence_data_processor.process()
 
     return best_regressor
+
+
+def build_catboost_model(input_data_path: str, logger):
+    train_pool = catboost.Pool(input_data_path,
+                               delimiter=',',
+                               has_header=True)
+
+    redir_logger = StreamToLogger(logger)
+    with redirect_stdout(redir_logger):
+        with redirect_stderr(redir_logger):
+            # specify the training parameters
+            model = catboost.CatBoostRegressor()
+            # train the model
+            model.fit(train_pool)
+
+    return model
 
 
 def initialize_scatter_plot_dict(techniques: 'list[str]') -> 'dict[str, dict]':
@@ -185,7 +201,7 @@ def main():
     args = parser.parse_args()
 
     # aMLLibrary techniques to test
-    regressor_techniques = ['SVR', 'NNLS', 'XGBoost', 'LRRidge']
+    regressor_techniques = ['CatBoost', 'SVR', 'NNLS', 'XGBoost', 'LRRidge']
 
     csv_path = os.path.join(args.p, 'csv')
     log_path = setup_folders(args.p, techniques=regressor_techniques)
@@ -203,7 +219,7 @@ def main():
     # regressor is called after b=1 training and above, but not at last step (max_b)
     for b in range(1, max_b):
         # label of predictions
-        scatter_plot_legends.append(f'B{b+1}')
+        scatter_plot_legends.append(f'B{b + 1}')
 
         input_csv_path, models_to_predict, prediction_real_times = prepare_regressor_data(training_time_df, log_path, b)
         logger.info('Built regressor input for b=%d', b)
@@ -212,21 +228,33 @@ def main():
             logger.info(f'------------------- {technique} B={b} -----------------------')
             technique_log_path = os.path.join(log_path, technique)
 
-            config_path = write_regressor_config_file(input_csv_path, technique_log_path, [technique], b)
-            best_regressor = build_best_regressor(config_path, technique_log_path, logger, b)
+            if technique == 'CatBoost':
+                best_regressor = build_catboost_model(os.path.join(csv_path, 'training_time.csv'), logger)
+            else:
+                config_path = write_regressor_config_file(input_csv_path, technique_log_path, [technique], b)
+                best_regressor = build_best_regressor(config_path, technique_log_path, logger, b)
 
             scatter_x, scatter_y = [], []
             for model_pred_features, real_time in zip(models_to_predict, prediction_real_times):
                 features_df = pd.DataFrame([model_pred_features], columns=feature_columns)
-                predicted_time = best_regressor.predict(features_df)[0]
+
+                if technique == 'CatBoost':
+                    features_pool = catboost.Pool(features_df)
+                    # returned as a numpy array of single element
+                    predicted_time = best_regressor.predict(features_pool)[0]
+                else:
+                    predicted_time = best_regressor.predict(features_df)[0]
+
                 scatter_x.append(real_time)
                 scatter_y.append(predicted_time)
 
             comparison_df = pd.DataFrame({'real_time': scatter_x, 'pred_time': scatter_y})
             scatter_values[technique]['x'].append(scatter_x)
             scatter_values[technique]['y'].append(scatter_y)
-            scatter_values[technique]['MAPE'].append((((comparison_df['real_time'] - comparison_df['pred_time']) / comparison_df['real_time']).abs()).mean() * 100)
-            scatter_values[technique]['spearman'].append(comparison_df['real_time'].corr(comparison_df['pred_time'], method='spearman'))
+            scatter_values[technique]['MAPE'].append((((comparison_df['real_time'] - comparison_df['pred_time']) /
+                                                       comparison_df['real_time']).abs()).mean() * 100)
+            scatter_values[technique]['spearman'].append(
+                comparison_df['real_time'].corr(comparison_df['pred_time'], method='spearman'))
 
             logger.info('--------------------------------------------------------------')
 
@@ -234,11 +262,12 @@ def main():
     for technique in regressor_techniques:
         technique_log_path = os.path.join(log_path, technique)
         # add MAPE and spearman to legend
-        technique_legend_labels = list(map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}', \
-            scatter_plot_legends, scatter_values[technique]['MAPE'], scatter_values[technique]['spearman']))
+        technique_legend_labels = list(
+            map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}', \
+                scatter_plot_legends, scatter_values[technique]['MAPE'], scatter_values[technique]['spearman']))
 
         plot_squared_scatter_chart(scatter_values[technique]['x'], scatter_values[technique]['y'], technique,
-                                        technique_log_path, legend_labels=technique_legend_labels)
+                                   technique_log_path, legend_labels=technique_legend_labels)
 
     logger.info('Script completed successfully')
 
