@@ -229,7 +229,7 @@ def main():
             technique_log_path = os.path.join(log_path, technique)
 
             if technique == 'CatBoost':
-                best_regressor = build_catboost_model(os.path.join(csv_path, 'training_time.csv'), logger)
+                best_regressor = build_catboost_model(input_csv_path, logger)
             else:
                 config_path = write_regressor_config_file(input_csv_path, technique_log_path, [technique], b)
                 best_regressor = build_best_regressor(config_path, technique_log_path, logger, b)
@@ -263,7 +263,7 @@ def main():
         technique_log_path = os.path.join(log_path, technique)
         # add MAPE and spearman to legend
         technique_legend_labels = list(
-            map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}', \
+            map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}',
                 scatter_plot_legends, scatter_values[technique]['MAPE'], scatter_values[technique]['spearman']))
 
         plot_squared_scatter_chart(scatter_values[technique]['x'], scatter_values[technique]['y'], technique,
