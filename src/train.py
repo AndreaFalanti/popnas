@@ -117,7 +117,7 @@ class Train:
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params, flops = manager.get_rewards(cell_spec, self.concat_only_unused, save_best_model=last_block_train)
+        reward, timer, total_params, flops = manager.get_rewards(cell_spec, save_best_model=last_block_train)
 
         self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
@@ -299,15 +299,16 @@ class Train:
 
         dataset = self.prepare_dataset(x_train_init, y_train_init)
 
+        # create the Network Manager
+        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
+                                 learning_rate=self.learning_rate, filters=self.filters,
+                                 concat_only_unused=self.concat_only_unused, weight_norm=self.weight_norm)
+
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
                                        train_iterations=15,
                                        pnas_mode=self.pnas_mode,
                                        restore_controller=self.restore)
-
-        # create the Network Manager
-        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
-                                 learning_rate=self.learning_rate, filters=self.filters, weight_norm=self.weight_norm)
 
         # add dynamic reindex
         if self.restore:

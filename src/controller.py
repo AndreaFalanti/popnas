@@ -33,16 +33,11 @@ class ControllerManager:
     training.
     '''
 
-    def __init__(self, state_space: StateSpace,
-                 checkpoint_B,
+    def __init__(self, state_space: StateSpace, checkpoint_B,
                  B=5, K=256, T=np.inf,
-                 train_iterations=10,
-                 reg_param=0.001,
-                 controller_cells=48,
-                 embedding_dim=30,
-                 input_B=None,
+                 train_iterations=10, reg_param=0.001, controller_cells=48, embedding_dim=30,
                  pnas_mode=False,
-                 restore_controller=False):
+                 input_B=None, restore_controller=False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -395,7 +390,7 @@ class ControllerManager:
 
         return best_regressor
 
-    def train_catboost_model(self, input_csv_path: str):
+    def train_catboost_regressor(self, input_csv_path: str):
         # first feature is the one used as y (time)
         train_pool = catboost.Pool(input_csv_path,
                                    delimiter=',',
@@ -411,20 +406,20 @@ class ControllerManager:
 
         return regressor
 
-    def estimate_time(self, regressor: Union[Regressor, catboost.CatBoostRegressor], child_encoding: list, headers: 'list[str]'):
+    def estimate_time(self, regressor: Union[Regressor, catboost.CatBoostRegressor], child_spec: list, headers: 'list[str]'):
         '''
         Use regressor to estimate the time for training the model.
 
         Args:
             regressor (Regressor): time regressor
-            child_encoding (list[str]): model encoding
+            child_spec (list[str]): model encoding
             headers ([type]): [description]
 
         Returns:
             (float): estimated time predicted
         '''
         # regressor uses dynamic reindex for operations, instead of categorical
-        encoded_child = self.state_space.encode_cell_spec(child_encoding, op_enc_name='dynamic_reindex')
+        encoded_child = self.state_space.encode_cell_spec(child_spec, op_enc_name='dynamic_reindex')
 
         # add missing blocks num feature (see training_time.csv, all columns except time are needed)
         regressor_features = np.append(np.array([self.b_]), encoded_child)
@@ -446,18 +441,18 @@ class ControllerManager:
 
         return predicted_time
 
-    def estimate_accuracy(self, child_encoding):
+    def estimate_accuracy(self, child_spec: 'list[tuple]'):
         '''
         Use RNN controller to estimate the model accuracy.
 
         Args:
-            child_encoding (list[str]): model encoding
+            child_spec (list[tuple]): plain cell specification
 
         Returns:
             (float): estimated accuracy predicted
         '''
         # TODO: Dataset of single element, maybe not much efficient...
-        pred_dataset = self.__build_rnn_dataset([child_encoding])
+        pred_dataset = self.__build_rnn_dataset([child_spec])
 
         score = self.controller.predict(x=pred_dataset)
         # score is a numpy array of shape (1, 1) since model has a single output (return_sequences=False)
@@ -490,7 +485,7 @@ class ControllerManager:
 
         # TODO: see what to do with aMLLibrary
         # regressor = self.setup_regressor(techniques=['NNLS'])
-        regressor = self.train_catboost_model(csv_path)
+        regressor = self.train_catboost_regressor(csv_path)
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1

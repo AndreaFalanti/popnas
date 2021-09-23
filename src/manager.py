@@ -17,7 +17,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24, weight_norm=None):
+    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24, concat_only_unused=True, weight_norm=None):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -28,6 +28,7 @@ class NetworkManager:
             batchsize: batchsize
             learning_rate: learning rate for the Optimizer
             filters (int): initial number of filters
+            concat_only_unused (bool): use only blocks' outputs not used internally in cell in the final concatenation layer
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -39,6 +40,7 @@ class NetworkManager:
         self.batchsize = batchsize
         self.lr = learning_rate
         self.filters = filters
+        self.concat_only_unused = concat_only_unused
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
@@ -46,7 +48,7 @@ class NetworkManager:
 
     # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
     # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
-    def get_model_flops(self, model, write_path):
+    def get_model_flops(self, model, write_path=None):
         '''
         Get total flops of current compiled model.
 
@@ -66,8 +68,10 @@ class NetworkManager:
             tf.graph_util.import_graph_def(graph_def, name='')
             run_meta = tf.compat.v1.RunMetadata()
             opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
-            if write_path:
+            if write_path is not None:
                 opts['output'] = 'file:outfile={}'.format(write_path)  # redirect output
+            else:
+                opts['output'] = 'none'
 
             flops = tf.compat.v1.profiler.profile(graph=graph, run_meta=run_meta, cmd="op", options=opts)
 
@@ -76,20 +80,18 @@ class NetworkManager:
 
         return flops.total_float_ops
 
-    def __compile_model(self, actions: 'list[tuple]', concat_only_unused: bool, tb_logdir: str):
+    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str):
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
         Args:
-            model_fn (ModelGenerator): [description]
-            actions (list): [description]
-            concat_only_unused (bool): [description]
+            cell_spec (list): [description]
             tb_logdir (str): path for tensorboard logging
 
         Returns:
-            (tf.keras.Model, list(tf.keras.callbacks.Callback)): model and callbacks to use while training
+            (tf.keras.Model, list[tf.keras.callbacks.Callback]): model and callbacks to use while training
         '''
-        model_gen = ModelGenerator(actions, self.filters, concat_only_unused, self.weight_norm)  # type: ModelGenerator
+        model_gen = ModelGenerator(cell_spec, self.filters, self.concat_only_unused, self.weight_norm)  # type: ModelGenerator
         model = model_gen.build_model()
 
         loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
@@ -129,7 +131,7 @@ class NetworkManager:
 
         return train_dataset, validation_dataset, train_batches, val_batches
 
-    def get_rewards(self, cell_spec: 'list[tuple]', concat_only_unused: bool=True, save_best_model: bool=False):
+    def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool=False):
         '''
         Creates a CNN given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
@@ -160,7 +162,7 @@ class NetworkManager:
                 self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
 
             # build the model, given the actions
-            model, callbacks = self.__compile_model(cell_spec, concat_only_unused, tb_logdir)
+            model, callbacks = self.__compile_model(cell_spec, tb_logdir)
             # add callback to register as accurate as possible the training time
             time_cb = TimingCallback()
             callbacks.append(time_cb)
