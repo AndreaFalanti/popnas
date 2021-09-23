@@ -1,10 +1,9 @@
+import itertools
 from typing import Any, Callable
 
-import itertools
-
 import log_service
-from utils.rstr import rstr
 from utils.func_utils import list_flatten
+from utils.rstr import rstr
 
 
 class StateSpace:
@@ -64,9 +63,9 @@ class StateSpace:
 
         self.children = None
         self.intermediate_children = None
-        
-        self.input_encoders = {}    # type: dict[str, Encoder]
-        self.operator_encoders = {} # type: dict[str, Encoder]
+
+        self.input_encoders = {}  # type: dict[str, Encoder]
+        self.operator_encoders = {}  # type: dict[str, Encoder]
 
         self.B = B
         self.input_lookback_depth = input_lookback_depth
@@ -75,14 +74,14 @@ class StateSpace:
 
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
-        self.input_values = list(range(input_lookback_depth, self.B-1))
+        self.input_values = list(range(input_lookback_depth, self.B - 1))
         if operators is None:
             self.operator_values = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv',
-                              '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+                                    '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
         else:
-            self.operator_values = operators         
-        
-        # for embedding (see LSTM controller)
+            self.operator_values = operators
+
+            # for embedding (see LSTM controller)
         self.inputs_embedding_max = len(self.input_values)
         self.operator_embedding_max = len(self.operator_values)
 
@@ -200,8 +199,8 @@ class StateSpace:
             '''
             for child in self.children:
                 for permutation in new_search_space:
-                    yield child + permutation   # list concat
- 
+                    yield child + permutation  # list concat
+
         return generate_models
 
     def __construct_permutations(self, search_space):
@@ -219,12 +218,12 @@ class StateSpace:
         for in1 in inputs:
             for op1 in ops:
                 for in2 in inputs:
-                    if in2 >= in1: # added to avoid repeated permutations (equivalent blocks)
+                    if in2 >= in1:  # added to avoid repeated permutations (equivalent blocks)
                         for op2 in ops:
-                            if in2 != in1 or op2 >= op1: # added to avoid repeated permutations (equivalent blocks)
+                            if in2 != in1 or op2 >= op1:  # added to avoid repeated permutations (equivalent blocks)
                                 yield [(in1, op_enc.decode(op1), in2, op_enc.decode(op2))]
 
-    def generate_eqv_cells(self, cell_spec: list, size: int=None):
+    def generate_eqv_cells(self, cell_spec: list, size: int = None):
         cell_inputs = list_flatten(cell_spec)[::2]
         # that is basically the 'fixed blocks' index list
         used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
@@ -241,7 +240,7 @@ class StateSpace:
 
         # generate all possible permutations of the swappable blocks
         eqv_swap_only_set = set(itertools.permutations(swappable_blocks))
-       
+
         eqv_cells = []
         for cell in eqv_swap_only_set:
             # cell is a tuple containing the block tuples, it must be converted into a list of tuples
@@ -278,7 +277,7 @@ class StateSpace:
 
 
 class Encoder:
-    def __init__(self, name, values: list, fn: Callable=None, none_val=0) -> None:
+    def __init__(self, name, values: list, fn: Callable = None, none_val=0) -> None:
         self.name = name
         self.values = values
         self.encodings = []
@@ -292,7 +291,7 @@ class Encoder:
 
         for i, val in enumerate(values):
             # if encoding function is not provided, use categorical
-            encoding = i+1 if fn is None else fn(val)
+            encoding = i + 1 if fn is None else fn(val)
 
             self.__index_map[encoding] = val
             self.__value_map[val] = encoding

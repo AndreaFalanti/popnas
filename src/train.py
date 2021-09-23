@@ -1,6 +1,5 @@
 import log_service
 import plotter
-from model import ModelGenerator
 from manager import NetworkManager
 from controller import ControllerManager
 from encoder import StateSpace
@@ -15,7 +14,9 @@ import csv
 import statistics
 
 import os
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
+
 
 class Train:
 
@@ -47,11 +48,12 @@ class Train:
             (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar10.load_data()
         elif self.dataset == "cifar100":
             (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar100.load_data()
+        # TODO: untested legacy code, not sure this is still working
         else:
             spec = importlib.util.spec_from_file_location("dataset", self.dataset)
-            set = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(set)
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = set.load_data()
+            dataset = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(dataset)
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = dataset.load_data()
 
         return (x_train_init, y_train_init), (x_test_init, y_test_init)
 
@@ -61,8 +63,6 @@ class Train:
         Args:
             x_train_init (ndarray): x training
             y_train_init (ndarray): y training
-            x_test (ndarray): x test
-            y_test (ndarray): y test
 
         Returns:
             list:
@@ -75,12 +75,13 @@ class Train:
         # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
             # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
-            limit = 10000
+            limit = 1000
             x_train_init = x_train_init[:limit]
             y_train_init = y_train_init[:limit]
 
             # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0, stratify=y_train_init)
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0,
+                                                                            stratify=y_train_init)
 
             if self.dataset == "cifar10":
                 # cifar10
@@ -113,7 +114,7 @@ class Train:
         """
         # print the cell in a more comprehensive way
         state_space.print_cell_spec(cell_spec)
-        
+
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
@@ -172,7 +173,7 @@ class Train:
             # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
             if f.tell() == 0:
                 writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val acc', 'max acc', 'min acc'])
-            
+
             avg_time = statistics.mean(timers)
             max_time = max(timers)
             min_time = min(timers)
@@ -207,7 +208,7 @@ class Train:
             data.extend(encoded_cell)
 
             # extend with empty blocks, if necessary
-            for _ in range(i+1, self.blocks + 1):
+            for _ in range(i + 1, self.blocks + 1):
                 data.extend([0, 0, 0, 0])
 
             csv_rows.append(data)
@@ -259,11 +260,11 @@ class Train:
         reindex_function = None
 
         # TODO: restore search space
-        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        #operators = ['identity', '3x3 dconv']
+        # operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        operators = ['identity', '3x3 dconv']
 
         if self.restore:
-            starting_B = self.checkpoint  # change the starting point of B
+            starting_b = self.checkpoint  # change the starting point of B
 
             self._logger.info("Loading operator indexes!")
             with open(log_service.build_path('csv', 'reindex_op_times.csv')) as f:
@@ -274,12 +275,12 @@ class Train:
 
             reindex_function = self.generate_dynamic_reindex_function(operators, op_timers)
         else:
-            starting_B = 0
+            starting_b = 0
 
             # create headers for csv files
-            for b in range(1, self.blocks+1):
-                a = b*2
-                c = a-1
+            for b in range(1, self.blocks + 1):
+                a = b * 2
+                c = a - 1
                 new_block = [f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"]
                 headers.extend(new_block)
 
@@ -315,21 +316,21 @@ class Train:
             state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
 
         # if B = 0, perform initial thrust before starting actual training procedure
-        if starting_B == 0:
-            self.perform_initial_thrust(state_space, manager) 
-            starting_B = 1
+        if starting_b == 0:
+            self.perform_initial_thrust(state_space, manager)
+            starting_b = 1
 
         monoblock_times = []
 
         # train the child CNN networks for each number of blocks
-        for current_blocks in range(starting_B, self.blocks + 1):
+        for current_blocks in range(starting_b, self.blocks + 1):
             rewards = []
             timers = []
 
             cell_specs = state_space.get_cells_to_train()
 
             for model_index, cell_spec in enumerate(cell_specs):
-                self._logger.info("Model #%d / #%d", model_index+1, len(cell_specs))
+                self._logger.info("Model #%d / #%d", model_index + 1, len(cell_specs))
                 self._logger.debug("\t%s", cell_spec)
 
                 reward, timer, total_params, flops = self.generate_and_train_model_from_spec(state_space, manager, cell_spec)
@@ -363,7 +364,7 @@ class Train:
 
                     cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
                     data = [reward, timer, total_params, flops, current_blocks, cell_structure]
-                    
+
                     writer.writerow(data)
 
                 # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
@@ -378,7 +379,7 @@ class Train:
 
                 for timer, cell_spec in monoblock_times:
                     self.write_training_time(current_blocks, timer, cell_spec, state_space)
-            
+
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
             # avoid controller training, pareto front estimation and plot at final step
@@ -396,5 +397,5 @@ class Train:
 
         plotter.plot_training_info_per_block()
         plotter.plot_predictions_error(self.blocks, self.pnas_mode)
-        
+
         self._logger.info("Finished!")

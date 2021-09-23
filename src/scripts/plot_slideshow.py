@@ -1,10 +1,11 @@
 import argparse
+import math
 import os
 from sys import platform
-import math
 
 import matplotlib.pyplot as plt
 from PIL import Image
+
 
 def path_closure(log_folder):
     plot_path = os.path.join(log_folder, 'plots')
@@ -50,18 +51,21 @@ def display_plot_overview(plot_paths, columns, rows, title=None):
 
 def main():
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar=('FOLDER'), type=str, help="log folder", required=True)
+    parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     args = parser.parse_args()
 
     gen_paths = path_closure(args.p)
 
-    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2, title='Specular mono blocks (input -1) overview')
-    display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'time_pred_overview.png', 'pred_time_errors_overview.png']),
-                             2, 2, title='Prediction errors overview')
+    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2,
+                          title='Specular mono blocks (input -1) overview')
+    display_plot_overview(
+        gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'time_pred_overview.png', 'pred_time_errors_overview.png']),
+        2, 2, title='Prediction errors overview')
 
     b = 2
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
-        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png']), 2, 1, title=f'Operation usage overview (B={b})')
+        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png']), 2, 1,
+                              title=f'Operation usage overview (B={b})')
         b += 1
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png']), 2, 1, title='CNN training per block overview')

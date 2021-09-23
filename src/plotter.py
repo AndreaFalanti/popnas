@@ -1,13 +1,12 @@
+import re
+import statistics
 from typing import Iterable, NamedTuple
 
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
-
+import pandas as pd
 from pandas.io.parsers import TextFileReader
-import statistics
-import re
 
 import log_service
 
@@ -18,6 +17,7 @@ __logger = None
 # disable matplotlib info messages
 plt.set_loglevel('WARNING')
 
+
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
 def initialize_logger():
     global __logger
@@ -26,13 +26,13 @@ def initialize_logger():
 
 def __parse_cell_structures(cell_structures: Iterable):
     # remove set of chars { []()'" } for easier parsing
-    cell_structures = list(map(lambda cell_str: re.sub(r'[\[\]\'\"\(\)]', '', cell_str), cell_structures))
+    cell_structures = list(map(lambda cell_str: re.sub(r'[\[\]\'\"()]', '', cell_str), cell_structures))
     # parse cell structure into multiple strings, each one representing a tuple
     list_of_tuple_str_lists = list(map(lambda cs: cs.split(';'), cell_structures))
 
     # parse tuple structure (trim round brackets and split by ,)
-    return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list))) \
-        for tuple_str_list in list_of_tuple_str_lists]
+    return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
+            for tuple_str_list in list_of_tuple_str_lists]
 
 
 def __compute_spearman_rank_correlation_coefficient(df: pd.DataFrame, x_col: str, y_col: str):
@@ -69,27 +69,27 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=Fa
 
 def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y_label, title, save_name):
     fig, ax = plt.subplots()
-    
+
     x_label_dist = np.arange(len(x))  # the label locations
     x_offset = - ((len(y_array) - 1) / 2.0) * col_width
 
     # Make the plot
     for bar_info in y_array:
-        ax.bar(x_label_dist + x_offset, bar_info.y, color=bar_info.color, width = col_width, label=bar_info.label)
+        ax.bar(x_label_dist + x_offset, bar_info.y, color=bar_info.color, width=col_width, label=bar_info.label)
         x_offset += col_width
-    
+
     ax.set_xticks(x_label_dist)
     ax.set_xticklabels(x)
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
-    
+
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='silver')
 
     ax.legend()
-    
+
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
 
@@ -101,11 +101,11 @@ def __plot_pie_chart(labels, values, title, save_name):
 
     fig1, ax1 = plt.subplots()
 
-    explode = np.empty(len(labels)) # type: np.ndarray
+    explode = np.empty(len(labels))  # type: np.ndarray
     explode.fill(0.03)
 
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
-    legend_labels = [f'{label} - {(val/total)*100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
+    legend_labels = [f'{label} - {(val / total) * 100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
     patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None)
     ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
@@ -166,7 +166,7 @@ def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
     Returns:
         (list[BarInfo, BarInfo, BarInfo]): BarInfos usable in multi-bar plots
     '''
-    bar_avg = BarInfo(avg_vals, 'b', 'avg') 
+    bar_avg = BarInfo(avg_vals, 'b', 'avg')
     bar_max = BarInfo(max_vals, 'g', 'max')
     bar_min = BarInfo(min_vals, 'r', 'min')
 
@@ -195,7 +195,7 @@ def plot_dynamic_reindex_related_blocks_info():
     y_acc = df['best val accuracy']
     y_params = df['total params']
     y_flops = df['flops']
-  
+
     __logger.info("Writing plots...")
     __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time.png', incline_labels=True)
     __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc.png', incline_labels=True)
@@ -276,7 +276,7 @@ def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
     op_counters = __update_op_counters(cells, op_counters)
     values = __generate_value_list_from_counters_dict(op_counters, operations)
 
-    #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+    # operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
     __plot_pie_chart(operations, values, f'Operations usage in b={b} pareto front', f'pareto_op_usage_B{b}')
     __logger.info("Pareto op usage plot for b=%d written successfully", b)
@@ -289,7 +289,7 @@ def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[
     op_counters = __update_op_counters(children_cnn, op_counters)
     values = __generate_value_list_from_counters_dict(op_counters, operations)
 
-    #operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+    # operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
 
     __plot_pie_chart(operations, values, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
     __logger.info("Children op usage plot for b=%d written successfully", b)
@@ -316,9 +316,9 @@ def __build_prediction_dataframe(b: int, pnas_mode: bool):
 
 
 def plot_predictions_error(B: int, pnas_mode: bool):
-    avg_time_errors, max_time_errors, min_time_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
-    avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
-    time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B-1), np.zeros(B-1), np.zeros(B-1), np.zeros(B-1)
+    avg_time_errors, max_time_errors, min_time_errors = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+    avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+    time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
 
     # TODO: maybe better to refactor these lists to numpy arrays too.
     # They are used as list of lists for scatter plots.
@@ -327,23 +327,22 @@ def plot_predictions_error(B: int, pnas_mode: bool):
     scatter_time_legend_labels, scatter_acc_legend_labels = [], []
 
     # TODO: find a good way to remove duplication
-    for b in range(2, B+1):
+    for b in range(2, B + 1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
         merge_df = __build_prediction_dataframe(b, pnas_mode)
 
         # compute time prediction errors (regressor)
         if not pnas_mode:
             time_errors = merge_df['training time(seconds)'] - merge_df['time']
-            
+
             pred_times.append(merge_df['time'].to_list())
             real_times.append(merge_df['training time(seconds)'].to_list())
-            
-            avg_time_errors[b-2] = statistics.mean(time_errors)
-            max_time_errors[b-2] = max(time_errors)
-            min_time_errors[b-2] = min(time_errors)
-            time_mapes[b-2] = ((time_errors / merge_df['training time(seconds)']).abs()).mean() * 100
-            time_spearman_coeffs[b-2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
 
+            avg_time_errors[b - 2] = statistics.mean(time_errors)
+            max_time_errors[b - 2] = max(time_errors)
+            min_time_errors[b - 2] = min(time_errors)
+            time_mapes[b - 2] = ((time_errors / merge_df['training time(seconds)']).abs()).mean() * 100
+            time_spearman_coeffs[b - 2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
 
         # always compute accuracy prediction errors (LSTM controller)
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
@@ -351,43 +350,42 @@ def plot_predictions_error(B: int, pnas_mode: bool):
         pred_acc.append(merge_df['val accuracy'].to_list())
         real_acc.append(merge_df['best val accuracy'].to_list())
 
-        avg_acc_errors[b-2] = statistics.mean(val_accuracy_errors)
-        max_acc_errors[b-2] = max(val_accuracy_errors)
-        min_acc_errors[b-2] = min(val_accuracy_errors)
-        acc_mapes[b-2] = ((val_accuracy_errors / merge_df['best val accuracy']).abs()).mean() * 100
-        acc_spearman_coeffs[b-2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
+        avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors)
+        max_acc_errors[b - 2] = max(val_accuracy_errors)
+        min_acc_errors[b - 2] = min(val_accuracy_errors)
+        acc_mapes[b - 2] = ((val_accuracy_errors / merge_df['best val accuracy']).abs()).mean() * 100
+        acc_spearman_coeffs[b - 2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
 
         # add also MAPE and spearman to legends
-        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b-2]:.3f}%, ρ: {time_spearman_coeffs[b-2]:.3f})')
-        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b-2]:.3f}%, ρ: {acc_spearman_coeffs[b-2]:.3f})')
+        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
+        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
 
-    x = np.arange(2, B+1)
-    #x_str = list(map(lambda x: str(x), x))
+    x = np.arange(2, B + 1)
+    # x_str = list(map(lambda x: str(x), x))
 
     # write plots about time
     if not pnas_mode:
         time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
 
         __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
-                                'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
+                                  'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
-                                    'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
-        #__plot_histogram(x_str, time_mapes, 'Blocks', 'MAPE', 'Time predictions MAPE', 'time_pred_MAPE.png')
-
+                                     'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
+        # __plot_histogram(x_str, time_mapes, 'Blocks', 'MAPE', 'Time predictions MAPE', 'time_pred_MAPE.png')
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
     # write plots about accuracy
     __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
-                                'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
+                              'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
-                                    'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
-    #__plot_histogram(x_str, acc_mapes, 'Blocks', 'MAPE', 'Validation accuracy predictions MAPE', 'acc_pred_MAPE.png')
+                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
+    # __plot_histogram(x_str, acc_mapes, 'Blocks', 'MAPE', 'Validation accuracy predictions MAPE', 'acc_pred_MAPE.png')
 
     __logger.info("Prediction error overview plots written successfully")
 
 
 class BarInfo(NamedTuple):
-    y: TextFileReader   # pandas df column type
+    y: TextFileReader  # pandas df column type
     color: str
     label: str

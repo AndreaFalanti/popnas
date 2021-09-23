@@ -1,8 +1,7 @@
 import logging
-import sys
 import os
+import sys
 import time
-from pathlib import Path
 
 # Must be set using initialize_log_folders or check_log_folder
 log_path = None
@@ -64,16 +63,16 @@ def get_logger(name):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler,console_handler])
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 
     return logger
 
 
 def create_critical_logger():
     logger = logging.getLogger(__name__)
-    fHandler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
-    fHandler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
-    logger.addHandler(fHandler)
+    file_handler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
+    logger.addHandler(file_handler)
 
     return logger
 
@@ -83,6 +82,7 @@ def make_exception_handler(logger):
     """
     Closure to make an exception handler, given a logger.
     """
+
     def handle_exception(exc_type, exc_value, exc_traceback):
         """
         Handle uncaught exception logging, must be bound to sys.excepthook.

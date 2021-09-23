@@ -1,13 +1,12 @@
-import log_service
-
-import numpy as np
 import os
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 from tensorflow.keras.utils import plot_model
+from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
+import log_service
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
 
@@ -131,14 +130,13 @@ class NetworkManager:
 
         return train_dataset, validation_dataset, train_batches, val_batches
 
-    def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool=False):
+    def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''
         Creates a CNN given the actions predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
 
         Args:
             cell_spec (list[tuple]): plain cell specification. Used to build the CNN.
-            concat_only_unused (bool, optional): concat only unused block outputs in the cell output. Defaults to True.
             save_best_model (bool, optional): [description]. Defaults to False.
 
         Returns:
@@ -152,7 +150,7 @@ class NetworkManager:
         self.num_child = self.num_child + 1
         # grouped for block count and enumerated progressively
         tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.num_child))
-        os.makedirs(tb_logdir, exist_ok = True)
+        os.makedirs(tb_logdir, exist_ok=True)
 
         # generate a submodel given predicted actions
         # TODO: tests are now always done with data_num = 1, if > 1 it would be better to do the mean of the metrics computed.
@@ -170,12 +168,12 @@ class NetworkManager:
             train_ds, val_ds, train_batches, val_batches = self.__build_datasets(index, True)
 
             hist = model.fit(x=train_ds,
-                        epochs=self.epochs,
-                        batch_size=self.batchsize,
-                        steps_per_epoch=train_batches,
-                        validation_data=val_ds,
-                        validation_steps=val_batches,
-                        callbacks=callbacks)
+                             epochs=self.epochs,
+                             batch_size=self.batchsize,
+                             steps_per_epoch=train_batches,
+                             validation_data=val_ds,
+                             validation_steps=val_batches,
+                             callbacks=callbacks)
 
             timer = sum(time_cb.logs)
 

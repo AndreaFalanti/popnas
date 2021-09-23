@@ -1,18 +1,18 @@
 import argparse
-import os
-from configparser import ConfigParser
 import logging
-import sys
+import os
 import shutil
+import sys
+from configparser import ConfigParser
+from contextlib import redirect_stdout, redirect_stderr
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import pandas as pd
-import numpy as np
 import catboost
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from ..utils.stream_to_logger import StreamToLogger
-from contextlib import redirect_stdout, redirect_stderr
 
 # TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
 # import them directly to enable intellisense
@@ -197,7 +197,7 @@ def plot_squared_scatter_chart(x, y, technique, log_path, plot_reference=True, l
 
 def main():
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar=('FOLDER'), type=str, help="log folder", required=True)
+    parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     args = parser.parse_args()
 
     # aMLLibrary techniques to test

@@ -1,26 +1,23 @@
+import csv
+import os
+from configparser import ConfigParser
+from contextlib import redirect_stderr, redirect_stdout
 from typing import Union
 
-import pandas
+import catboost
 import numpy as np
-import csv
-from tqdm import tqdm
-
+import pandas
 import tensorflow as tf
 from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, callbacks, Model
 from tensorflow.keras.utils import plot_model
-import catboost
-
-from configparser import ConfigParser
-import os
-from aMLLibrary.regressor import Regressor
+from tqdm import tqdm
 
 import cell_pruning
-from encoder import StateSpace
-from aMLLibrary import sequence_data_processing
-
 import log_service
+from aMLLibrary import sequence_data_processing
+from aMLLibrary.regressor import Regressor
+from encoder import StateSpace
 from utils.stream_to_logger import StreamToLogger
-from contextlib import redirect_stderr, redirect_stdout
 
 
 class ControllerManager:
@@ -52,7 +49,7 @@ class ControllerManager:
             controller_cells: number of cells in the Controller LSTM.
             embedding_dim: embedding dimension for inputs and operators.
             input_B: override value of B, used only when we are restoring the controller.
-                Determing the maximum input connectivity allowed to the RNN Controller,
+                Determining the maximum input connectivity allowed to the RNN Controller,
                 to maintain backward compatibility with trained models.
 
                 Use it alongside `restore_controller` to evaluate model settings
@@ -88,7 +85,7 @@ class ControllerManager:
         # restore controller
         # TODO: surely not working by beginning, it used csv files that don't exist!
         if self.restore_controller:
-            #region fix_restore_mess
+            # region fix_restore_mess
             self.b_ = checkpoint_B
             self._logger.info("Loading controller history!")
 
@@ -148,7 +145,7 @@ class ControllerManager:
             self.children_history = children
 
             self.score_history = rewards
-            #endregion
+            # endregion
         else:
             self.b_ = 1
             self.children_history = []
@@ -169,8 +166,8 @@ class ControllerManager:
         '''
         cell_encoding = self.state_space.encode_cell_spec(cell_spec)
 
-        cell_tensor = tf.convert_to_tensor(cell_encoding)   # type: tf.Tensor
-        #cell_tensor = tf.expand_dims(cell_tensor, 0)
+        cell_tensor = tf.convert_to_tensor(cell_encoding)  # type: tf.Tensor
+        # cell_tensor = tf.expand_dims(cell_tensor, 0)
 
         inputs = cell_tensor[0::2]  # even place data
         operators = cell_tensor[1::2]  # odd place data
@@ -182,7 +179,7 @@ class ControllerManager:
 
         return [inputs, operators]
 
-    def __build_rnn_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]'=None):
+    def __build_rnn_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None):
         '''
         Build a dataset to be used in the RNN controller.
 
@@ -255,7 +252,7 @@ class ControllerManager:
             (tf.keras.Callback[]): Keras callbacks
         '''
         model_callbacks = []
-        
+
         # By default shows losses and metrics for both training and validation
         tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
         model_callbacks.append(tb_callback)
@@ -269,7 +266,7 @@ class ControllerManager:
         Also constructs saver and restorer to the RNN controller if required.
         '''
 
-        #learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
+        # learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
 
         # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
         reg = regularizers.l1(self.reg_strength)
@@ -342,7 +339,7 @@ class ControllerManager:
         config = ConfigParser()
         # to keep casing in keys while reading / writing
         config.optionxform = str
-        
+
         config.read(os.path.join('configs', 'regressors.ini'))
 
         for section in config.sections():
@@ -423,7 +420,7 @@ class ControllerManager:
 
         # add missing blocks num feature (see training_time.csv, all columns except time are needed)
         regressor_features = np.append(np.array([self.b_]), encoded_child)
-        headers = headers[1:]   # remove time, because it's the regressor output
+        headers = headers[1:]  # remove time, because it's the regressor output
 
         # complete features with missing blocks (0 is for null)
         for _ in range(self.b_, self.B):
@@ -517,7 +514,7 @@ class ControllerManager:
                 # LSTM controller (RNN, estimates the accuracy)
                 score = self.estimate_accuracy(intermediate_child)
 
-                pbar.set_postfix({ 'score': score }, refresh=False)
+                pbar.set_postfix({'score': score}, refresh=False)
 
                 # always preserve the child and its score in pnas mode, otherwise check that time estimation is < T (time threshold)
                 if self.pnas_mode or estimated_time <= self.T:
@@ -551,14 +548,14 @@ class ControllerManager:
                         else:
                             pruned_count += 1
 
-                self._logger.info('Pruned %d equivalent models while building pareto front', pruned_count) 
+                self._logger.info('Pruned %d equivalent models while building pareto front', pruned_count)
 
                 with open(log_service.build_path('csv', f'pareto_front_B{self.b_}.csv'), mode='w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(ModelEstimate.get_csv_headers())
-                    writer.writerows(map(lambda model_est: model_est.to_csv_array(), pareto_front))
+                    writer.writerows(map(lambda est: est.to_csv_array(), pareto_front))
 
-                self._logger.info('Pareto front built successfully')    
+                self._logger.info('Pareto front built successfully')
             else:
                 # just a rename to integrate with existent code below, it's not a pareto front in this case!
                 pareto_front = model_estimations
@@ -571,7 +568,7 @@ class ControllerManager:
                 children = list(map(lambda child: child.model_encoding, pareto_front[:children_count]))
             else:
                 # remove equivalent models, not done already if running in pnas mode
-                models = list(map(lambda model_est: model_est.model_encoding, pareto_front))
+                models = list(map(lambda est: est.model_encoding, pareto_front))
                 children, pruned_count = cell_pruning.prune_equivalent_cell_models(models, children_count)
                 self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)
 
@@ -589,6 +586,7 @@ class ModelEstimate:
     '''
     Helper class, basically a struct with a function to convert into array for csv saving
     '''
+
     def __init__(self, model_encoding, score, time):
         self.model_encoding = model_encoding
         self.score = score

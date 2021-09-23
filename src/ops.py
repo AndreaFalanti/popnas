@@ -1,6 +1,7 @@
 import tensorflow as tf
-from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
+from tensorflow.keras.models import Model
+
 
 def depth_zero_pad_closure(desired_depth, op_layer):
     '''
@@ -14,6 +15,7 @@ def depth_zero_pad_closure(desired_depth, op_layer):
     Returns:
         (Callable): call function built by closure
     '''
+
     def depth_zero_pad_call(inputs):
         # directly compute depth on input, because 
         input_depth = inputs.get_shape().as_list()[3]
@@ -43,6 +45,7 @@ def depth_pointwise_conv_closure(desired_depth, op_layer):
     Returns:
         (Callable): call function built by closure
     '''
+
     def depth_pointwise_conv_call(inputs):
         input_depth = inputs.get_shape().as_list()[3]
 
@@ -63,7 +66,7 @@ class Identity(Model):
         '''
         super(Identity, self).__init__(name=name)
 
-        self.op = Layer()   # Identity layer in Keras
+        self.op = Layer()  # Identity layer in Keras
         self.identity_call = depth_zero_pad_closure(filters, self.op)
 
     def call(self, inputs, training=None, mask=None):
@@ -131,17 +134,15 @@ class StackedConvolution(Model):
         return x
 
 
-# TODO: pointwise conv should be allocated only when necessary for best memory utilization and performances, change model code 
-# and the op classes to achieve this.
 class Pooling(Model):
 
-    def __init__(self, type, size, strides, name='pool'):
+    def __init__(self, pool_type, size, strides, name='pool'):
         '''
         Constructs a standard pooling layer (average or max).
         '''
         super(Pooling, self).__init__(name=name)
-        
-        if type == 'max':
+
+        if pool_type == 'max':
             self.pool = MaxPooling2D(size, strides, padding='same')
         else:
             self.pool = AveragePooling2D(size, strides, padding='same')
@@ -152,14 +153,14 @@ class Pooling(Model):
 
 class PoolingConv(Model):
 
-    def __init__(self, filters, type, size, strides, weight_norm=None, name='pool_conv'):
+    def __init__(self, filters, pool_type, size, strides, weight_norm=None, name='pool_conv'):
         '''
         Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
         to adapt the output depth to filters size.
         '''
         super(PoolingConv, self).__init__(name=name)
-        
-        self.pool = Pooling(type, size, strides)
+
+        self.pool = Pooling(pool_type, size, strides)
         self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_norm=weight_norm)
 
     def call(self, inputs, training=None, mask=None):

@@ -1,14 +1,13 @@
 import re
-import tensorflow as tf
-
-import ops
-import log_service
-from utils.func_utils import to_int_tuple, list_flatten
 
 from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model
 
+import log_service
+import ops
+from utils.func_utils import to_int_tuple, list_flatten
 
-class ModelGenerator():
+
+class ModelGenerator:
 
     def __init__(self, cell_spec, filters=24, concat_only_unused=True, weight_norm=None):
         '''
@@ -36,7 +35,7 @@ class ModelGenerator():
         self.use_skip = -2 in cell_spec[::2]
 
         if len(cell_spec) > 0:
-            self.action_list = [x for x in zip(*[iter(cell_spec)]*2)]     # generate a list of tuples (pairs)
+            self.action_list = [x for x in zip(*[iter(cell_spec)] * 2)]  # generate a list of tuples (pairs)
             self.M = 3
             self.N = 2
         else:
@@ -57,14 +56,10 @@ class ModelGenerator():
         Returns:
             (dict): Regex dictionary
         '''
-        regex_dict = {}
-        regex_dict['conv'] = re.compile(r'(\d+)x(\d+) conv')
-        regex_dict['dconv'] = re.compile(r'(\d+)x(\d+) dconv')
-        regex_dict['stack_conv'] = re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv')
-        regex_dict['pool'] = re.compile(r'(\d+)x(\d+) (max|avg)pool')
-
-        return regex_dict
-
+        return {'conv': re.compile(r'(\d+)x(\d+) conv'),
+                'dconv': re.compile(r'(\d+)x(\d+) dconv'),
+                'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
+                'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
 
     def __build_cell_util(self, filters, inputs, reduction=False):
         '''
@@ -104,8 +99,9 @@ class ModelGenerator():
         self.prev_cell_filters = 3
 
         # define inputs usable by blocks
-        # last_output will be the input image at start, while skip_output is set to None to trigger a special case in build_cell (avoids input normalization)
-        cell_inputs = [None, model_input]   # [skip, last]
+        # last_output will be the input image at start, while skip_output is set to None to trigger
+        # a special case in build_cell (avoids input normalization)
+        cell_inputs = [None, model_input]  # [skip, last]
 
         # add (M - 1) times N normal cells and a reduction cell
         for _ in range(self.M - 1):
@@ -135,7 +131,8 @@ class ModelGenerator():
 
         Args:
             B (int): Number of blocks in the cell
-            action_list (list<tuple<int, string>): List of tuples of 2 elements -> (input, action_name). Input can be either -1 (last cell output) or -2 (skip connection).
+            action_list (list<tuple<int, string>): List of tuples of 2 elements -> (input, action_name).
+                Input can be either -1 (last cell output) or -2 (skip connection).
             filters (int): Initial filters to use
             stride (tuple<int, int>): (1, 1) for normal cells, (2, 2) for reduction cells
             inputs (list<tf.tensor>): Possible tensors to use as input (based on action_list index value)
@@ -155,7 +152,7 @@ class ModelGenerator():
 
         # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
-        total_inputs = inputs   # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
+        total_inputs = inputs  # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i in range(B):
             self.block_index = i
             block_out = self.__build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs, adapt_depth)
@@ -192,7 +189,7 @@ class ModelGenerator():
         '''
 
         # Initial cell case, skip input is not defined, simply use the other input without any depth normalization
-        if inputs[-2] == None:
+        if inputs[-2] is None:
             inputs[-2] = inputs[-1]
             return inputs
 
@@ -217,7 +214,7 @@ class ModelGenerator():
         # TODO: also it is no more required and could be not good for the network
         elif skip_depth != last_depth:
             self._logger.debug("Normalizing inputs' depth (cell %d)", self.cell_index)
-            x = ops.Convolution(last_depth, (1, 1), strides=(1, 1))     # no stride
+            x = ops.Convolution(last_depth, (1, 1), strides=(1, 1))  # no stride
             x._name = f'pointwise_conv_input_c{self.cell_index}'
             inputs[-2] = x(inputs[-2])
 
@@ -266,10 +263,6 @@ class ModelGenerator():
             (tf.keras.Model): The custom layer corresponding to the action (see ops.py)
         '''
 
-        # basically a huge switch case, python has no switch case because 'reasons'...
-        # TODO: with python 3.10.0 match-case is available, it's worth to upgrade python for it?
-
-
         # check non parametrized operations first since they don't require a regex and are faster
         if action == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
@@ -284,15 +277,15 @@ class ModelGenerator():
                 return x
 
         # check for separable conv
-        match = self.op_regexes['dconv'].match(action) #type: re.Match
+        match = self.op_regexes['dconv'].match(action)  # type: re.Match
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                            name=model_name, weight_norm=self.weight_norm)
+                                         name=model_name, weight_norm=self.weight_norm)
             return x
 
         # check for stacked conv operation
-        match = self.op_regexes['stack_conv'].match(action) #type: re.Match
+        match = self.op_regexes['stack_conv'].match(action)  # type: re.Match
         if match:
             f = [filters, filters]
             k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
@@ -303,23 +296,23 @@ class ModelGenerator():
             return x
 
         # check for standard conv
-        match = self.op_regexes['conv'].match(action) #type: re.Match
+        match = self.op_regexes['conv'].match(action)  # type: re.Match
         if match:
             model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                    name=model_name, weight_norm=self.weight_norm)          
+                                name=model_name, weight_norm=self.weight_norm)
             return x
 
         # check for pooling
-        match = self.op_regexes['pool'].match(action) #type: re.Match
+        match = self.op_regexes['pool'].match(action)  # type: re.Match
         if match:
             size = to_int_tuple(match.group(1, 2))
             pool_type = match.group(3)
 
             model_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_norm=self.weight_norm) if adapt_depth \
-                    else ops.Pooling(pool_type, size, strides, name=model_name)
-            
+                else ops.Pooling(pool_type, size, strides, name=model_name)
+
             return x
 
         raise ValueError('Operation not covered by POPNAS algorithm')
@@ -335,9 +328,9 @@ class ModelGenerator():
 
         # TODO: Save best weights, not really necessary? Was used only to get best val_accuracy...
         # ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('temp_weights', 'cp_e{epoch:02d}_vl{val_accuracy:.2f}.ckpt'),
-        #                                                     save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max', verbose=1)
+        #                                           save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max', verbose=1)
         # model_callbacks.append(ckpt_callback)
-        
+
         # By default shows losses and metrics for both training and validation
         tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
         model_callbacks.append(tb_callback)
