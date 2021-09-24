@@ -11,4 +11,8 @@ def to_int_tuple(str_tuple: 'tuple[str, ...]'):
 
 
 def list_flatten(nested_l: 'list[Iterable]'):
-    return [el for iter in nested_l for el in iter]
+    return [el for iterable_el in nested_l for el in iterable_el]
+
+
+def to_list_of_tuples(sequence, chunk_size):
+    return list(zip(*[iter(sequence)] * chunk_size))

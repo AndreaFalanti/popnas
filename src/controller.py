@@ -18,6 +18,7 @@ from aMLLibrary import sequence_data_processing
 from aMLLibrary.regressor import Regressor
 from encoder import StateSpace
 from utils.stream_to_logger import StreamToLogger
+from utils.func_utils import to_list_of_tuples
 
 
 class ControllerManager:
@@ -33,7 +34,7 @@ class ControllerManager:
     def __init__(self, state_space: StateSpace, checkpoint_B,
                  B=5, K=256, T=np.inf,
                  train_iterations=10, reg_param=0.001, controller_cells=48, embedding_dim=30,
-                 pnas_mode=False,
+                 pnas_mode=False, use_previous_data=True,
                  input_B=None, restore_controller=False):
         '''
         Manages the Controller network training and prediction process.
@@ -79,6 +80,7 @@ class ControllerManager:
         self.input_B = input_B
         self.pnas_mode = pnas_mode
         self.restore_controller = restore_controller
+        self.use_previous_data = use_previous_data
 
         self.build_regressor_config = True
 
@@ -166,16 +168,18 @@ class ControllerManager:
         '''
         cell_encoding = self.state_space.encode_cell_spec(cell_spec)
 
-        cell_tensor = tf.convert_to_tensor(cell_encoding)  # type: tf.Tensor
-        # cell_tensor = tf.expand_dims(cell_tensor, 0)
+        inputs = cell_encoding[0::2]  # even place data
+        operators = cell_encoding[1::2]  # odd place data
 
-        inputs = cell_tensor[0::2]  # even place data
-        operators = cell_tensor[1::2]  # odd place data
-
-        # transform to tensor and add sequence dimension (final shape is (len / 2, 2)),
+        # add sequence dimension (final shape is (B, 2)),
         # to process blocks one at a time by the LSTM (2 inputs, 2 operators)
-        inputs = tf.reshape(inputs, shape=(inputs.shape[0] // 2, 2))
-        operators = tf.reshape(operators, shape=(operators.shape[0] // 2, 2))
+        inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(inputs, 2)]
+        operators = [[op1, op2] for op1, op2 in to_list_of_tuples(operators, 2)]
+
+        # right padding to reach B elements
+        for i in range(len(inputs), self.B):
+            inputs.append([0, 0])
+            operators.append([0, 0])
 
         return [inputs, operators]
 
@@ -192,7 +196,7 @@ class ControllerManager:
             tf.data.Dataset: [description]
         '''
         # generate also equivalent cell specifications. This provides a data augmentation mechanism that
-        # can help the LSTM to lea
+        # can help the LSTM to learn better
         eqv_cell_specs, eqv_rewards = [], []
 
         # build dataset for predictions (no y labels), simply rename the list without doing data augmentation
@@ -212,31 +216,32 @@ class ControllerManager:
 
         rnn_inputs = list(map(lambda child: self.__prepare_rnn_inputs(child), eqv_cell_specs))
         # fit function actually wants two distinct lists, instead of a list of tuples. This does the trick.
-        rnn_in = np.array([inputs for inputs, _ in rnn_inputs], dtype=np.int32)
-        rnn_ops = np.array([ops for _, ops in rnn_inputs], dtype=np.int32)
+        rnn_in = [inputs for inputs, _ in rnn_inputs]
+        rnn_ops = [ops for _, ops in rnn_inputs]
 
         ds = tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops})) if rewards is None \
             else tf.data.Dataset.from_tensor_slices(({"input_1": rnn_in, "input_2": rnn_ops}, rewards))
 
         # add batch size (MUST be done here, if specified in .fit function it doesn't work!)
-        ds = ds.batch(1)
+        # TODO: also shuffle data, it can be good for better train when reusing old data (should be verified with actual testing, but i suppose so)
+        ds = ds.shuffle(10000).batch(1)
 
         return ds
 
     def build_controller_model(self, weight_reg):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
         # since the length varies, None is given as dimension
-        inputs = layers.Input(shape=(None, 2))
-        ops = layers.Input(shape=(None, 2))
+        inputs = layers.Input(shape=(self.B, 2))
+        ops = layers.Input(shape=(self.B, 2))
 
         # input dim is the max integer value present in the embedding + 1.
         inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim)(inputs)
         ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim)(ops)
 
         embed = layers.Concatenate()([inputs_embed, ops_embed])
-        # pass from (None, None, 2, 60) to (None, None, 120), indicating [batch_size, serie_length, features(embedding)]
-        # -1 is for inheriting a dimension
-        embed = layers.Reshape((-1, 120))(embed)
+        # pass from (None, self.B, 2, 2*embedding_dim) to (None, self.B, 4*embedding_dim),
+        # indicating [batch_size, serie_length, features(whole block embedding)]
+        embed = layers.Reshape((self.B, 4*self.embedding_dim))(embed)
 
         # many-to-one, so must have return_sequences = False (it is by default)
         lstm = layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg)(embed)
@@ -299,12 +304,16 @@ class ControllerManager:
         # Returns:
             final training loss
         '''
-        rnn_dataset = self.__build_rnn_dataset(self.state_space.children, rewards)
+        # create the dataset using also previous data, if flag is set.
+        # a list of values is stored for both cells and their rewards.
+        if self.use_previous_data:
+            self.children_history.extend(self.state_space.children)
+            self.score_history.extend(rewards)
 
-        # TODO: create the datasets as list of lists, if want to reuse also previous data.
-        #  PNAS used only the data of the current CNN generation
-        # self.children_history.append(rnn_inputs)
-        # self.score_history.append(rewards)
+            rnn_dataset = self.__build_rnn_dataset(self.children_history, self.score_history)
+        # use only current data
+        else:
+            rnn_dataset = self.__build_rnn_dataset(self.state_space.children, rewards)
 
         train_size = len(rnn_dataset) * self.train_iterations
         self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)

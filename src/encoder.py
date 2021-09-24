@@ -81,9 +81,10 @@ class StateSpace:
         else:
             self.operator_values = operators
 
-            # for embedding (see LSTM controller)
-        self.inputs_embedding_max = len(self.input_values)
-        self.operator_embedding_max = len(self.operator_values)
+        # for embedding (see LSTM controller), use categorical values
+        # all values must be strictly < than these (that's the reason for + 1)
+        self.inputs_embedding_max = len(self.input_values) + 1
+        self.operator_embedding_max = len(self.operator_values) + 1
 
         # generate categorical encoders for both inputs and operators
         self.input_encoders['cat'] = Encoder('cat', values=self.input_values)
