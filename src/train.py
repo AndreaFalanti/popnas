@@ -75,9 +75,9 @@ class Train:
         # TODO: splits for other datasets are actually not defined
         for i in range(0, self.sets):
             # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
-            limit = 1000
-            x_train_init = x_train_init[:limit]
-            y_train_init = y_train_init[:limit]
+            # limit = 10000
+            # x_train_init = x_train_init[:limit]
+            # y_train_init = y_train_init[:limit]
 
             # create a validation set for evaluation of the child models
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0,
@@ -260,8 +260,8 @@ class Train:
         reindex_function = None
 
         # TODO: restore search space
-        # operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        operators = ['identity', '3x3 dconv']
+        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        # operators = ['identity', '3x3 dconv']
 
         if self.restore:
             starting_b = self.checkpoint  # change the starting point of B
