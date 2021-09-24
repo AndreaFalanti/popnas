@@ -2,13 +2,25 @@ import os
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import Model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import plot_model
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
+from tensorflow.keras.applications.imagenet_utils import preprocess_input
+from typing import Tuple
 
 import log_service
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
+
+
+# tentative way of reproducing PNAS transformation
+# TODO: usable in image generator as preprocessing function, unfortunately slow and seems not good for learning too...
+def upsample_and_random_crop(image_tensor):
+    image_tensor = tf.image.resize(image_tensor, [40, 40])
+    image_tensor = tf.image.random_crop(image_tensor, [32, 32, 3])
+    # normalize in [-1, 1] domain
+    return preprocess_input(image_tensor, mode='tf')
 
 
 class NetworkManager:
@@ -79,7 +91,7 @@ class NetworkManager:
 
         return flops.total_float_ops
 
-    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str):
+    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list]:
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
