@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from ..utils.stream_to_logger import StreamToLogger
+from ..utils.catboost_eval_metric_spearman import CatBoostEvalMetricSpearman
 
 # TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
 # import them directly to enable intellisense
@@ -128,19 +129,33 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     return best_regressor
 
 
-def build_catboost_model(input_data_path: str, logger):
-    train_pool = catboost.Pool(input_data_path,
-                               delimiter=',',
-                               has_header=True)
+def build_catboost_model(input_data_path: str, col_desc_path: str, logger: logging.Logger):
+    train_pool = catboost.Pool(input_data_path, delimiter=',', has_header=True, column_description=col_desc_path)
+
+    # param_grid = {
+    #     'learning_rate': [0.1, 0.15],
+    #     'depth': [4, 5, 6, 7],
+    #     'l2_leaf_reg': [1, 3, 5, 7],
+    #     'random_strength': [1, 1.25, 1.4],
+    #     'bagging_temperature': [0.6, 0.75, 1],
+    #     'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
+    # }
+    param_grid = {
+        'depth': [6],
+        'l2_leaf_reg': [1],
+        'random_strength': [1.25]
+    }
 
     redir_logger = StreamToLogger(logger)
     with redirect_stdout(redir_logger):
         with redirect_stderr(redir_logger):
             # specify the training parameters
-            model = catboost.CatBoostRegressor()
+            # TODO: task type = 'GPU' is very slow, why?
+            model = catboost.CatBoostRegressor(custom_metric='MAPE', eval_metric=CatBoostEvalMetricSpearman(), early_stopping_rounds=16)
             # train the model
-            model.fit(train_pool)
+            results_dict = model.grid_search(param_grid, train_pool, train_size=0.85)
 
+    logger.info('Best parameters: %s', str(results_dict['params']))
     return model
 
 
@@ -215,6 +230,7 @@ def main():
     scatter_values = initialize_scatter_plot_dict(regressor_techniques)
 
     feature_columns = get_feature_names(training_time_df)
+    catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc.csv')
 
     # regressor is called after b=1 training and above, but not at last step (max_b)
     for b in range(1, max_b):
@@ -229,20 +245,24 @@ def main():
             technique_log_path = os.path.join(log_path, technique)
 
             if technique == 'CatBoost':
-                best_regressor = build_catboost_model(input_csv_path, logger)
+                best_regressor = build_catboost_model(input_csv_path, catboost_col_desc_file_path, logger)
             else:
                 config_path = write_regressor_config_file(input_csv_path, technique_log_path, [technique], b)
                 best_regressor = build_best_regressor(config_path, technique_log_path, logger, b)
 
             scatter_x, scatter_y = [], []
             for model_pred_features, real_time in zip(models_to_predict, prediction_real_times):
-                features_df = pd.DataFrame([model_pred_features], columns=feature_columns)
-
                 if technique == 'CatBoost':
-                    features_pool = catboost.Pool(features_df)
+                    cat_features_indexes = [indexes for i in range(max_b) for indexes in (4*i+1, 4*i+3)]
+                    # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)
+                    for cat_index in cat_features_indexes:
+                        model_pred_features[cat_index] = int(model_pred_features[cat_index])
+
+                    features_pool = catboost.Pool([model_pred_features], cat_features=cat_features_indexes, feature_names=feature_columns)
                     # returned as a numpy array of single element
                     predicted_time = best_regressor.predict(features_pool)[0]
                 else:
+                    features_df = pd.DataFrame([model_pred_features], columns=feature_columns)
                     predicted_time = best_regressor.predict(features_df)[0]
 
                 scatter_x.append(real_time)
