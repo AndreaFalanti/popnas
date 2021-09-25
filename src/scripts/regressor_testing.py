@@ -132,19 +132,22 @@ def build_best_regressor(config_path, log_path, logger, b: int):
 def build_catboost_model(input_data_path: str, col_desc_path: str, logger: logging.Logger):
     train_pool = catboost.Pool(input_data_path, delimiter=',', has_header=True, column_description=col_desc_path)
 
-    # param_grid = {
-    #     'learning_rate': [0.1, 0.15],
-    #     'depth': [4, 5, 6, 7],
-    #     'l2_leaf_reg': [1, 3, 5, 7],
-    #     'random_strength': [1, 1.25, 1.4],
-    #     'bagging_temperature': [0.6, 0.75, 1],
-    #     'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
-    # }
+    # intensive testing
     param_grid = {
-        'depth': [6],
-        'l2_leaf_reg': [1],
-        'random_strength': [1.25]
+        'learning_rate': [0.08, 0.1, 0.15],
+        'depth': [4, 5, 6, 7],
+        'l2_leaf_reg': [1, 3, 5, 7],
+        'random_strength': [1, 1.25, 1.4, 2],
+        'bagging_temperature': [0.4, 0.6, 0.75, 1],
+        'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
     }
+
+    # fast testing
+    # param_grid = {
+    #     'depth': [4, 5, 6],
+    #     'l2_leaf_reg': [1, 3, 5],
+    #     'random_strength': [1, 1.25]
+    # }
 
     redir_logger = StreamToLogger(logger)
     with redirect_stdout(redir_logger):
@@ -216,7 +219,7 @@ def main():
     args = parser.parse_args()
 
     # aMLLibrary techniques to test
-    regressor_techniques = ['CatBoost', 'SVR', 'NNLS', 'XGBoost', 'LRRidge']
+    regressor_techniques = ['CatBoost', 'NNLS', 'LRRidge']
 
     csv_path = os.path.join(args.p, 'csv')
     log_path = setup_folders(args.p, techniques=regressor_techniques)
