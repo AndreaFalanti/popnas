@@ -154,7 +154,7 @@ def build_catboost_model(input_data_path: str, col_desc_path: str, logger: loggi
         with redirect_stderr(redir_logger):
             # specify the training parameters
             # TODO: task type = 'GPU' is very slow, why?
-            model = catboost.CatBoostRegressor(custom_metric='MAPE', eval_metric=CatBoostEvalMetricSpearman(), early_stopping_rounds=16)
+            model = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16)
             # train the model
             results_dict = model.grid_search(param_grid, train_pool, train_size=0.85)
 
