@@ -1,7 +1,4 @@
 import numpy as np
-import pandas as pd
-
-from utils.func_utils import compute_spearman_rank_correlation_coefficient
 
 
 # See also: https://catboost.ai/docs/concepts/python-usages-examples.html#custom-loss-function-eval-metric
@@ -27,11 +24,16 @@ class CatBoostEvalMetricSpearman:
         assert len(approxes) == 1
         assert len(target) == len(approxes[0])
 
-        df_data = {
-            'preds': np.array(approxes[0]),
-            'target': np.array(target)
-        }
-        df = pd.DataFrame.from_dict(df_data)
+        # approxes is already a numpy array, but inside a tuple. target instead is fine (ndarray).
+        preds = approxes[0]
+
+        # spearman correlation coefficient computation, done entirely with numpy so that numba can compile this function
+        cov_n0 = np.cov(target, preds, ddof=0)[0][1]
+
+        s_x0 = np.std(target)
+        s_y0 = np.std(preds)
+
+        spearman_coeff = cov_n0 / (s_x0 * s_y0)
 
         # weight sum not necessary, so set to 1
-        return compute_spearman_rank_correlation_coefficient(df, 'target', 'preds'), 1
+        return spearman_coeff, 1

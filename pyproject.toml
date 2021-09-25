@@ -20,6 +20,7 @@ eli5 = "0.11.0"
 mypy = "0.910"
 catboost = "0.26.1"
 pydot = "1.4.2"
+numba = "0.54.0"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.7"
