@@ -248,6 +248,11 @@ class Train:
             writer = csv.writer(f)
             writer.writerows(csv_rows)
 
+    def write_catboost_column_desc_file(self, header_types):
+        with open(log_service.build_path('csv', 'column_desc.csv'), mode='w', newline='') as f:
+            writer = csv.writer(f, delimiter='\t')
+            writer.writerows(enumerate(header_types))
+
     def process(self):
         '''
         Main function, executed by run.py to start POPNAS algorithm.
@@ -255,6 +260,7 @@ class Train:
 
         # create the complete headers row of the CSV files
         headers = ["time", "blocks"]
+        header_types = ['Label', 'Num']
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
         reindex_function = None
@@ -281,13 +287,15 @@ class Train:
             for b in range(1, self.blocks + 1):
                 a = b * 2
                 c = a - 1
-                new_block = [f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"]
-                headers.extend(new_block)
+                headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
+                header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
 
             # add headers
             with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
+
+            self.write_catboost_column_desc_file(header_types)
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
