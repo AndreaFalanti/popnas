@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.io.parsers import TextFileReader
 
 import log_service
+from utils.func_utils import compute_spearman_rank_correlation_coefficient
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
@@ -33,20 +34,6 @@ def __parse_cell_structures(cell_structures: Iterable):
     # parse tuple structure (trim round brackets and split by ,)
     return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
             for tuple_str_list in list_of_tuple_str_lists]
-
-
-def __compute_spearman_rank_correlation_coefficient(df: pd.DataFrame, x_col: str, y_col: str):
-    '''
-    Spearman rank correlation coefficient, computed on given Pandas dataframe.
-    '''
-    # df['rank_x'] = df[x_col].rank()
-    # df['rank_y'] = df[y_col].rank()
-    # df['rank_diff_pow2'] = (df['rank_x'] - df['rank_y']).pow(2)
-
-    # num = 6 * df['rank_diff_pow2'].mean()
-    # den = (df['rank_diff_pow2'].size ** 2) - 1
-    # return 1 - num / den
-    return df[x_col].corr(df[y_col], method='spearman')
 
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
@@ -342,7 +329,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
             max_time_errors[b - 2] = max(time_errors)
             min_time_errors[b - 2] = min(time_errors)
             time_mapes[b - 2] = ((time_errors / merge_df['training time(seconds)']).abs()).mean() * 100
-            time_spearman_coeffs[b - 2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
+            time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
 
         # always compute accuracy prediction errors (LSTM controller)
         val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
@@ -354,14 +341,13 @@ def plot_predictions_error(B: int, pnas_mode: bool):
         max_acc_errors[b - 2] = max(val_accuracy_errors)
         min_acc_errors[b - 2] = min(val_accuracy_errors)
         acc_mapes[b - 2] = ((val_accuracy_errors / merge_df['best val accuracy']).abs()).mean() * 100
-        acc_spearman_coeffs[b - 2] = __compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
+        acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
 
         # add also MAPE and spearman to legends
         scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
         scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
 
     x = np.arange(2, B + 1)
-    # x_str = list(map(lambda x: str(x), x))
 
     # write plots about time
     if not pnas_mode:
@@ -371,7 +357,6 @@ def plot_predictions_error(B: int, pnas_mode: bool):
                                   'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
                                      'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
-        # __plot_histogram(x_str, time_mapes, 'Blocks', 'MAPE', 'Time predictions MAPE', 'time_pred_MAPE.png')
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
@@ -380,7 +365,6 @@ def plot_predictions_error(B: int, pnas_mode: bool):
                               'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
                                  'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
-    # __plot_histogram(x_str, acc_mapes, 'Blocks', 'MAPE', 'Validation accuracy predictions MAPE', 'acc_pred_MAPE.png')
 
     __logger.info("Prediction error overview plots written successfully")
 
