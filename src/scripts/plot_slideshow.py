@@ -6,6 +6,8 @@ from sys import platform
 import matplotlib.pyplot as plt
 from PIL import Image
 
+from utils.func_utils import clamp
+
 
 def path_closure(log_folder):
     plot_path = os.path.join(log_folder, 'plots')
@@ -81,7 +83,9 @@ def main():
             plot_path = os.path.join(subfolder, 'results.png')
             regressor_plot_paths.append(plot_path)
 
-        display_plot_overview(regressor_plot_paths, math.ceil(regressors_num / 2.0), regressors_num // 2, title='Regressor testing overview')
+        cols = clamp(math.ceil(regressors_num / 2.0), 0, 4)
+        rows = math.ceil(regressors_num / cols)
+        display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview')
 
 
 if __name__ == '__main__':
