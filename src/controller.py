@@ -396,7 +396,7 @@ class ControllerManager:
 
         return best_regressor
 
-    def train_catboost_regressor(self, input_csv_path: str):
+    def train_catboost_regressor(self, input_csv_path: str, train_log_path: str):
         # first feature is the one used as y (time)
         train_pool = catboost.Pool(input_csv_path,
                                    delimiter=',',
@@ -406,7 +406,7 @@ class ControllerManager:
         with redirect_stdout(redir_logger):
             with redirect_stderr(redir_logger):
                 # specify the training parameters
-                regressor = catboost.CatBoostRegressor()
+                regressor = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16, train_dir=train_log_path)
                 # train the model
                 regressor.fit(train_pool)
 
@@ -491,7 +491,7 @@ class ControllerManager:
 
         # TODO: see what to do with aMLLibrary
         # regressor = self.setup_regressor(techniques=['NNLS'])
-        regressor = self.train_catboost_regressor(csv_path)
+        regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1

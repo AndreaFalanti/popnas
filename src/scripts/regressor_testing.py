@@ -129,7 +129,7 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     return best_regressor
 
 
-def build_catboost_model(input_data_path: str, col_desc_path: str, logger: logging.Logger):
+def build_catboost_model(input_data_path: str, col_desc_path: str, logger: logging.Logger, train_log_path: str):
     train_pool = catboost.Pool(input_data_path, delimiter=',', has_header=True, column_description=col_desc_path)
 
     # intensive testing
@@ -154,7 +154,7 @@ def build_catboost_model(input_data_path: str, col_desc_path: str, logger: loggi
         with redirect_stderr(redir_logger):
             # specify the training parameters
             # TODO: task type = 'GPU' is very slow, why?
-            model = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16)
+            model = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16, train_dir=train_log_path)
             # train the model
             results_dict = model.grid_search(param_grid, train_pool, train_size=0.85)
 
@@ -248,7 +248,7 @@ def main():
             technique_log_path = os.path.join(log_path, technique)
 
             if technique == 'CatBoost':
-                best_regressor = build_catboost_model(input_csv_path, catboost_col_desc_file_path, logger)
+                best_regressor = build_catboost_model(input_csv_path, catboost_col_desc_file_path, logger, os.path.join(technique_log_path, f'B{b}'))
             else:
                 config_path = write_regressor_config_file(input_csv_path, technique_log_path, [technique], b)
                 best_regressor = build_best_regressor(config_path, technique_log_path, logger, b)
