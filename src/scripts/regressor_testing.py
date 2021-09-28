@@ -87,7 +87,7 @@ def write_regressor_config_file(input_csv_path, log_path, techniques: 'list[str]
     # to keep casing in keys while reading / writing
     config.optionxform = str
 
-    config.read(os.path.join('src', 'configs', 'regressors.ini'))
+    config.read(os.path.join('src', 'configs', 'regressors_hyperopt.ini'))
 
     for section in config.sections():
         if section == 'General':
@@ -219,7 +219,7 @@ def main():
     args = parser.parse_args()
 
     # aMLLibrary techniques to test
-    regressor_techniques = ['CatBoost', 'NNLS', 'LRRidge']
+    regressor_techniques = ['NNLS', 'LRRidge', 'SVR', 'XGBoost']
 
     csv_path = os.path.join(args.p, 'csv')
     log_path = setup_folders(args.p, techniques=regressor_techniques)
