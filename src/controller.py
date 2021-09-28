@@ -349,7 +349,7 @@ class ControllerManager:
         # to keep casing in keys while reading / writing
         config.optionxform = str
 
-        config.read(os.path.join('configs', 'regressors.ini'))
+        config.read(os.path.join('configs', 'regressors_hyperopt.ini'))
 
         for section in config.sections():
             if section == 'General':
@@ -397,10 +397,9 @@ class ControllerManager:
         return best_regressor
 
     def train_catboost_regressor(self, input_csv_path: str, train_log_path: str):
+        column_description_file = log_service.build_path('csv', 'column_desc.csv')
         # first feature is the one used as y (time)
-        train_pool = catboost.Pool(input_csv_path,
-                                   delimiter=',',
-                                   has_header=True)
+        train_pool = catboost.Pool(input_csv_path, delimiter=',', has_header=True, column_description=column_description_file)
 
         redir_logger = StreamToLogger(self._catboost_logger)
         with redirect_stdout(redir_logger):
@@ -489,9 +488,9 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        # TODO: see what to do with aMLLibrary
-        # regressor = self.setup_regressor(techniques=['NNLS'])
-        regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
+        # TODO: choice between catboost and aMLLibrary. Better to have only one enabled for now.
+        regressor = self.setup_regressor(techniques=['NNLS', 'SVR', 'LRRidge', 'XGBoost'])
+        # regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
