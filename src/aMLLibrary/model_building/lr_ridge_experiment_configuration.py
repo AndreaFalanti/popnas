@@ -1,5 +1,6 @@
 """
 Copyright 2019 Marco Lattuada
+Copyright 2021 Bruno Guindani
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,8 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import List
-
 import sklearn.linear_model as lr
 
 import model_building.experiment_configuration as ec
@@ -25,13 +24,11 @@ class LRRidgeExperimentConfiguration(ec.ExperimentConfiguration):
     """
     Class representing a single experiment configuration for linear regression
 
-    Attributes
-    ----------
-    _regressor : LinearRegression
-        The actual scikt object which performs the linear regression
-
     Methods
     -------
+    _compute_signature()
+        Compute the signature (i.e., an univocal identifier) of this experiment
+
     _train()
         Performs the actual building of the linear model
 
@@ -41,25 +38,36 @@ class LRRidgeExperimentConfiguration(ec.ExperimentConfiguration):
     print_model()
         Prints the model
     """
-    def __init__(self, campaign_configuration, hyperparameters, regression_inputs, prefix: List[str]):
+    def __init__(self, campaign_configuration, hyperparameters, regression_inputs, prefix):
         """
-        campaign_configuration: dict of dict:
+        campaign_configuration: dict of str: dict of str: str
             The set of options specified by the user though command line and campaign configuration files
 
-        hyperparameters: dictionary
+        hyperparameters: dict of str: object
             The set of hyperparameters of this experiment configuration
 
         regression_inputs: RegressionInputs
             The input of the regression problem to be solved
+
+        prefix: list of str
+            The prefix to be added to the signature of this experiment configuration
         """
         assert prefix
         super().__init__(campaign_configuration, hyperparameters, regression_inputs, prefix)
         self.technique = ec.Technique.LR_RIDGE
-        self._regressor = lr.Ridge()
 
     def _compute_signature(self, prefix):
         """
         Compute the signature associated with this experiment configuration
+
+        Parameters
+        ----------
+        prefix: list of str
+            The signature of this experiment configuration without considering hyperparameters
+
+        Returns
+        -------
+            The signature of the experiment
         """
         assert isinstance(prefix, list)
         signature = prefix.copy()
@@ -71,17 +79,21 @@ class LRRidgeExperimentConfiguration(ec.ExperimentConfiguration):
         Build the model with the experiment configuration represented by this object
         """
         self._logger.debug("Building model for %s", self._signature)
-        self._regressor = lr.Ridge(alpha=self._hyperparameters['alpha'])
         assert self._regression_inputs
         xdata, ydata = self._regression_inputs.get_xy_data(self._regression_inputs.inputs_split["training"])
         self._regressor.fit(xdata, ydata)
         self._logger.debug("Model built")
-        for idx, col_name in enumerate(self._regression_inputs.x_columns):
+        for idx, col_name in enumerate(self.get_x_columns()):
             self._logger.debug("The coefficient for %s is %f", col_name, self._regressor.coef_[idx])
 
     def compute_estimations(self, rows):
         """
-        Compute the estimations and the MAPE for runs in rows
+        Compute the predictions for data points indicated in rows estimated by the regressor
+
+        Parameters
+        ----------
+        rows: list of integers
+            The set of rows to be considered
         """
         xdata, _ = self._regression_inputs.get_xy_data(rows)
         return self._regressor.predict(xdata)
@@ -92,9 +104,24 @@ class LRRidgeExperimentConfiguration(ec.ExperimentConfiguration):
         """
         ret_string = ""
         coefficients = self._regressor.coef_
-        for column, coefficient in zip(self._regression_inputs.x_columns, coefficients):
+        for column, coefficient in zip(self.get_x_columns(), coefficients):
             if ret_string != "":
                 ret_string = ret_string + " + "
             ret_string = ret_string + "(" + str(coefficient) + "*" + column + ")"
         ret_string = ret_string + " + (" + str(self._regressor.intercept_) + ")"
         return ret_string
+
+    def initialize_regressor(self):
+        """
+        Initialize the regressor object for the experiments
+        """
+        if not getattr(self, '_hyperparameters', None):
+            self._regressor = lr.Ridge()
+        else:
+            self._regressor = lr.Ridge(alpha=self._hyperparameters['alpha'])
+
+    def get_default_parameters(self):
+        """
+        Get a dictionary with all technique parameters with default values
+        """
+        return {'alpha': 0.1}

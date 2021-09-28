@@ -1,8 +1,16 @@
-*swp
+# Python cache files
 *__pycache__
-log
-output
+
+# Library output files
 output_*
+
+# Folders to ignore
+log
+etc
+old
+
+# Miscellaneous
+*swp
 /.idea/
 .mypy_cache/
-*orig
+*.pdf

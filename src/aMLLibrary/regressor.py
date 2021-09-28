@@ -18,6 +18,7 @@ import numpy
 
 import custom_logger
 import data_preparation.column_selection
+import data_preparation.ernest
 import data_preparation.inversion
 import data_preparation.product
 import data_preparation.rename_columns
@@ -26,10 +27,11 @@ import regression_inputs
 
 class Regressor:
     """
-    Regressor: it includes preprocesing step plus the actual regressor
+    The main type of object returned by the library. It includes preprocesing step plus the actual regressor
 
     Attributes
-    _campaign_configuration: dict of dict
+    ----------
+    _campaign_configuration: dict of str : dict of str : str
         The set of options specified during the generation of this regressor
 
     _regressor
@@ -52,7 +54,7 @@ class Regressor:
     get_regressor()
         Return the regressor associated with this experiment configuration
     """
-    def __init__(self, campaign_configuration, regressor, x_columns, scalers):
+    def __init__(self, campaign_configuration, regressor, x_cols, scalers):
         """
         Parameters
         regressor
@@ -61,11 +63,19 @@ class Regressor:
         assert regressor
         self._campaign_configuration = campaign_configuration
         self._regressor = regressor
-        self._x_columns = x_columns
+        self._x_columns = x_cols
         self._scalers = scalers
         self._logger = custom_logger.getLogger(__name__)
 
     def predict(self, inputs):
+        """
+        Perform the prediction on a set of input data
+
+        Parameters
+        ----------
+        inputs: pandas.DataFrame
+            The input on which prediction has to be applied
+        """
         data = inputs
         inputs_split = {}
         column_names = inputs.columns.values.tolist()
@@ -84,6 +94,9 @@ class Regressor:
             data = column_selection_step.process(data)
             self._logger.debug("Performed column selection")
 
+        onehot_encoding_step = data_preparation.onehot_encoding.OnehotEncoding(self._campaign_configuration)
+        data = onehot_encoding_step.process(data)
+
         # Compute inverse
         if 'inverse' in self._campaign_configuration['DataPreparation'] and self._campaign_configuration['DataPreparation']['inverse']:
             inversion_step = data_preparation.inversion.Inversion(self._campaign_configuration)
@@ -95,6 +108,12 @@ class Regressor:
             inversion_step = data_preparation.product.Product(self._campaign_configuration)
             data = inversion_step.process(data)
             self._logger.debug("Performed product")
+
+        # Create ernest features if required
+        if 'ernest' in self._campaign_configuration['DataPreparation'] and self._campaign_configuration['DataPreparation']['ernest']:
+            ernest_step = data_preparation.ernest.Ernest(self._campaign_configuration)
+            data = ernest_step.process(data)
+            self._logger.debug("Performed ernest feature computation")
 
         raw_data = data.data
 
