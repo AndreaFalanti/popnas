@@ -401,14 +401,24 @@ class ControllerManager:
         # first feature is the one used as y (time)
         train_pool = catboost.Pool(input_csv_path, delimiter=',', has_header=True, column_description=column_description_file)
 
+        param_grid = {
+            'learning_rate': [0.1, 0.15],
+            'depth': [4, 5, 6, 7],
+            'l2_leaf_reg': [1, 3, 6],
+            'random_strength': [1.2, 1.6],
+            'bagging_temperature': [0.4],
+            'grow_policy': ['SymmetricTree', 'Lossguide']
+        }
+
         redir_logger = StreamToLogger(self._catboost_logger)
         with redirect_stdout(redir_logger):
             with redirect_stderr(redir_logger):
                 # specify the training parameters
                 regressor = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16, train_dir=train_log_path)
                 # train the model
-                regressor.fit(train_pool)
+                results_dict = regressor.grid_search(param_grid, train_pool, train_size=0.85)
 
+        self._logger.info('Best parameters: %s', str(results_dict['params']))
         return regressor
 
     def estimate_time(self, regressor: Union[Regressor, catboost.CatBoostRegressor], child_spec: list, headers: 'list[str]'):
@@ -434,13 +444,19 @@ class ControllerManager:
         for _ in range(self.b_, self.B):
             regressor_features = np.append(regressor_features, np.array([0, 0, 0, 0]))
 
-        df_row = pandas.DataFrame([regressor_features], columns=headers)
-
         # TODO: could be made more "elegant", but right now is the best way to avoid more sophisticated changes
         if isinstance(regressor, catboost.CatBoostRegressor):
-            features_pool = catboost.Pool(df_row)
+            cat_features_indexes = [indexes for i in range(self.B) for indexes in (4 * i + 1, 4 * i + 3)]
+
+            # ndarray doesn't support multiple types, so are all floats, but categorical must be int or string
+            regressor_features = regressor_features.tolist()
+            for cat_index in cat_features_indexes:
+                regressor_features[cat_index] = int(regressor_features[cat_index])
+
+            features_pool = catboost.Pool([regressor_features], cat_features=cat_features_indexes, feature_names=headers)
             predicted_time = regressor.predict(features_pool)[0]
         else:
+            df_row = pandas.DataFrame([regressor_features], columns=headers)
             # array of single element (time prediction)
             predicted_time = regressor.predict(df_row)[0]
 
@@ -489,8 +505,8 @@ class ControllerManager:
         df.to_csv(csv_path, na_rep=0, index=False)
 
         # TODO: choice between catboost and aMLLibrary. Better to have only one enabled for now.
-        regressor = self.setup_regressor(techniques=['NNLS', 'SVR', 'LRRidge', 'XGBoost'])
-        # regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
+        # regressor = self.setup_regressor(techniques=['NNLS', 'SVR', 'LRRidge', 'XGBoost'])
+        regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
