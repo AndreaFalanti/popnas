@@ -87,6 +87,15 @@ def main():
         rows = math.ceil(regressors_num / cols)
         display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview')
 
+    controller_test_path = os.path.join(args.p, 'controllers_test')
+    if os.path.isdir(controller_test_path):
+        pngs_full_paths = [f.path for f in os.scandir(controller_test_path) if f.is_file() and f.path.endswith('.png')]
+        controllers_num = len(pngs_full_paths)
+
+        cols = clamp(math.ceil(controllers_num / 2.0), 0, 4)
+        rows = math.ceil(controllers_num / cols)
+        display_plot_overview(pngs_full_paths, cols, rows, title='Controller testing overview')
+
 
 if __name__ == '__main__':
     main()
