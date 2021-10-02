@@ -64,6 +64,7 @@ POPNASv2 can then be launched with command (set arguments as you like):
 docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 ```
 
+
 ## Command line arguments
 **Required arguments:**
 - **-b**: defines the maximum amount of blocks B a cell can contain.
@@ -90,6 +91,7 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation.
   This will make the computation extremely similar to PNAS algorithm.
 
+
 ## Tensorboard
 Trained CNNs have a callback for saving info to tensorboard log files. To access all the runs, run the command:
 ```
@@ -97,7 +99,25 @@ tensorboard --logdir {absolute_path_to_POPNAS_src}\logs\{date}\tensorboard_cnn -
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
 
-## Plot slideshow utility
+
+## Additional scripts
+### Regressor testing script
+An additional script is also provided to analyze the results of multiple regressors on the data gathered in a POPNAS run.
+The script creates an additional folder (*regressors_test*) inside the log folder given as argument.
+Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
+```
+python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folder(date)}
+```
+
+### Controller testing script
+Another additional script is provided to analyze the results of multiple controller configurations on the data gathered in a POPNAS run.
+The script creates an additional folder (*controllers_test*) inside the log folder given as argument.
+Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
+```
+python -m src.scripts.controller_testing -p {absolute_path_to_logs}\{target_folder(date)}
+```
+
+### Plot slideshow script
 The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way. To use it, only the log folder must be provided.
 An example of the command usage (from src folder):
 ```
@@ -105,13 +125,9 @@ python .\scripts\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(dat
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
-## Regressor testing utility
-An additional script is also provided to analyze the results of multiple regressors on the data gathered in a POPNAS run.
-The script creates an additional folder inside the log folder given as argument.
-Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
-```
-python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folder(date)}
-```
+If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder, also their output plots will be visualized
+in additional slides at the end.
+
 
 ## Changelog from original version
 - Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
@@ -127,6 +143,9 @@ python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folde
 - Fix regressor features bug: dynamic reindexing was nullified by an int cast.
 - CatBoost can now be used as time regressor, instead of aMLLibrary supported regressors.
 - Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
+  Add also the plot slideshow script to visualize all produced plots easily in aggregated views.
+- Add regressor and controller testing scripts, useful to tune their hyperparameters on data of an already completed run.
+  These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
   New training method supports ImageGenerators and allows using weight regularization if --wn parameter is provided.
@@ -156,9 +175,12 @@ python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folde
 
 ## TODO
 - Improve and tweak best model training script.
-- Improve plots generated.
+- Improve quality of plots generated, adding new relevant metrics if useful.
 - Investigate the "Model failed to serialize as JSON. Ignoring... " warning triggered by tensorboard call.
   It seems to not alter the program flow, but it's worth a check.
 - Logic for handling -h parameter was faulty from the start. Since this functionality has never been used, it's possible to deprecate it or otherwise
   it should be completed.
-- Restore procedure logic must be revisited and fixed, it was probably not working properly from the start.
+- Restore procedure logic must be revisited and fixed, it was probably not working properly from the start. This functionality has never been
+  used, but it can be nice to have in case the algorithm would take a lot of time on larger dataset.
+- Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't be too difficult
+  to support other datasets.
