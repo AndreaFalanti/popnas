@@ -3,8 +3,17 @@ import os
 import sys
 import time
 
-# Must be set using initialize_log_folders or check_log_folder
+# Must be set using initialize_log_folders, check_log_folder or set_log_path
 log_path = None
+
+
+def set_log_path(path):
+    '''
+    Useful for scripts outside the main execution workflow, where the path folder already exists and
+    extra folders creation is handled externally.
+    '''
+    global log_path
+    log_path = path
 
 
 def initialize_log_folders():
