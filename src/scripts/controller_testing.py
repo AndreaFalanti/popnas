@@ -380,7 +380,7 @@ def main():
     logger.info('Building plots for each controller configuration')
     for index, (controller_manager, preds_dict) in enumerate(zip(controller_configs, predictions)):
         # add MAPE and spearman to legend
-        legend_labels = list(map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f}',
+        legend_labels = list(map(lambda label, mape, spearman: label + f' (MAPE: {mape:.3f}%, ρ: {spearman:.3f})',
                                  scatter_plot_legend_labels, preds_dict['MAPE'], preds_dict['spearman']))
 
         plot_squared_scatter_chart(preds_dict['x'], preds_dict['y'], f'config_{index}',
