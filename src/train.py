@@ -315,9 +315,8 @@ class Train:
 
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
-                                       train_iterations=15,
-                                       pnas_mode=self.pnas_mode,
-                                       restore_controller=self.restore)
+                                       train_iterations=15, reg_param=4e-4, lr1=0.002, controller_cells=120, embedding_dim=25,
+                                       pnas_mode=self.pnas_mode, restore_controller=self.restore)
 
         # add dynamic reindex
         if self.restore:

@@ -33,7 +33,7 @@ class ControllerManager:
 
     def __init__(self, state_space: StateSpace, checkpoint_B,
                  B=5, K=256, T=np.inf,
-                 train_iterations=10, reg_param=0.001, controller_cells=48, embedding_dim=30,
+                 train_iterations=10, reg_param=1e-4, controller_cells=48, embedding_dim=30, lr1=0.01, lr2=0.002,
                  pnas_mode=False, use_previous_data=True,
                  input_B=None, restore_controller=False):
         '''
@@ -49,12 +49,6 @@ class ControllerManager:
             reg_param: strength of the L2 regularization loss.
             controller_cells: number of cells in the Controller LSTM.
             embedding_dim: embedding dimension for inputs and operators.
-            input_B: override value of B, used only when we are restoring the controller.
-                Determining the maximum input connectivity allowed to the RNN Controller,
-                to maintain backward compatibility with trained models.
-
-                Use it alongside `restore_controller` to evaluate model settings
-                with larger depth `B` than allowed at training time.
             pnas_mode: if True, do not build a regressor to estimate time. Use only LSTM controller,
                 like original PNAS.
             restore_controller: flag whether to restore a pre-trained RNN controller
@@ -72,12 +66,14 @@ class ControllerManager:
         self.B = B
         self.K = K
         self.T = T
-        self.embedding_dim = embedding_dim
 
+        self.embedding_dim = embedding_dim
         self.train_iterations = train_iterations
         self.controller_cells = controller_cells
         self.reg_strength = reg_param
-        self.input_B = input_B
+        self.lr1 = lr1
+        self.lr2 = lr2
+
         self.pnas_mode = pnas_mode
         self.restore_controller = restore_controller
         self.use_previous_data = use_previous_data
@@ -241,7 +237,7 @@ class ControllerManager:
         embed = layers.Concatenate()([inputs_embed, ops_embed])
         # pass from (None, self.B, 2, 2*embedding_dim) to (None, self.B, 4*embedding_dim),
         # indicating [batch_size, serie_length, features(whole block embedding)]
-        embed = layers.Reshape((self.B, 4*self.embedding_dim))(embed)
+        embed = layers.Reshape((self.B, 4 * self.embedding_dim))(embed)
 
         # many-to-one, so must have return_sequences = False (it is by default)
         lstm = layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg)(embed)
@@ -261,6 +257,9 @@ class ControllerManager:
         # By default shows losses and metrics for both training and validation
         tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
         model_callbacks.append(tb_callback)
+
+        plateau_callback = callbacks.ReduceLROnPlateau(monitor='loss', factor=0.4, patience=4, verbose=1)
+        model_callbacks.append(plateau_callback)
 
         return model_callbacks
 
@@ -283,8 +282,8 @@ class ControllerManager:
         plot_model(self.controller, to_file=os.path.join(self.log_path, 'model.png'), show_shapes=True, show_layer_names=True)
 
         # PNAS paper specifies different learning rates, one for b=1 and another for other b values
-        self.optimizer = optimizers.Adam(learning_rate=0.002)
-        self.optimizer_b1 = optimizers.Adam(learning_rate=0.01)
+        self.optimizer = optimizers.Adam(learning_rate=self.lr2)
+        self.optimizer_b1 = optimizers.Adam(learning_rate=self.lr1)
 
         self.saver = tf.train.Checkpoint(controller=self.controller,
                                          optimizer=self.optimizer,
@@ -328,11 +327,9 @@ class ControllerManager:
 
         # train only on last trained CNN batch.
         # Controller starts from the weights trained on previous CNNs, so retraining on them would cause overfitting on previous samples.
-        hist = self.controller.fit(
-            x=rnn_dataset,
-            epochs=self.train_iterations,
-            callbacks=model_callbacks
-        )
+        hist = self.controller.fit(x=rnn_dataset,
+                                   epochs=self.train_iterations,
+                                   callbacks=model_callbacks)
 
         with open(log_service.build_path('csv', 'rewards.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -401,14 +398,14 @@ class ControllerManager:
         # first feature is the one used as y (time)
         train_pool = catboost.Pool(input_csv_path, delimiter=',', has_header=True, column_description=column_description_file)
 
-        param_grid = {
-            'learning_rate': [0.1, 0.15],
-            'depth': [4, 5, 6, 7],
-            'l2_leaf_reg': [1, 3, 6],
-            'random_strength': [1.2, 1.6],
-            'bagging_temperature': [0.4],
-            'grow_policy': ['SymmetricTree', 'Lossguide']
-        }
+        # param_grid = {
+        #     'learning_rate': [0.1, 0.15],
+        #     'depth': [4, 5, 6, 7],
+        #     'l2_leaf_reg': [1, 3, 6],
+        #     'random_strength': [1.2, 1.6],
+        #     'bagging_temperature': [0.4],
+        #     'grow_policy': ['SymmetricTree', 'Lossguide']
+        # }
 
         redir_logger = StreamToLogger(self._catboost_logger)
         with redirect_stdout(redir_logger):
@@ -416,9 +413,10 @@ class ControllerManager:
                 # specify the training parameters
                 regressor = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16, train_dir=train_log_path)
                 # train the model
-                results_dict = regressor.grid_search(param_grid, train_pool, train_size=0.85)
+                # results_dict = regressor.grid_search(param_grid, train_pool, train_size=0.85)
+                regressor.fit(train_pool)
 
-        self._logger.info('Best parameters: %s', str(results_dict['params']))
+        # self._logger.info('Best parameters: %s', str(results_dict['params']))
         return regressor
 
     def estimate_time(self, regressor: Union[Regressor, catboost.CatBoostRegressor], child_spec: list, headers: 'list[str]'):

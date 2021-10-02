@@ -1,6 +1,6 @@
 import re
 import statistics
-from typing import Iterable, NamedTuple
+from typing import NamedTuple
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.io.parsers import TextFileReader
 
 import log_service
-from utils.func_utils import compute_spearman_rank_correlation_coefficient
+from utils.func_utils import compute_spearman_rank_correlation_coefficient, parse_cell_structures, compute_mape
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
@@ -23,17 +23,6 @@ plt.set_loglevel('WARNING')
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
-
-
-def __parse_cell_structures(cell_structures: Iterable):
-    # remove set of chars { []()'" } for easier parsing
-    cell_structures = list(map(lambda cell_str: re.sub(r'[\[\]\'\"()]', '', cell_str), cell_structures))
-    # parse cell structure into multiple strings, each one representing a tuple
-    list_of_tuple_str_lists = list(map(lambda cs: cs.split(';'), cell_structures))
-
-    # parse tuple structure (trim round brackets and split by ,)
-    return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
-            for tuple_str_list in list_of_tuple_str_lists]
 
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
@@ -168,7 +157,7 @@ def plot_dynamic_reindex_related_blocks_info():
     # take only mono block cells
     df = df[df['# blocks'] == 1]
 
-    cells = __parse_cell_structures(df['cell structure'])
+    cells = parse_cell_structures(df['cell structure'])
     # cells have a single block, extrapolate the tuple instead of using the list of blocks
     first_block_iter = map(lambda blocks: blocks[0], cells)
 
@@ -258,7 +247,7 @@ def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
     csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
     df = pd.read_csv(csv_path)
 
-    cells = __parse_cell_structures(df['cell structure'])
+    cells = parse_cell_structures(df['cell structure'])
 
     op_counters = __update_op_counters(cells, op_counters)
     values = __generate_value_list_from_counters_dict(op_counters, operations)
@@ -328,7 +317,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
             avg_time_errors[b - 2] = statistics.mean(time_errors)
             max_time_errors[b - 2] = max(time_errors)
             min_time_errors[b - 2] = min(time_errors)
-            time_mapes[b - 2] = ((time_errors / merge_df['training time(seconds)']).abs()).mean() * 100
+            time_mapes[b - 2] = compute_mape(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
             time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
 
         # always compute accuracy prediction errors (LSTM controller)
@@ -340,7 +329,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
         avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors)
         max_acc_errors[b - 2] = max(val_accuracy_errors)
         min_acc_errors[b - 2] = min(val_accuracy_errors)
-        acc_mapes[b - 2] = ((val_accuracy_errors / merge_df['best val accuracy']).abs()).mean() * 100
+        acc_mapes[b - 2] = compute_mape(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
         acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
 
         # add also MAPE and spearman to legends
