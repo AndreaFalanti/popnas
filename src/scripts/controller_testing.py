@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 
 import log_service
 from utils.func_utils import to_list_of_tuples, parse_cell_structures, compute_spearman_rank_correlation_coefficient, compute_mape
+from utils.rstr import rstr
 from ..encoder import StateSpace
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
@@ -27,8 +28,8 @@ class ControllerManagerTesting:
     '''
 
     def __init__(self, state_space: StateSpace, B: int, logger: logging.Logger,
-                 train_iterations=10, reg_param=0.001, controller_cells=48, embedding_dim=30,
-                 pnas_mode=False, use_previous_data=True):
+                 train_iterations=10, reg_param=0.001, controller_cells=48, embedding_dim=30, lr1=0.01, lr2=0.002,
+                 use_previous_data=True, use_l2_reg=False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -54,8 +55,6 @@ class ControllerManagerTesting:
 
         self.train_iterations = train_iterations
         self.controller_cells = controller_cells
-        self.reg_strength = reg_param
-        self.pnas_mode = pnas_mode
         self.use_previous_data = use_previous_data
 
         self.build_regressor_config = True
@@ -63,7 +62,13 @@ class ControllerManagerTesting:
         self.children_history = []
         self.score_history = []
 
-        self.build_policy_network()
+        # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
+        reg = (regularizers.l2(reg_param) if use_l2_reg else regularizers.l1(reg_param)) if reg_param > 0 else None
+        self.controller = self.build_controller_model(reg)
+
+        # PNAS paper specifies different learning rates, one for b=1 and another for other b values
+        self.optimizer = optimizers.Adam(learning_rate=lr2)
+        self.optimizer_b1 = optimizers.Adam(learning_rate=lr1)
 
     def __prepare_rnn_inputs(self, cell_spec):
         '''
@@ -181,24 +186,10 @@ class ControllerManagerTesting:
         # tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
         # model_callbacks.append(tb_callback)
 
+        plateau_callback = callbacks.ReduceLROnPlateau(monitor='loss', factor=0.4, patience=4, verbose=1)
+        model_callbacks.append(plateau_callback)
+
         return model_callbacks
-
-    def build_policy_network(self):
-        '''
-        Construct the RNN controller network with the provided settings.
-
-        Also constructs saver and restorer to the RNN controller if required.
-        '''
-
-        # learning_rate = tf.compat.v1.train.exponential_decay(0.001, self.global_step, 500, 0.98, staircase=True)
-
-        # TODO: L1 regularizer is cited in PNAS paper, but where to apply it?
-        reg = regularizers.l1(self.reg_strength) if self.reg_strength > 0 else None
-        self.controller = self.build_controller_model(reg)
-
-        # PNAS paper specifies different learning rates, one for b=1 and another for other b values
-        self.optimizer = optimizers.Adam(learning_rate=0.002)
-        self.optimizer_b1 = optimizers.Adam(learning_rate=0.01)
 
     def train_step(self, b: int, cells, rewards):
         '''
@@ -228,11 +219,10 @@ class ControllerManagerTesting:
 
         # train only on last trained CNN batch.
         # Controller starts from the weights trained on previous CNNs, so retraining on them would cause overfitting on previous samples.
-        hist = self.controller.fit(
-            x=rnn_dataset,
-            epochs=self.train_iterations,
-            callbacks=model_callbacks
-        )
+        hist = self.controller.fit(x=rnn_dataset,
+                                   epochs=self.train_iterations,
+                                   callbacks=model_callbacks)
+        self._logger.info("losses: %s", rstr(hist.history['loss']))
 
     def estimate_accuracy(self, child_spec: 'list[tuple]'):
         '''
@@ -347,10 +337,11 @@ def main():
     state_space = StateSpace(B=b_max, operators=operators, input_lookback_depth=-2)
 
     controller_configs = [
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=0),
-        # ControllerManagerTesting(state_space, b_max, logger, train_iterations=20),
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=1e-5),
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=1e-4)
+        # ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=1e-5),
+        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002),   # this
+        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002),
+        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002, controller_cells=100, embedding_dim=100),
+        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002, controller_cells=120, embedding_dim=25),
     ]
 
     # create an empty list of dicts
