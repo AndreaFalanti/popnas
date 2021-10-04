@@ -35,7 +35,7 @@ class ControllerManager:
                  B=5, K=256, T=np.inf,
                  train_iterations=10, reg_param=1e-4, controller_cells=48, embedding_dim=30, lr1=0.01, lr2=0.002,
                  pnas_mode=False, use_previous_data=True,
-                 input_B=None, restore_controller=False):
+                 restore_controller=False):
         '''
         Manages the Controller network training and prediction process.
 

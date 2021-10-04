@@ -70,6 +70,20 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
     plt.savefig(save_path, bbox_inches='tight')
 
 
+def __plot_boxplot(values, labels, x_label, y_label, title, save_name):
+    plt.figure()
+    plt.boxplot(values, labels=labels)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(title)
+
+    # add y grid lines
+    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
+
+    save_path = log_service.build_path('plots', save_name)
+    plt.savefig(save_path, bbox_inches='tight')
+
+
 def __plot_pie_chart(labels, values, title, save_name):
     total = sum(values)
     # def pct_val_formatter(x):
@@ -292,8 +306,8 @@ def __build_prediction_dataframe(b: int, pnas_mode: bool):
 
 
 def plot_predictions_error(B: int, pnas_mode: bool):
-    avg_time_errors, max_time_errors, min_time_errors = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
-    avg_acc_errors, max_acc_errors, min_acc_errors = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+    time_errors, avg_time_errors, max_time_errors, min_time_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+    acc_errors, avg_acc_errors, max_acc_errors, min_acc_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
 
     # TODO: maybe better to refactor these lists to numpy arrays too.
@@ -309,26 +323,28 @@ def plot_predictions_error(B: int, pnas_mode: bool):
 
         # compute time prediction errors (regressor)
         if not pnas_mode:
-            time_errors = merge_df['training time(seconds)'] - merge_df['time']
+            time_errors_b = merge_df['training time(seconds)'] - merge_df['time']
 
             pred_times.append(merge_df['time'].to_list())
             real_times.append(merge_df['training time(seconds)'].to_list())
 
-            avg_time_errors[b - 2] = statistics.mean(time_errors)
-            max_time_errors[b - 2] = max(time_errors)
-            min_time_errors[b - 2] = min(time_errors)
+            time_errors.append(time_errors_b)
+            avg_time_errors[b - 2] = statistics.mean(time_errors_b)
+            max_time_errors[b - 2] = max(time_errors_b)
+            min_time_errors[b - 2] = min(time_errors_b)
             time_mapes[b - 2] = compute_mape(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
             time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
 
         # always compute accuracy prediction errors (LSTM controller)
-        val_accuracy_errors = merge_df['best val accuracy'] - merge_df['val accuracy']
+        val_accuracy_errors_b = merge_df['best val accuracy'] - merge_df['val accuracy']
 
         pred_acc.append(merge_df['val accuracy'].to_list())
         real_acc.append(merge_df['best val accuracy'].to_list())
 
-        avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors)
-        max_acc_errors[b - 2] = max(val_accuracy_errors)
-        min_acc_errors[b - 2] = min(val_accuracy_errors)
+        acc_errors.append(val_accuracy_errors_b)
+        avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors_b)
+        max_acc_errors[b - 2] = max(val_accuracy_errors_b)
+        min_acc_errors[b - 2] = min(val_accuracy_errors_b)
         acc_mapes[b - 2] = compute_mape(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
         acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
 
@@ -346,6 +362,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
                                   'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
                                      'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
+        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot.png')
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
@@ -354,6 +371,8 @@ def plot_predictions_error(B: int, pnas_mode: bool):
                               'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
                                  'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
+    __plot_boxplot(acc_errors, x, 'Blocks', 'Accuracy error',
+                   'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot.png')
 
     __logger.info("Prediction error overview plots written successfully")
 
