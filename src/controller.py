@@ -383,11 +383,15 @@ class ControllerManager:
 
         # a-MLLibrary, redirect output to POPNAS logger (it uses stderr for output, see custom logger)
         redir_logger = StreamToLogger(self._amllibrary_logger)
+        cpus = os.cpu_count()
+        self._logger.info("Running regressors training on %d threads", cpus)
         with redirect_stdout(redir_logger):
             with redirect_stderr(redir_logger):
                 sequence_data_processor = sequence_data_processing.SequenceDataProcessing(
                     log_service.build_path('ini', 'aMLLibrary_regressors.ini'),
-                    output=log_service.build_path('regressors', f'B{self.b_}'))
+                    output=log_service.build_path('regressors', f'B{self.b_}'),
+                    j=cpus
+                )
 
                 best_regressor = sequence_data_processor.process()
 

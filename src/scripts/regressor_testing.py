@@ -121,9 +121,11 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     # a-MLLibrary, redirect output to script logger (it uses stderr for output, see custom logger)
     redir_logger = StreamToLogger(logger)
 
+    cpus = os.cpu_count()
+    logger.info("Running regressors training on %d threads", cpus)
     with redirect_stdout(redir_logger):
         with redirect_stderr(redir_logger):
-            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path, output=save_path)
+            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path, output=save_path, j=cpus)
             best_regressor = sequence_data_processor.process()
 
     return best_regressor
