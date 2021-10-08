@@ -61,7 +61,7 @@ def main():
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2,
                           title='Specular mono blocks (input -1) overview')
     display_plot_overview(
-        gen_paths(['acc_pred_overview.png', 'pred_acc_errors_overview.png', 'time_pred_overview.png', 'pred_time_errors_overview.png']),
+        gen_paths(['acc_pred_overview.png', 'pred_acc_errors_boxplot.png', 'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
         2, 2, title='Prediction errors overview')
 
     b = 2
@@ -76,25 +76,30 @@ def main():
     reg_test_path = os.path.join(args.p, 'regressors_test')
     if os.path.isdir(reg_test_path):
         subfolders_full_path = [f.path for f in os.scandir(reg_test_path) if f.is_dir()]
-        regressors_num = len(subfolders_full_path)
 
         regressor_plot_paths = []
         for subfolder in subfolders_full_path:
             plot_path = os.path.join(subfolder, 'results.png')
             regressor_plot_paths.append(plot_path)
 
+        # add reference plot (actual run results) and compute layout info
+        regressor_plot_paths.insert(0, *gen_paths(['time_pred_overview.png']))
+        regressors_num = len(regressor_plot_paths)
         cols = clamp(math.ceil(regressors_num / 2.0), 0, 4)
         rows = math.ceil(regressors_num / cols)
+
         display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview')
 
     controller_test_path = os.path.join(args.p, 'controllers_test')
     if os.path.isdir(controller_test_path):
-        pngs_full_paths = [f.path for f in os.scandir(controller_test_path) if f.is_file() and f.path.endswith('.png')]
-        controllers_num = len(pngs_full_paths)
+        png_full_paths = [f.path for f in os.scandir(controller_test_path) if f.is_file() and f.path.endswith('.png')]
 
+        # add reference plot (actual run results) and compute layout info
+        png_full_paths.insert(0, *gen_paths(['acc_pred_overview.png']))
+        controllers_num = len(png_full_paths)
         cols = clamp(math.ceil(controllers_num / 2.0), 0, 4)
         rows = math.ceil(controllers_num / cols)
-        display_plot_overview(pngs_full_paths, cols, rows, title='Controller testing overview')
+        display_plot_overview(png_full_paths, cols, rows, title='Controller testing overview')
 
 
 if __name__ == '__main__':
