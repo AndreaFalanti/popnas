@@ -15,11 +15,6 @@ import pandas as pd
 from ..utils.stream_to_logger import StreamToLogger
 from ..utils.catboost_eval_metric_spearman import CatBoostEvalMetricSpearman
 
-# TODO: deleting this would cause import failures inside aMLLibrary files, but from POPNAS its better to
-# import them directly to enable intellisense
-amllibrary_path = os.path.join(os.getcwd(), 'src', 'aMLLibrary')
-sys.path.append(amllibrary_path)
-
 from ..aMLLibrary import sequence_data_processing
 
 

@@ -1,11 +1,6 @@
 import argparse
 import sys
 
-# Deleting this would cause import failures inside aMLLibrary modules,
-# but in POPNAS modules its better to import them directly to enable intellisense.
-# Make sure this is executed before any module using aMLLibrary is imported.
-sys.path.append('aMLLibrary')
-
 import log_service
 from train import Train
 
