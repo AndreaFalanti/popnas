@@ -11,6 +11,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import psutil
 
 from ..utils.stream_to_logger import StreamToLogger
 from ..utils.catboost_eval_metric_spearman import CatBoostEvalMetricSpearman
@@ -116,11 +117,11 @@ def build_best_regressor(config_path, log_path, logger, b: int):
     # a-MLLibrary, redirect output to script logger (it uses stderr for output, see custom logger)
     redir_logger = StreamToLogger(logger)
 
-    cpus = os.cpu_count()
-    logger.info("Running regressors training on %d threads", cpus)
+    usable_cpu_cores = len(psutil.Process().cpu_affinity())
+    logger.info("Running regressors training on %d threads", usable_cpu_cores)
     with redirect_stdout(redir_logger):
         with redirect_stderr(redir_logger):
-            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path, output=save_path, j=cpus)
+            sequence_data_processor = sequence_data_processing.SequenceDataProcessing(config_path, output=save_path, j=usable_cpu_cores)
             best_regressor = sequence_data_processor.process()
 
     return best_regressor
