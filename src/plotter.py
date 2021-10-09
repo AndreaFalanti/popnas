@@ -210,79 +210,75 @@ def plot_training_info_per_block():
     __logger.info("Training aggregated overview plots written successfully")
 
 
-def __initialize_operation_usage_data(operations):
+def __initialize_dict_usage_data(keys: list):
     '''
     Create dictionary with indexes and initialize counters.
     '''
-    op_counters = {}
+    counters_dict = {}
 
-    for op in operations:
-        op_counters[op] = 0
+    for key in keys:
+        counters_dict[key] = 0
 
-    return op_counters
+    return counters_dict
 
 
-# TODO: unused right now
-def __prune_zero_values_and_labels(operations, op_counters: np.ndarray):
+def __update_counters(cells, op_counters: dict, input_counters: dict):
     '''
-    Prune labels associated to 0 values to avoid displaying them in plot
-    '''
-    op_gather_indexes = np.flatnonzero(op_counters)
-    operations = [operations[i] for i in op_gather_indexes]
-
-    # prune 0 values
-    op_counters = op_counters[op_counters != 0]
-
-    return operations, op_counters
-
-
-def __update_op_counters(cells, op_counters):
-    '''
-    Iterate cell structures and increment operation counters when the operation is encountered. 
+    Iterate cell structures and increment operators and inputs counters when the values are encountered.
     '''
     # iterate all cells (models selected for training)
     for cell in cells:
-        # iterate on blocks tuple(in1, op1, in2, op2)
-        for _, op1, _, op2 in cell:
+        # iterate on blocks tuple
+        for in1, op1, in2, op2 in cell:
             op_counters[op1] += 1
             op_counters[op2] += 1
+            input_counters[int(in1)] += 1
+            input_counters[int(in2)] += 1
 
-    return op_counters
+    return op_counters, input_counters
 
 
-def __generate_value_list_from_counters_dict(op_counters: 'dict[str, int]', operations: 'list[str]'):
+def __generate_value_list_from_op_counters_dict(op_counters: 'dict[str, int]', operations: 'list[str]'):
     return [op_counters[op] for op in operations]
 
 
-def plot_pareto_operation_usage(b: int, operations: 'list[str]'):
-    op_counters = __initialize_operation_usage_data(operations)
+def __generate_value_list_from_inputs_counters_dict(input_counters: 'dict[int, int]', inputs: 'list[int]'):
+    return [input_counters[inp] for inp in inputs]
 
-    __logger.info("Analyzing operation usage for pareto front of b=%d", b)
+
+def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]'):
+    op_counters = __initialize_dict_usage_data(operators)
+    input_counters = __initialize_dict_usage_data(inputs)
+
+    __logger.info("Analyzing operators and inputs usage of pareto front for b=%d", b)
     csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
     df = pd.read_csv(csv_path)
 
     cells = parse_cell_structures(df['cell structure'])
 
-    op_counters = __update_op_counters(cells, op_counters)
-    values = __generate_value_list_from_counters_dict(op_counters, operations)
+    op_counters, input_counters = __update_counters(cells, op_counters, input_counters)
+    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
+    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
 
-    # operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
+    __plot_pie_chart(operators, op_values, f'Operators usage in b={b} pareto front', f'pareto_op_usage_B{b}')
+    __logger.info("Pareto operators usage plot for b=%d written successfully", b)
+    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} pareto front', f'pareto_inputs_usage_B{b}')
+    __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
-    __plot_pie_chart(operations, values, f'Operations usage in b={b} pareto front', f'pareto_op_usage_B{b}')
-    __logger.info("Pareto op usage plot for b=%d written successfully", b)
 
+def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[str]'):
+    op_counters = __initialize_dict_usage_data(operators)
+    input_counters = __initialize_dict_usage_data(inputs)
 
-def plot_children_op_usage(b: int, operations: 'list[str]', children_cnn: 'list[str]'):
-    op_counters = __initialize_operation_usage_data(operations)
+    __logger.info("Analyzing operators and inputs usage of CNN children to train for b=%d", b)
+    op_counters, input_counters = __update_counters(children_cnn, op_counters, input_counters)
+    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
+    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
 
-    __logger.info("Analyzing operation usage for CNN children to train for b=%d", b)
-    op_counters = __update_op_counters(children_cnn, op_counters)
-    values = __generate_value_list_from_counters_dict(op_counters, operations)
-
-    # operations, op_counters = __prune_zero_values_and_labels(operations, op_counters)
-
-    __plot_pie_chart(operations, values, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
-    __logger.info("Children op usage plot for b=%d written successfully", b)
+    __plot_pie_chart(operators, op_values, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
+    __logger.info("Children operators usage plot for b=%d written successfully", b)
+    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} CNN children', f'children_inputs_usage_B{b}')
+    __logger.info("Children inputs usage plot for b=%d written successfully", b)
 
 
 def __build_prediction_dataframe(b: int, pnas_mode: bool):
@@ -360,19 +356,19 @@ def plot_predictions_error(B: int, pnas_mode: bool):
 
         __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
                                   'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
+        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot.png')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
                                      'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
-        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot.png')
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
     # write plots about accuracy
     __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
                               'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
-    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
-                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
     __plot_boxplot(acc_errors, x, 'Blocks', 'Accuracy error',
                    'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot.png')
+    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
+                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
 
     __logger.info("Prediction error overview plots written successfully")
 

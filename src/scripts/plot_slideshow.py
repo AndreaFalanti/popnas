@@ -58,16 +58,17 @@ def main():
 
     gen_paths = path_closure(args.p)
 
-    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']), 2, 2,
-                          title='Specular mono blocks (input -1) overview')
-    display_plot_overview(
-        gen_paths(['acc_pred_overview.png', 'pred_acc_errors_boxplot.png', 'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
-        2, 2, title='Prediction errors overview')
+    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
+                          2, 2, title='Specular mono blocks (input -1) overview')
+    display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_boxplot.png',
+                                     'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
+                          2, 2, title='Prediction errors overview')
 
     b = 2
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
-        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png']), 2, 1,
-                              title=f'Operation usage overview (B={b})')
+        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
+                                         f'pareto_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
+                              2, 2, title=f'Operation usage overview (B={b})')
         b += 1
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png']), 2, 1, title='CNN training per block overview')

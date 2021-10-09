@@ -396,11 +396,14 @@ class Train:
 
                 controller.update_step(headers)
 
+                # remove invalid input values for current blocks
+                inputs_to_prune_count = current_blocks + 1 - self.blocks
+                valid_inputs = state_space.input_values if inputs_to_prune_count >= 0 else state_space.input_values[:inputs_to_prune_count]
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:
-                    plotter.plot_pareto_operation_usage(current_blocks + 1, operators)
+                    plotter.plot_pareto_inputs_and_operators_usage(current_blocks + 1, operators, valid_inputs)
                 # state_space.children are updated in controller.update_step, CNN to train in next step
-                plotter.plot_children_op_usage(current_blocks + 1, operators, state_space.children)
+                plotter.plot_children_inputs_and_operators_usage(current_blocks + 1, operators, valid_inputs, state_space.children)
 
         plotter.plot_training_info_per_block()
         plotter.plot_predictions_error(self.blocks, self.pnas_mode)
