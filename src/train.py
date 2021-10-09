@@ -406,6 +406,7 @@ class Train:
                 plotter.plot_children_inputs_and_operators_usage(current_blocks + 1, operators, valid_inputs, state_space.children)
 
         plotter.plot_training_info_per_block()
+        plotter.plot_cnn_train_boxplots_per_block(self.blocks)
         plotter.plot_predictions_error(self.blocks, self.pnas_mode)
 
         self._logger.info("Finished!")

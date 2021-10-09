@@ -71,7 +71,8 @@ def main():
                               2, 2, title=f'Operation usage overview (B={b})')
         b += 1
 
-    display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png']), 2, 1, title='CNN training per block overview')
+    display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
+                          2, 2, title='CNN training per block overview')
 
     # check if regressor test folder is present (regressor_testing.py output)
     reg_test_path = os.path.join(args.p, 'regressors_test')

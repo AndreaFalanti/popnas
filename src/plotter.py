@@ -23,10 +23,16 @@ plt.set_loglevel('WARNING')
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
+    
 
+def __save_and_close_plot(fig, save_name):
+    save_path = log_service.build_path('plots', save_name)
+    plt.savefig(save_path, bbox_inches='tight')
+    plt.close(fig)
+    
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
-    plt.figure()
+    fig = plt.figure()
     plt.bar(x, y)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -39,8 +45,7 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=Fa
     if incline_labels:
         plt.gcf().autofmt_xdate()
 
-    save_path = log_service.build_path('plots', save_name)
-    plt.savefig(save_path, bbox_inches='tight')
+    __save_and_close_plot(fig, save_name)
 
 
 def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y_label, title, save_name):
@@ -66,12 +71,11 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
 
     ax.legend()
 
-    save_path = log_service.build_path('plots', save_name)
-    plt.savefig(save_path, bbox_inches='tight')
+    __save_and_close_plot(fig, save_name)
 
 
 def __plot_boxplot(values, labels, x_label, y_label, title, save_name):
-    plt.figure()
+    fig = plt.figure()
     plt.boxplot(values, labels=labels)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -80,8 +84,7 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name):
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
 
-    save_path = log_service.build_path('plots', save_name)
-    plt.savefig(save_path, bbox_inches='tight')
+    __save_and_close_plot(fig, save_name)
 
 
 def __plot_pie_chart(labels, values, title, save_name):
@@ -89,7 +92,7 @@ def __plot_pie_chart(labels, values, title, save_name):
     # def pct_val_formatter(x):
     #     return '{:.3f}%\n({:.0f})'.format(x, total*x/100)
 
-    fig1, ax1 = plt.subplots()
+    fig, ax = plt.subplots()
 
     explode = np.empty(len(labels))  # type: np.ndarray
     explode.fill(0.03)
@@ -97,15 +100,14 @@ def __plot_pie_chart(labels, values, title, save_name):
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
     legend_labels = [f'{label} - {(val / total) * 100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
-    patches, texts = ax1.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None)
-    ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None)
+    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
     plt.title(title)
     plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.03, 0.04))
     plt.subplots_adjust(right=0.7)
 
-    save_path = log_service.build_path('plots', save_name)
-    plt.savefig(save_path, bbox_inches='tight')
+    __save_and_close_plot(fig, save_name)
 
 
 def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_reference=True, legend_labels=None):
@@ -140,8 +142,7 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_
 
         ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
-    save_path = log_service.build_path('plots', save_name)
-    plt.savefig(save_path, bbox_inches='tight')
+    __save_and_close_plot(fig, save_name)
 
 
 def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
@@ -208,6 +209,23 @@ def plot_training_info_per_block():
     __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview.png')
 
     __logger.info("Training aggregated overview plots written successfully")
+
+
+def plot_cnn_train_boxplots_per_block(B: int):
+    __logger.info("Analyzing training results data...")
+    csv_path = log_service.build_path('csv', 'training_results.csv')
+    df = pd.read_csv(csv_path)
+
+    times_per_block, acc_per_block = [], []
+    x = list(range(1, B+1))
+    for b in x:
+        b_df = df[df['# blocks'] == b]
+
+        acc_per_block.append(b_df['best val accuracy'])
+        times_per_block.append(b_df['training time(seconds)'])
+
+    __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot.png')
+    __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot.png')
 
 
 def __initialize_dict_usage_data(keys: list):
