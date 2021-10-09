@@ -507,9 +507,9 @@ class ControllerManager:
 
         df.to_csv(csv_path, na_rep=0, index=False)
 
-        # TODO: choice between catboost and aMLLibrary. Better to have only one enabled for now.
-        # regressor = self.setup_regressor(techniques=['NNLS', 'SVR', 'LRRidge', 'XGBoost'])
-        regressor = self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
+        # TODO: choice between catboost and aMLLibrary. Choose best settings based on tuning runs.
+        regressor = self.setup_regressor(techniques=['LRRidge']) if self.b_ == 1 \
+            else self.train_catboost_regressor(csv_path, log_service.build_path('regressors', f'B{self.b_}'))
 
         if self.b_ + 1 <= self.B:
             self.b_ += 1
