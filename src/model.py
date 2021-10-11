@@ -9,14 +9,14 @@ from utils.func_utils import to_int_tuple, list_flatten
 
 class ModelGenerator:
 
-    def __init__(self, cell_spec, filters=24, concat_only_unused=True, weight_norm=None):
+    def __init__(self, cell_spec, filters=24, normal_cells_per_stack=2, cell_stacks=3, concat_only_unused=True, weight_norm=None):
         '''
         Utility class to build a CNN with structure provided in the action list.
 
         # Args:
             actions: list of [input; action] pairs that define the cell.
             filters (int): initial number of filters.
-            concat_only_unused (bool): concats only unused states at the end of each cell if true, otherwise concats all blocks output.
+            concat_only_unused (bool): concatenates only unused states at the end of each cell if true, otherwise concatenates all blocks output.
         '''
 
         self._logger = log_service.get_logger(__name__)
@@ -36,8 +36,8 @@ class ModelGenerator:
 
         if len(cell_spec) > 0:
             self.action_list = [x for x in zip(*[iter(cell_spec)] * 2)]  # generate a list of tuples (pairs)
-            self.M = 3
-            self.N = 2
+            self.M = cell_stacks
+            self.N = normal_cells_per_stack
         else:
             self.action_list = []
             self.M = 1
@@ -48,6 +48,10 @@ class ModelGenerator:
         self.prev_cell_filters = 0
 
         self.weight_norm = regularizers.l2(weight_norm) if weight_norm is not None else None
+
+        # used for layers naming, defined in class to avoid to pass them across multiple functions
+        self.cell_index = 0
+        self.block_index = 0
 
     def __compile_op_regexes(self):
         '''
@@ -86,10 +90,6 @@ class ModelGenerator:
         return [inputs[-1], cell_output]
 
     def build_model(self):
-        # used for layers naming, defined in class to avoid to pass them across multiple functions
-        self.cell_index = 0
-        self.block_index = 0
-
         filters = self.filters
 
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used

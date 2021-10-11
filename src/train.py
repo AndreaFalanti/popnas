@@ -20,26 +20,38 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
 class Train:
 
-    def __init__(self, blocks, children, checkpoint,
-                 dataset, sets, epochs, batchsize,
-                 learning_rate, restore, filters, weight_norm,
-                 all_blocks_concat, pnas_mode):
+    def __init__(self, blocks, children_max_size,
+                 dataset, sets,
+                 epochs, batch_size, learning_rate, filters, weight_reg,
+                 cell_stacks, normal_cells_per_stack,
+                 all_blocks_concat, pnas_mode,
+                 checkpoint, restore):
 
         self._logger = log_service.get_logger(__name__)
 
+        # search space parameters
         self.blocks = blocks
-        self.checkpoint = checkpoint
-        self.children = children
+        self.children_max_size = children_max_size
+
+        # dataset parameters
         self.dataset = dataset
         self.sets = sets
+
+        # CNN models parameters
         self.epochs = epochs
-        self.batchsize = batchsize
+        self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.restore = restore
         self.filters = filters
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
         self.concat_only_unused = not all_blocks_concat
+        self.cell_stacks = cell_stacks
+        self.normal_cells_per_stack = normal_cells_per_stack
+
         self.pnas_mode = pnas_mode
+
+        # for restoring a run
+        self.checkpoint = checkpoint
+        self.restore = restore
 
         plotter.initialize_logger()
 
@@ -302,6 +314,8 @@ class Train:
 
         # print the state space being searched
         state_space.print_state_space()
+        self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
+        self._logger.info('%s', '*' * 101)
 
         # load correct dataset (based on self.dataset), test data is not used actually
         (x_train_init, y_train_init), _ = self.load_dataset()
@@ -309,12 +323,13 @@ class Train:
         dataset = self.prepare_dataset(x_train_init, y_train_init)
 
         # create the Network Manager
-        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batchsize,
-                                 learning_rate=self.learning_rate, filters=self.filters,
-                                 concat_only_unused=self.concat_only_unused, weight_norm=self.weight_norm)
+        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batch_size,
+                                 learning_rate=self.learning_rate, filters=self.filters, weight_reg=self.weight_reg,
+                                 cell_stacks=self.cell_stacks, normal_cells_per_stack=self.normal_cells_per_stack,
+                                 concat_only_unused=self.concat_only_unused)
 
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children,
+        controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children_max_size,
                                        train_iterations=15, reg_param=3e-5, lr1=0.002, controller_cells=60, embedding_dim=10,
                                        pnas_mode=self.pnas_mode, restore_controller=self.restore)
 

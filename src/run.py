@@ -20,7 +20,9 @@ def main():
     parser.add_argument('-r', '--restore', help="restore a previous run", action="store_true")
     parser.add_argument('-t', metavar='FOLDER', type=str, help="log folder to restore", default="")
     parser.add_argument('-f', metavar='FILTERS', type=int, help="initial number of filters", default=24)
-    parser.add_argument('-wn', metavar='WEIGHT_REG', type=float, help="L2 weight regularization factor, not applied if not specified", default=None)
+    parser.add_argument('-m', metavar='CELL_STACKS', type=int, help="number of cell stacks to use when building the CNNs", default=3)
+    parser.add_argument('-n', metavar='NORMAL_CELLS', type=int, help="number of normal cells (stride 1) to use in a cell stack", default=2)
+    parser.add_argument('-wr', metavar='WEIGHT_REG', type=float, help="L2 weight regularization factor, not applied if not specified", default=None)
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
     parser.add_argument('--abc', help="concat all blocks output in a cell output, otherwise use unused only", action="store_true")
     parser.add_argument('--pnas', help="run in PNAS mode (no regressor, only LSTM controller)", action="store_true")
@@ -55,11 +57,12 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
-    run = Train(args.b, args.k, checkpoint=args.c,
-                dataset=args.d, sets=args.s, epochs=args.e, batchsize=args.z,
-                learning_rate=args.l, restore=args.restore,
-                filters=args.f, weight_norm=args.wn,
-                all_blocks_concat=args.abc, pnas_mode=args.pnas)
+    run = Train(args.b, args.k,
+                dataset=args.d, sets=args.s,
+                epochs=args.e, batch_size=args.z, learning_rate=args.l, filters=args.f, weight_reg=args.wr,
+                cell_stacks=args.m, normal_cells_per_stack=args.n,
+                all_blocks_concat=args.abc, pnas_mode=args.pnas,
+                checkpoint=args.c, restore=args.restore)
 
     run.process()
 

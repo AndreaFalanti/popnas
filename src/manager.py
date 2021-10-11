@@ -28,16 +28,20 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24, concat_only_unused=True, weight_norm=None):
+    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24,
+                 weight_reg=None, cell_stacks=3, normal_cells_per_stack=2, concat_only_unused=True):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
 
-        # Args:
+        Args:
             dataset: a tuple of 4 arrays (X_train, y_train, X_val, y_val)
             epochs: number of epochs to train the subnetworks
             batchsize: batchsize
             learning_rate: learning rate for the Optimizer
+            weight_reg (float): weight regularization factor
+            cell_stacks (int): cell stacks used to build each CNN
+            normal_cells_per_stack (int): normal cells used in each cell stack
             filters (int): initial number of filters
             concat_only_unused (bool): use only blocks' outputs not used internally in cell in the final concatenation layer
         '''
@@ -51,11 +55,13 @@ class NetworkManager:
         self.batchsize = batchsize
         self.lr = learning_rate
         self.filters = filters
+        self.cell_stacks = cell_stacks
+        self.normal_cells_per_stack = normal_cells_per_stack
+        self.weight_reg = weight_reg
         self.concat_only_unused = concat_only_unused
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
-        self.weight_norm = weight_norm
 
     # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
     # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
@@ -102,7 +108,8 @@ class NetworkManager:
         Returns:
             (tf.keras.Model, list[tf.keras.callbacks.Callback]): model and callbacks to use while training
         '''
-        model_gen = ModelGenerator(cell_spec, self.filters, self.concat_only_unused, self.weight_norm)  # type: ModelGenerator
+        model_gen = ModelGenerator(cell_spec, self.filters, self.normal_cells_per_stack, self.cell_stacks,
+                                   self.concat_only_unused, self.weight_reg)  # type: ModelGenerator
         model = model_gen.build_model()
 
         loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
