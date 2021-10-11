@@ -39,7 +39,7 @@ class StateSpace:
         It is upto the model designer to interpret this block tuple
         information and construct the final model.
 
-        # Args:
+        Args:
             B: Maximum number of blocks
 
             operators: a list of operations (can be anything, must be
@@ -102,13 +102,15 @@ class StateSpace:
 
     def decode_cell_spec(self, encoded_cell, input_enc_name='cat', op_enc_name='cat'):
         '''
-        Parses a list of encoded states to retrieve a list of state values
+        Decodes an encoded cell specification.
 
-        # Args:
-            state_list: list of encoded states
+        Args:
+            encoded_cell (list): encoded cell specification
+            input_enc_name: name of input encoder
+            op_enc_name: name of operator encoder
 
-        # Returns:
-            list of state values
+        Returns:
+            (list): decoded cell
         '''
         assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
         decode_i = self.input_encoders[input_enc_name].decode
@@ -120,11 +122,14 @@ class StateSpace:
         '''
         Perform encoding for all blocks in a cell
 
-        # Args:
-            child: a list of blocks (which forms one cell / layer)
+        Args:
+            cell_spec (list): plain cell specification
+            input_enc_name: name of input encoder
+            op_enc_name: name of operator encoder
+            flatten (bool): if True, a flat list is returned instead of a list of tuples
 
-        # Returns:
-            list of entity encoded blocks of the cell
+        Returns:
+            (list): encoded cell
         '''
         assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
         encode_i = self.input_encoders[input_enc_name].encode
@@ -150,19 +155,6 @@ class StateSpace:
 
         search_space = (inputs, self.operator_values)
         self.children = list(self.__construct_permutations(search_space))
-
-    # TODO: not necessary?
-    def get_current_step_total_models(self, new_b):
-        new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
-            else min(self.input_lookforward_depth, new_b)
-
-        possible_input_values = new_b_dash - self.input_lookback_depth
-
-        total_new_child_count = (possible_input_values ** 2) * (len(self.operator_values) ** 2)
-        symmetric_child_count = possible_input_values * len(self.operator_values)
-        non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
-
-        return len(self.children) * non_specular_child_count
 
     def prepare_intermediate_children(self, new_b):
         '''
@@ -256,11 +248,11 @@ class StateSpace:
 
     def print_state_space(self):
         ''' Pretty print the state space '''
-        self._logger.info('%s', '*' * 30 + 'STATE SPACE' + '*' * 30)
+        self._logger.info('%s', '*' * 45 + 'STATE SPACE' + '*' * 45)
         self._logger.info('Block values: %s', rstr(list(range(1, self.B + 1))))
         self._logger.info('Inputs: %s', rstr(self.input_values))
         self._logger.info('Operators: %s', rstr(self.operator_values))
-        self._logger.info('%s', '*' * 71)
+        self._logger.info('%s', '*' * 101)
 
     def print_cell_spec(self, cell_spec):
         ''' Print the cell specification space properly '''
@@ -283,10 +275,10 @@ class Encoder:
         self.values = values
         self.encodings = []
 
-        # dictionary (map) for convertion encoding->value
+        # dictionary (map) for conversion encoding->value
         self.__index_map = {}
 
-        # dictionary (map) for convertion value->encoding
+        # dictionary (map) for conversion value->encoding
         # Inverse mapping compared to index_map (see above).
         self.__value_map = {}
 

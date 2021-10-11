@@ -518,15 +518,10 @@ class ControllerManager:
             # closure that returns a function that returns the model generator for current generation step
             generate_models = self.state_space.prepare_intermediate_children(self.b_)
 
-            # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the 
-            # necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
-            # if you can make it more performant prune them before the evaluations again.
+            # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
+            #  necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
+            #  if you can make it more performant prune them before the evaluations again.
             next_models = list(generate_models())
-
-            # TODO: previous method with generator
-            # pbar = tqdm(iterable=enumerate(generate_models()),
-            #             unit='model', desc='Estimating models: ',
-            #             total=self.state_space.get_current_step_total_models(self.b_))
 
             pbar = tqdm(iterable=next_models,
                         unit='model', desc='Estimating models: ',
