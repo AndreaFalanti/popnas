@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import shutil
 from sys import platform
 
 import matplotlib.pyplot as plt
@@ -18,7 +19,22 @@ def path_closure(log_folder):
     return gen_paths
 
 
-def display_plot_overview(plot_paths, columns, rows, title=None):
+def generate_slide_save_path(log_folder):
+    save_folder = os.path.join(log_folder, 'plot_slides')
+    try:
+        os.makedirs(save_folder)
+    except OSError:
+        shutil.rmtree(save_folder)
+        os.makedirs(save_folder)
+
+    def gen_save_name():
+        for i in range(1, 1000):
+            yield os.path.join(save_folder, f'slide_{i}.png')
+
+    return gen_save_name()
+
+
+def display_plot_overview(plot_paths, columns, rows, title=None, save=False, save_name=None):
     assert len(plot_paths) <= (columns * rows)
 
     # force TkAgg for maximizing the window with code below
@@ -41,38 +57,45 @@ def display_plot_overview(plot_paths, columns, rows, title=None):
     if title is not None:
         fig.suptitle(title, fontsize='x-large', fontweight='semibold', y=1.0)
 
-    # maximize graph (TKAgg backend)
-    mng = plt.get_current_fig_manager()
-    if platform == 'win32':
-        mng.window.state('zoomed')
+    # if in save mode, just save plot to file
+    if save:
+        fig.savefig(save_name, bbox_inches='tight', dpi=300)
+    # if not in save mode, display the plot on screen
     else:
-        mng.resize(*mng.window.maxsize())
+        # maximize graph (TKAgg backend)
+        mng = plt.get_current_fig_manager()
+        if platform == 'win32':
+            mng.window.state('zoomed')
+        else:
+            mng.resize(*mng.window.maxsize())
 
-    plt.show()
+        plt.show()
 
 
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
+    parser.add_argument('--save', help="save slides into a folder, instead of displaying them", action="store_true")
     args = parser.parse_args()
 
     gen_paths = path_closure(args.p)
+    gen_save_path = generate_slide_save_path(args.p) if args.save else iter(())
 
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
-                          2, 2, title='Specular mono blocks (input -1) overview')
+                          2, 2, title='Specular mono blocks (input -1) overview', save=args.save, save_name=next(gen_save_path, None))
     display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_boxplot.png',
                                      'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
-                          2, 2, title='Prediction errors overview')
+                          2, 2, title='Prediction errors overview', save=args.save, save_name=next(gen_save_path, None))
 
     b = 2
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
         display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
                                          f'pareto_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
-                              2, 2, title=f'Operation usage overview (B={b})')
+                              2, 2, title=f'Operation usage overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
         b += 1
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
-                          2, 2, title='CNN training per block overview')
+                          2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))
 
     # check if regressor test folder is present (regressor_testing.py output)
     reg_test_path = os.path.join(args.p, 'regressors_test')
@@ -90,7 +113,7 @@ def main():
         cols = clamp(math.ceil(regressors_num / 2.0), 0, 4)
         rows = math.ceil(regressors_num / cols)
 
-        display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview')
+        display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview', save=args.save, save_name=next(gen_save_path, None))
 
     controller_test_path = os.path.join(args.p, 'controllers_test')
     if os.path.isdir(controller_test_path):
@@ -101,7 +124,7 @@ def main():
         controllers_num = len(png_full_paths)
         cols = clamp(math.ceil(controllers_num / 2.0), 0, 4)
         rows = math.ceil(controllers_num / cols)
-        display_plot_overview(png_full_paths, cols, rows, title='Controller testing overview')
+        display_plot_overview(png_full_paths, cols, rows, title='Controller testing overview', save=args.save, save_name=next(gen_save_path, None))
 
 
 if __name__ == '__main__':

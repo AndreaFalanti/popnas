@@ -125,6 +125,8 @@ python .\scripts\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(dat
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
+If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
+
 If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder, also their output plots will be visualized
 in additional slides at the end.
 
