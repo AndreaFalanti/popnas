@@ -83,7 +83,11 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **-c**: defines the checkpoint B value from which restart if the argument -r is specified in the input command.
 - **-d**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
 - **-f**: defines the initial number of filters to use. Defaults to 24.
-- **-wn**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
+- **-wr**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
+- **-m**: defines the number of "cell stacks" to use in each CNN built. Defaults to 3. A cell stack is intended as N normal cells (1-stride)
+  followed by a reduction cell (2-stride). M cell stacks are stacked together to build the final CNN. The last stack has no reduction cell
+  and is directly connected to the GAP. The total number of cells stacked into the CNN is therefore (N + 1) * M - 1.
+- **-n**: defines the number of normal cells to use into a "cell stack". It is the parameter called N in the PNAS paper. Defaults to 2.
 - **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available. Must be specified if the host machine has no gpu.
 - **--abc**: short for "all blocks concatenation".
   If specified, all blocks' output of a cell will be used in concatenation at the end of a cell to build the cell output,
