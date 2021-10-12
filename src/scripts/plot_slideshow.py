@@ -91,7 +91,7 @@ def main():
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
         display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
                                          f'pareto_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
-                              2, 2, title=f'Operation usage overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
+                              2, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
         b += 1
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
