@@ -1,8 +1,11 @@
 # TODO: extrapolate generic helper functions used by multiple modules here
 import re
 from typing import Iterable
-import pandas as pd
+import operator
+from functools import reduce
 
+import tensorflow as tf
+import pandas as pd
 from sklearn.metrics import mean_absolute_percentage_error
 
 
@@ -58,3 +61,19 @@ def parse_cell_structures(cell_structures: Iterable):
     # parse tuple structure (trim round brackets and split by ,)
     return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
             for tuple_str_list in list_of_tuple_str_lists]
+
+
+def compute_tensor_byte_size(tensor: tf.Tensor):
+    dtype_sizes = {
+        tf.float32: 4,
+        tf.float64: 8,
+        tf.int32: 4,
+        tf.int64: 8
+    }
+
+    dtype_size = dtype_sizes[tensor.dtype]
+    # remove batch size from shape
+    tensor_shape = tensor.get_shape().as_list()[1:]
+
+    # byte size is: (number of weights) * (size of each weight)
+    return reduce(operator.mul, tensor_shape, 1) * dtype_size

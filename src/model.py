@@ -1,10 +1,11 @@
 import re
 
+import tensorflow as tf
 from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model
 
 import log_service
 import ops
-from utils.func_utils import to_int_tuple, list_flatten
+from utils.func_utils import to_int_tuple, list_flatten, compute_tensor_byte_size
 
 
 class ModelGenerator:
@@ -33,6 +34,7 @@ class ModelGenerator:
         self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
 
         self.use_skip = -2 in cell_spec[::2]
+        self.use_prev = -1 in cell_spec[::2]
 
         if len(cell_spec) > 0:
             self.action_list = [x for x in zip(*[iter(cell_spec)] * 2)]  # generate a list of tuples (pairs)
@@ -53,6 +55,9 @@ class ModelGenerator:
         self.cell_index = 0
         self.block_index = 0
 
+        # store partition sizes (computed between each two adjacent cells and between last cell and GAP
+        self.partition_sizes = []
+
     def __compile_op_regexes(self):
         '''
         Build a dictionary with compiled regexes for each parametrized supported operation.
@@ -64,6 +69,17 @@ class ModelGenerator:
                 'dconv': re.compile(r'(\d+)x(\d+) dconv'),
                 'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
                 'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
+
+    def __compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
+        input_tensors_size = 0
+
+        # TODO: generalize it for lookback sizes != -2, if want to conduct experiments on different lookbacks. For now not a priority.
+        if self.use_skip:
+            input_tensors_size += compute_tensor_byte_size(cell_inputs[-2])
+        if self.use_prev:
+            input_tensors_size += compute_tensor_byte_size(cell_inputs[-1])
+
+        return input_tensors_size
 
     def __build_cell_util(self, filters, inputs, reduction=False):
         '''
@@ -87,7 +103,10 @@ class ModelGenerator:
 
         # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
         # while -1 is the output of the created cell
-        return [inputs[-1], cell_output]
+        new_inputs = [inputs[-1], cell_output]
+
+        self.partition_sizes.append(self.__compute_partition_size(new_inputs))
+        return new_inputs
 
     def build_model(self):
         filters = self.filters
@@ -119,11 +138,20 @@ class ModelGenerator:
 
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
+
+        # adjust partition sizes, by replacing the last element with only the last cell output,
+        # since only that is passed to GAP (no -2, even if used in cell specification).
+        if len(self.partition_sizes) > 0:
+            self.partition_sizes[-1] = compute_tensor_byte_size(last_output)
+        # initial thrust case, use append since no partitions have been made
+        else:
+            self.partition_sizes.append(compute_tensor_byte_size(last_output))
+
         gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
         output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
 
-        return Model(inputs=model_input, outputs=output)
+        return Model(inputs=model_input, outputs=output), self.partition_sizes
 
     def __build_cell(self, B, action_list, filters, stride, inputs, adapt_depth: bool):
         '''
@@ -201,7 +229,7 @@ class ModelGenerator:
         skip_height = inputs[-2].get_shape().as_list()[1]
         last_height = inputs[-1].get_shape().as_list()[1]
 
-        # address cases where the tensor dims of the two imputs diverge
+        # address cases where the tensor dims of the two inputs diverge
         # spatial dim divergence, pointwise convolution with (2, 2) stride to reduce dimensions of normal cell input to reduce one
         if skip_height != last_height:
             # also uniform the depth between the two inputs
