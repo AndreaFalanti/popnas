@@ -138,6 +138,21 @@ class StateSpace:
         encoded_cell = [(encode_i(in1), encode_o(op1), encode_i(in2), encode_o(op2)) for in1, op1, in2, op2 in cell_spec]
         return list_flatten(encoded_cell) if flatten else encoded_cell
 
+    def __compute_non_specular_expansions_count(self, valid_inputs: list):
+        '''
+        Returns the count of all possible expansions, given the allowed input values for the step.
+        To get the total CNN children for steps B >= 2, multiply this value for the total CNN trained at previous step.
+        Args:
+            valid_inputs (list): allowed input values
+
+        Returns:
+            (int): expansions count (total CNN to train for step B = 1)
+        '''
+        total_expansions_count = (len(valid_inputs) ** 2) * (len(self.operator_values) ** 2)
+        symmetric_expansions_count = len(valid_inputs) * len(self.operator_values)
+        # non symmetric expansions count is returned
+        return (total_expansions_count + symmetric_expansions_count) / 2
+
     def prepare_initial_children(self):
         '''
         Prepare the initial set of child models which must
@@ -151,7 +166,7 @@ class StateSpace:
             inputs = [-1]
 
         self._logger.info("Obtaining search space for b = 1")
-        self._logger.info("Search space size : %d", (len(inputs) * (len(self.operator_values) ** 2)))
+        self._logger.info("Search space size : %d", self.__compute_non_specular_expansions_count(inputs))
 
         search_space = (inputs, self.operator_values)
         self.children = list(self.__construct_permutations(search_space))
@@ -173,15 +188,12 @@ class StateSpace:
             else min(self.input_lookforward_depth, new_b)
 
         allowed_input_values = list(range(self.input_lookback_depth, new_b_dash))
-
-        total_new_child_count = (len(allowed_input_values) ** 2) * (len(self.operator_values) ** 2)
-        symmetric_child_count = len(allowed_input_values) * len(self.operator_values)
-        non_specular_child_count = (total_new_child_count + symmetric_child_count) / 2
+        non_specular_expansions = self.__compute_non_specular_expansions_count(allowed_input_values)
 
         self._logger.info("Obtaining search space for b = %d", new_b)
-        self._logger.info("Search space size: %d", non_specular_child_count)
+        self._logger.info("Search space size: %d", non_specular_expansions)
 
-        self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_child_count)
+        self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_expansions)
 
         search_space = (allowed_input_values, self.operator_values)
         new_search_space = list(self.__construct_permutations(search_space))
