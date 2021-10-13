@@ -90,6 +90,9 @@ class StateSpace:
         self.input_encoders['cat'] = Encoder('cat', values=self.input_values)
         self.operator_encoders['cat'] = Encoder('cat', values=self.operator_values)
 
+        # print info about search space to the logger
+        self.print_state_space()
+
         self.prepare_initial_children()
 
     def add_input_encoder(self, name: str, fn: Callable[[int], Any]):

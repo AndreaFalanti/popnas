@@ -309,13 +309,9 @@ class Train:
 
             self.write_catboost_column_desc_file(header_types)
 
+        self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
-
-        # print the state space being searched
-        state_space.print_state_space()
-        self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
-        self._logger.info('%s', '*' * 101)
 
         # load correct dataset (based on self.dataset), test data is not used actually
         (x_train_init, y_train_init), _ = self.load_dataset()
