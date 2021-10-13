@@ -56,7 +56,10 @@ class ModelGenerator:
         self.block_index = 0
 
         # store partition sizes (computed between each two adjacent cells and between last cell and GAP
-        self.partition_sizes = []
+        self.partitions_dict = {
+            'sizes': [],
+            'use_skip_only': self.use_skip and not self.use_prev
+        }
 
     def __compile_op_regexes(self):
         '''
@@ -105,7 +108,7 @@ class ModelGenerator:
         # while -1 is the output of the created cell
         new_inputs = [inputs[-1], cell_output]
 
-        self.partition_sizes.append(self.__compute_partition_size(new_inputs))
+        self.partitions_dict['sizes'].append(self.__compute_partition_size(new_inputs))
         return new_inputs
 
     def build_model(self):
@@ -114,6 +117,8 @@ class ModelGenerator:
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
         model_input = layers.Input(shape=(32, 32, 3))
+        # save initial input size in bytes into partition list
+        self.partitions_dict['sizes'].append(compute_tensor_byte_size(model_input))
         # put prev filters = input depth
         self.prev_cell_filters = 3
 
@@ -139,19 +144,22 @@ class ModelGenerator:
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
-        # adjust partition sizes, by replacing the last element with only the last cell output,
-        # since only that is passed to GAP (no -2, even if used in cell specification).
-        if len(self.partition_sizes) > 0:
-            self.partition_sizes[-1] = compute_tensor_byte_size(last_output)
-        # initial thrust case, use append since no partitions have been made
+        # adjust partition sizes, by replacing the last element with only the last cell output, since only that is passed
+        # to GAP (no -2, even if used in cell specification).
+        if len(self.partitions_dict['sizes']) > 1:
+            self.partitions_dict['sizes'][-1] = compute_tensor_byte_size(last_output)
+            # remove skipped cells from feasible partitions, when using only skip inputs
+            if self.partitions_dict['use_skip_only']:
+                self.partitions_dict['sizes'][1:-1] = self.partitions_dict['sizes'][2:-1:2]
+        # initial thrust case, use append since no partitions have been made (only input size is present)
         else:
-            self.partition_sizes.append(compute_tensor_byte_size(last_output))
+            self.partitions_dict['sizes'].append(compute_tensor_byte_size(last_output))
 
         gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
         output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
 
-        return Model(inputs=model_input, outputs=output), self.partition_sizes
+        return Model(inputs=model_input, outputs=output), self.partitions_dict
 
     def __build_cell(self, B, action_list, filters, stride, inputs, adapt_depth: bool):
         '''

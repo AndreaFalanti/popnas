@@ -97,15 +97,18 @@ class NetworkManager:
 
         return flops.total_float_ops
 
-    def __write_partitions_file(self, partition_sizes, save_dir):
-        lines = [f'cell_{i} - cell_{i+1}: {size} bytes' for i, size in enumerate(partition_sizes[:-1])]
-        lines.append(f'last_cell - GAP: {partition_sizes[-1]} bytes')
+    def __write_partitions_file(self, partition_dict: dict, save_dir: str):
+        incr = 2 if partition_dict['use_skip_only'] else 1
+        # first value is CNN input size, last is for partition between last cell and GAP; these two cases are handled separately below.
+        lines = [f'cell_{i} - cell_{i + incr}: {size:,} bytes' for i, size in enumerate(partition_dict['sizes'][1:-1])]
+        lines.insert(0, f'initial input size: {partition_dict["sizes"][0]:,} bytes')
+        lines.append(f'last_cell - GAP: {partition_dict["sizes"][-1]:,} bytes')
 
         with open(save_dir, 'w') as f:
             # GG python devs for this crap, a writelines function that works like a write, not adding \n automatically...
             f.writelines(line + '\n' for line in lines)
 
-    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, list]:
+    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, dict]:
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
@@ -114,16 +117,16 @@ class NetworkManager:
             tb_logdir (str): path for tensorboard logging
 
         Returns:
-            (tf.keras.Model, list[tf.keras.callbacks.Callback], list[int]): model and callbacks to use while training
+            (tf.keras.Model, list[tf.keras.callbacks.Callback], dict): model and callbacks to use while training
         '''
         model_gen = ModelGenerator(cell_spec, self.filters, self.normal_cells_per_stack, self.cell_stacks,
                                    self.concat_only_unused, self.weight_reg)  # type: ModelGenerator
-        model, partition_sizes = model_gen.build_model()
+        model, partition_dict = model_gen.build_model()
 
         loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
         model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-        return model, model_gen.define_callbacks(tb_logdir), partition_sizes
+        return model, model_gen.define_callbacks(tb_logdir), partition_dict
 
     def __build_datasets(self, dataset_index: int, use_data_augmentation: bool):
         '''
@@ -187,7 +190,7 @@ class NetworkManager:
                 self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
 
             # build the model, given the actions
-            model, callbacks, partition_sizes = self.__compile_model(cell_spec, tb_logdir)
+            model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
             # add callback to register as accurate as possible the training time
             time_cb = TimingCallback()
             callbacks.append(time_cb)
@@ -217,7 +220,7 @@ class NetworkManager:
             f.write(f'\nFLOPS: {flops:,}')
 
         # write partitions file
-        self.__write_partitions_file(partition_sizes, os.path.join(tb_logdir, 'partitions.txt'))
+        self.__write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
 
         # save also an overview diagram of the network
         plot_model(model, to_file=os.path.join(tb_logdir, 'model.png'), show_shapes=True, show_layer_names=True)
