@@ -122,7 +122,7 @@ class Train:
             cell_spec (list): plain cell specification
 
         Returns:
-            tuple: reward, timer, params, flops of trained CNN
+            tuple: 4 elements: (max accuracy, training time, params, flops) of trained CNN
         """
         # print the cell in a more comprehensive way
         state_space.print_cell_spec(cell_spec)
@@ -169,14 +169,19 @@ class Train:
         '''
 
         self._logger.info('Performing initial thrust with empty cell')
-        _, timer, _, _ = self.generate_and_train_model_from_spec(state_space, manager, [])
+        acc, timer, _, _ = self.generate_and_train_model_from_spec(state_space, manager, [])
+
+        # last field is data augmentation, True for generated sample only
+        time_data = [timer, 0] + [0, 0, 0, 0] * self.blocks + [False]
+        acc_data = [acc, 0] + [0, 0, 0, 0] * self.blocks + [False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-            data = [timer, 0]
-            for _ in range(self.blocks):
-                data.extend([0, 0, 0, 0])
             writer = csv.writer(f)
-            writer.writerow(data)
+            writer.writerow(time_data)
+
+        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(acc_data)
 
     def write_overall_cnn_training_results(self, blocks, timers, rewards):
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
@@ -197,7 +202,7 @@ class Train:
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
     # TODO: not really necessary, even b=1 could use the more powerful generate_eqv_cells_encodings. Keep it or not?
-    def generate_sliding_block_encodings(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+    def generate_sliding_block_encodings(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
         '''
         Usable for cells with b = 1. Simply slide the block in different positions. Very fast since it doesn't need to
         build all possible permutations.
@@ -206,28 +211,25 @@ class Train:
             (list): encoded cells with additional data, to write in csv (list of lists)
         '''
 
-        encoded_cell = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
-        csv_rows = []
+        # encode and flat the lists
+        time_encoded_cell = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
+        acc_encoded_cell = state_space.encode_cell_spec(cell_spec)
 
+        time_csv_rows, acc_csv_rows = [], []
         for i in range(current_blocks, self.blocks + 1):
-            data = [timer, current_blocks]
-
             # slide block forward
-            for _ in range(current_blocks, i):
-                data.extend([0, 0, 0, 0])
+            forward_pad = [0, 0, 0, 0] * (i - current_blocks)
 
-            # add reindexed block encoding (encoded cell is actually a single block)
-            data.extend(encoded_cell)
+            # fill with empty blocks up to B, if necessary
+            filling_pad = [0, 0, 0, 0] * (self.blocks - i)
 
-            # extend with empty blocks, if necessary
-            for _ in range(i + 1, self.blocks + 1):
-                data.extend([0, 0, 0, 0])
+            # last field is data augmentation
+            time_csv_rows.append([timer, current_blocks] + forward_pad + time_encoded_cell + filling_pad + [i != current_blocks])
+            acc_csv_rows.append([accuracy, current_blocks] + forward_pad + acc_encoded_cell + filling_pad + [i != current_blocks])
 
-            csv_rows.append(data)
+        return time_csv_rows, acc_csv_rows
 
-        return csv_rows
-
-    def generate_eqv_cells_encodings(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+    def generate_eqv_cells_encodings(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
         '''
         Needed for cells with b > 1, compared to sliding blocks it also builds the allowed permutations of the blocks
         present in the cell.
@@ -238,30 +240,39 @@ class Train:
 
         # equivalent cells can be useful to train better the regressor
         eqv_cells, _ = state_space.generate_eqv_cells(cell_spec, size=self.blocks)
-        # encode cell spec, using dynamic reindex for operators, but keep it as a list of tuples
-        return list(map(lambda cell: [timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex'), eqv_cells))
 
-    def write_training_time(self, current_blocks: int, timer: float, cell_spec: list, state_space: StateSpace):
+        # encode cell spec, using dynamic reindex for operators in time case. Encoding is automatically flatted into plain list.
+        # last field is data augmentation, false if cell is the extended original cell specification (== works for list of tuples)
+        cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
+        return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec] for cell in eqv_cells],\
+               [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
+
+    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
         '''
-        Write on csv the training time, that will be used for regressor training.
-        Use sliding blocks mechanism to multiple the entries.
+        Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
+        Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
 
         Args:
             current_blocks (int): [description]
             timer (float): [description]
+            accuracy (float):
             cell_spec (list): [description]
             state_space (StateSpace): [description]
         '''
 
-        csv_rows = self.generate_sliding_block_encodings(current_blocks, timer, cell_spec, state_space) if current_blocks == 1 \
-            else self.generate_eqv_cells_encodings(current_blocks, timer, cell_spec, state_space)
+        time_rows, acc_rows = self.generate_sliding_block_encodings(current_blocks, timer, accuracy, cell_spec, state_space) if current_blocks == 1 \
+            else self.generate_eqv_cells_encodings(current_blocks, timer, accuracy, cell_spec, state_space)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
-            writer.writerows(csv_rows)
+            writer.writerows(time_rows)
 
-    def write_catboost_column_desc_file(self, header_types):
-        with open(log_service.build_path('csv', 'column_desc.csv'), mode='w', newline='') as f:
+        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(acc_rows)
+
+    def write_catboost_column_desc_file(self, header_types, y_col: str):
+        with open(log_service.build_path('csv', f'column_desc_{y_col}.csv'), mode='w', newline='') as f:
             writer = csv.writer(f, delimiter='\t')
             writer.writerows(enumerate(header_types))
 
@@ -271,8 +282,8 @@ class Train:
         '''
 
         # create the complete headers row of the CSV files
-        headers = ["time", "blocks"]
-        header_types = ['Label', 'Num']
+        time_csv_headers = ['time', 'blocks']
+        time_header_types, acc_header_types = ['Label', 'Num'], ['Label', 'Num']
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
         reindex_function = None
@@ -299,15 +310,32 @@ class Train:
             for b in range(1, self.blocks + 1):
                 a = b * 2
                 c = a - 1
-                headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
-                header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
+                time_csv_headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
+                time_header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
+                acc_header_types.extend(['Categ', 'Categ', 'Categ', 'Categ'])
+
+            # deep copy substituting first element (y column)
+            # deep copy could be not necessary, but better than fighting with side-effect later on
+            acc_csv_headers = ['acc'] + [header for header in time_csv_headers[1:]]
+
+            # extra boolean field that simply state if the entry has been generated from data augmentation (False for original samples).
+            # this field will be dropped during training, so it is not relevant for algorithms (catboost drops 'Auxiliary' header_type).
+            time_csv_headers.append('data_augmented')
+            time_header_types.append('Auxiliary')
+            acc_csv_headers.append('data_augmented')
+            acc_header_types.append('Auxiliary')
 
             # add headers
-            with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
+            with open(log_service.build_path('csv', 'training_time.csv'), mode='w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(headers)
+                writer.writerow(time_csv_headers)
 
-            self.write_catboost_column_desc_file(header_types)
+            with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(acc_csv_headers)
+
+            self.write_catboost_column_desc_file(time_header_types, 'time')
+            self.write_catboost_column_desc_file(acc_header_types, 'acc')
 
         self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
         # construct a state space
@@ -338,7 +366,7 @@ class Train:
             self.perform_initial_thrust(state_space, manager)
             starting_b = 1
 
-        monoblock_times = []
+        monoblocks_info = []
 
         # train the child CNN networks for each number of blocks
         for current_blocks in range(starting_b, self.blocks + 1):
@@ -356,7 +384,7 @@ class Train:
                 timers.append(timer)
 
                 if current_blocks == 1:
-                    monoblock_times.append([timer, cell_spec])
+                    monoblocks_info.append([timer, reward, cell_spec])
                     # unpack the block (only tuple present in the list) into its components
                     in1, op1, in2, op2 = cell_spec[0]
 
@@ -387,7 +415,7 @@ class Train:
 
                 # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
                 if current_blocks > 1:
-                    self.write_training_time(current_blocks, timer, cell_spec, state_space)
+                    self.write_training_data(current_blocks, timer, reward, cell_spec, state_space)
 
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
@@ -395,8 +423,8 @@ class Train:
                 state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
-                for timer, cell_spec in monoblock_times:
-                    self.write_training_time(current_blocks, timer, cell_spec, state_space)
+                for time, acc, cell_spec in monoblocks_info:
+                    self.write_training_data(current_blocks, time, acc, cell_spec, state_space)
 
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
@@ -405,7 +433,7 @@ class Train:
                 loss = controller.train_step(rewards)
                 self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
 
-                controller.update_step(headers)
+                controller.update_step(time_csv_headers)
 
                 # remove invalid input values for current blocks
                 inputs_to_prune_count = current_blocks + 1 - self.blocks

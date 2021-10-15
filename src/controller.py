@@ -19,7 +19,7 @@ from aMLLibrary import sequence_data_processing
 from aMLLibrary.regressor import Regressor
 from encoder import StateSpace
 from utils.stream_to_logger import StreamToLogger
-from utils.func_utils import to_list_of_tuples
+from utils.func_utils import to_list_of_tuples, strip_unused_amllibrary_config_sections
 
 
 class ControllerManager:
@@ -349,20 +349,14 @@ class ControllerManager:
 
         config.read(os.path.join('configs', 'regressors_hyperopt.ini'))
 
-        for section in config.sections():
-            if section == 'General':
-                continue
-
-            # delete config section not relevant to selected techniques
-            if section not in techniques:
-                del config[section]
+        strip_unused_amllibrary_config_sections(config, techniques)
 
         # value in .ini must be a single string of format ['technique1', 'technique2', ...]
         # note: '' are important for correct execution (see map)
         techniques_iter = map(lambda s: f"'{s}'", techniques)
         techniques_str = f"[{', '.join(techniques_iter)}]"
         config['General']['techniques'] = techniques_str
-        config['DataPreparation'] = {'input_path': log_service.build_path('csv', 'training_time.csv')}
+        config['DataPreparation']['input_path'] = log_service.build_path('csv', 'training_time.csv')
 
         with open(log_service.build_path('ini', 'aMLLibrary_regressors.ini'), 'w') as f:
             config.write(f)
@@ -399,7 +393,7 @@ class ControllerManager:
         return best_regressor
 
     def train_catboost_regressor(self, input_csv_path: str, train_log_path: str):
-        column_description_file = log_service.build_path('csv', 'column_desc.csv')
+        column_description_file = log_service.build_path('csv', 'column_desc_time.csv')
         # first feature is the one used as y (time)
         train_pool = catboost.Pool(input_csv_path, delimiter=',', has_header=True, column_description=column_description_file)
 
@@ -441,7 +435,7 @@ class ControllerManager:
 
         # add missing blocks num feature (see training_time.csv, all columns except time are needed)
         regressor_features = np.append(np.array([self.b_]), encoded_child)
-        headers = headers[1:]  # remove time, because it's the regressor output
+        headers = headers[1:-1]  # remove time, because it's the regressor output, and data_augmented field (last one)
 
         # complete features with missing blocks (0 is for null)
         for _ in range(self.b_, self.B):
@@ -501,11 +495,7 @@ class ControllerManager:
         of larger number of blocks in each cell
         '''
 
-        # TODO: pandas is used only to add 0s and remove headers? But this is already done in code...
         csv_path = log_service.build_path('csv', 'training_time.csv')
-        df = pandas.read_csv(csv_path)
-
-        df.to_csv(csv_path, na_rep=0, index=False)
 
         # TODO: choice between catboost and aMLLibrary. Choose best settings based on tuning runs.
         regressor = self.setup_regressor(techniques=['LRRidge']) if self.b_ == 1 \

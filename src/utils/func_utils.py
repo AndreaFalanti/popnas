@@ -1,4 +1,5 @@
 # TODO: extrapolate generic helper functions used by multiple modules here
+from configparser import ConfigParser
 import re
 from typing import Iterable
 import operator
@@ -77,3 +78,13 @@ def compute_tensor_byte_size(tensor: tf.Tensor):
 
     # byte size is: (number of weights) * (size of each weight)
     return reduce(operator.mul, tensor_shape, 1) * dtype_size
+
+
+def strip_unused_amllibrary_config_sections(config: ConfigParser, techniques: list):
+    for section in config.sections():
+        if section in ['General', 'DataPreparation']:
+            continue
+
+        # delete config section not relevant to selected techniques
+        if section not in techniques:
+            del config[section]

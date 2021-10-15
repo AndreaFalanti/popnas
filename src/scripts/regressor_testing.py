@@ -15,6 +15,7 @@ import psutil
 
 from ..utils.stream_to_logger import StreamToLogger
 from ..utils.catboost_eval_metric_spearman import CatBoostEvalMetricSpearman
+from ..utils.func_utils import strip_unused_amllibrary_config_sections
 
 from ..aMLLibrary import sequence_data_processing
 
@@ -85,20 +86,14 @@ def write_regressor_config_file(input_csv_path, log_path, techniques: 'list[str]
 
     config.read(os.path.join('src', 'configs', 'regressors_hyperopt.ini'))
 
-    for section in config.sections():
-        if section == 'General':
-            continue
-
-        # delete config section not relevant to selected techniques
-        if section not in techniques:
-            del config[section]
+    strip_unused_amllibrary_config_sections(config, techniques)
 
     # value in .ini must be a single string of format ['technique1', 'technique2', ...]
     # note: '' are important for correct execution (see map)
     techniques_iter = map(lambda s: f"'{s}'", techniques)
     techniques_str = f"[{', '.join(techniques_iter)}]"
     config['General']['techniques'] = techniques_str
-    config['DataPreparation'] = {'input_path': input_csv_path}
+    config['DataPreparation']['input_path'] = input_csv_path
 
     save_path = os.path.join(log_path, f'B{actual_b}.ini')
     with open(save_path, 'w') as f:
