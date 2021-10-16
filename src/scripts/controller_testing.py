@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from tensorflow.keras import layers, regularizers, callbacks, optimizers, losses, metrics, Model
+from tensorflow.keras.utils import plot_model
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
@@ -56,8 +57,6 @@ class ControllerManagerTesting:
         self.train_iterations = train_iterations
         self.controller_cells = controller_cells
         self.use_previous_data = use_previous_data
-
-        self.build_regressor_config = True
 
         self.children_history = []
         self.score_history = []
@@ -159,16 +158,22 @@ class ControllerManagerTesting:
         ops = layers.Input(shape=(self.B, 2))
 
         # input dim is the max integer value present in the embedding + 1.
-        inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim)(inputs)
-        ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim)(ops)
+        inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim,
+                                        embeddings_regularizer=weight_reg, mask_zero=True)(inputs)
+        ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim,
+                                     embeddings_regularizer=weight_reg, mask_zero=True)(ops)
 
         embed = layers.Concatenate()([inputs_embed, ops_embed])
         # pass from (None, self.B, 2, 2*embedding_dim) to (None, self.B, 4*embedding_dim),
         # indicating [batch_size, serie_length, features(whole block embedding)]
         embed = layers.Reshape((self.B, 4 * self.embedding_dim))(embed)
 
+        # attention = layers.Attention()([ops_embed, inputs_embed])
+        # embed = layers.Reshape((self.B, 2 * self.embedding_dim))(attention)
+
         # many-to-one, so must have return_sequences = False (it is by default)
-        lstm = layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg)(embed)
+        lstm = layers.Bidirectional(layers.LSTM(self.controller_cells, kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg,
+                                                activity_regularizer=weight_reg))(embed)
         score = layers.Dense(1, activation='sigmoid', kernel_regularizer=weight_reg)(lstm)
 
         return Model(inputs=(inputs, ops), outputs=score)
@@ -185,9 +190,6 @@ class ControllerManagerTesting:
         # By default shows losses and metrics for both training and validation
         # tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
         # model_callbacks.append(tb_callback)
-
-        plateau_callback = callbacks.ReduceLROnPlateau(monitor='loss', factor=0.4, patience=4, verbose=1)
-        model_callbacks.append(plateau_callback)
 
         return model_callbacks
 
@@ -240,6 +242,222 @@ class ControllerManagerTesting:
         score = self.controller.predict(x=pred_dataset)
         # score is a numpy array of shape (1, 1) since model has a single output (return_sequences=False)
         # and dataset has a single item. Simply return the plain element.
+        return score[0, 0]
+
+
+class ConvControllerManagerTesting:
+    '''
+    Utility class to easily test different configurations of the controller on existing data of a previous run.
+    It is based on the actual controller manager, but using a conv1D based controller instead of a LSTM.
+    '''
+
+    def __init__(self, state_space: StateSpace, B: int, logger: logging.Logger, model_log_path: str,
+                 train_iterations=10, reg_param=0.001, filters=16, kernel_size=2, lr=0.01, use_previous_data=True):
+        '''
+        Manages the Controller network training and prediction process.
+
+        # Args:
+            state_space: completely defined search space.
+            B: depth of progression.
+            train_iterations: number of training epochs for the RNN per depth level.
+            reg_param: strength of the L2 regularization loss.
+            controller_cells: number of cells in the Controller LSTM.
+            embedding_dim: embedding dimension for inputs and operators.
+            pnas_mode: if True, do not build a regressor to estimate time. Use only LSTM controller,
+                like original PNAS.
+        '''
+        self._logger = logger
+        self.log_path = model_log_path
+
+        self.state_space = state_space
+        self.B = B
+
+        self.global_epoch = 0
+
+        self.train_iterations = train_iterations
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.use_previous_data = use_previous_data
+
+        self.children_history = []
+        self.score_history = []
+
+        reg = regularizers.l2(reg_param) if reg_param > 0 else None
+        self.controller = self.build_controller_model(reg)
+
+        self.optimizer = optimizers.Adam(learning_rate=lr)
+
+        plot_model(self.controller, to_file=os.path.join(self.log_path, 'model.png'), show_shapes=True, show_layer_names=True)
+
+    def __prepare_rnn_inputs(self, cell_spec):
+        '''
+        Splits a cell specification (list of [in, op]) into separate inputs
+        and operators tensors to be used in LSTM.
+
+        # Args:
+            cell_spec: interleaved [input; operator] pairs, not encoded.
+
+        # Returns:
+            (tuple): contains list of inputs and list of operators.
+        '''
+        cell_encoding = self.state_space.encode_cell_spec(cell_spec)
+
+        inputs = cell_encoding[0::2]  # even place data
+        operators = cell_encoding[1::2]  # odd place data
+
+        # add sequence dimension (final shape is (B, 2)),
+        # to process blocks one at a time by the LSTM (2 inputs, 2 operators)
+        inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(inputs, 2)]
+        operators = [[op1, op2] for op1, op2 in to_list_of_tuples(operators, 2)]
+
+        # right padding to reach B elements
+        for i in range(len(inputs), self.B):
+            inputs.append([0, 0])
+            operators.append([0, 0])
+
+        return [inputs, operators]
+
+    def __build_rnn_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None):
+        '''
+        Build a dataset to be used in the RNN controller.
+
+        Args:
+            cell_specs (list): List of lists of inputs and operators, specification of cells in value form (no encoding).
+            rewards (list[float], optional): List of rewards (y labels). Defaults to None, provide it for building
+                a dataset for training purposes.
+
+        Returns:
+            tf.data.Dataset: [description]
+        '''
+        # generate also equivalent cell specifications. This provides a data augmentation mechanism that
+        # can help the LSTM to learn better
+        eqv_cell_specs, eqv_rewards = [], []
+
+        # build dataset for predictions (no y labels), simply rename the list without doing data augmentation
+        if rewards is None:
+            eqv_cell_specs = cell_specs
+        # build dataset for training (y labels are present)
+        else:
+            for cell_spec, reward in zip(cell_specs, rewards):
+                eqv_cells, _ = self.state_space.generate_eqv_cells(cell_spec)
+
+                # add {len(eqv_cells)} repeated elements into the reward list
+                eqv_rewards.extend([reward] * len(eqv_cells))
+                eqv_cell_specs.extend(eqv_cells)
+
+            rewards = np.array(eqv_rewards, dtype=np.float32)
+            rewards = np.expand_dims(rewards, -1)
+
+        rnn_inputs = list(map(lambda child: self.__prepare_rnn_inputs(child), eqv_cell_specs))
+        # fit function actually wants two distinct lists, instead of a list of tuples. This does the trick.
+        rnn_in = [inputs for inputs, _ in rnn_inputs]
+        rnn_ops = [ops for _, ops in rnn_inputs]
+
+        ds = tf.data.Dataset.from_tensor_slices((rnn_in, rnn_ops))
+        if rewards is not None:
+            ds_label = tf.data.Dataset.from_tensor_slices(rewards)
+            ds = tf.data.Dataset.zip((ds, ds_label))
+        else:
+            # TODO: add fake y, otherwise the input will be separated instead of using a pair of tensors...
+            ds_label = tf.data.Dataset.from_tensor_slices([[1]])
+            ds = tf.data.Dataset.zip((ds, ds_label))
+
+        # add batch size (MUST be done here, if specified in .fit function it doesn't work!)
+        # TODO: also shuffle data, it can be good for better train when reusing old data (should be verified with actual testing, but i suppose so)
+        ds = ds.shuffle(10000).batch(1)
+
+        # for element in ds:
+        #     print(element)
+
+        return ds
+
+    def build_controller_model(self, weight_reg):
+        # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
+        # since the length varies, None is given as dimension
+        inputs = layers.Input(shape=(self.B, 2))
+        ops = layers.Input(shape=(self.B, 2))
+
+        # TODO: add regularization
+        inputs_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=weight_reg)(inputs)
+        ops_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=weight_reg)(ops)
+
+        # indicating [batch_size, serie_length, features(whole block embedding)]
+        block_serie = layers.Concatenate()([inputs_temp_conv, ops_temp_conv])
+
+        # TODO: add regularization
+        block_temp_conv = layers.Conv1D(self.filters * 2, self.kernel_size, activation='relu', kernel_regularizer=weight_reg)(block_serie)
+
+        flatten = layers.Flatten()(block_temp_conv)
+        score = layers.Dense(1, activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
+
+        return Model(inputs=(inputs, ops), outputs=score)
+
+    def define_callbacks(self):
+        '''
+        Define callbacks used in model training.
+
+        Returns:
+            (tf.keras.Callback[]): Keras callbacks
+        '''
+        model_callbacks = []
+
+        # By default shows losses and metrics for both training and validation
+        tb_callback = callbacks.TensorBoard(log_dir=self.log_path, profile_batch=0, histogram_freq=0, update_freq='epoch')
+        model_callbacks.append(tb_callback)
+
+        es_callback = callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)
+        model_callbacks.append(es_callback)
+
+        return model_callbacks
+
+    def train_step(self, b: int, cells, rewards):
+        '''
+        Perform a single train step on the Controller RNN
+        '''
+        # create the dataset using also previous data, if flag is set.
+        # a list of values is stored for both cells and their rewards.
+        if self.use_previous_data:
+            self.children_history.extend(cells)
+            self.score_history.extend(rewards)
+
+            rnn_dataset = self.__build_rnn_dataset(self.children_history, self.score_history)
+        # use only current data
+        else:
+            rnn_dataset = self.__build_rnn_dataset(cells, rewards)
+
+        train_size = len(rnn_dataset) * self.train_iterations
+        self._logger.info("Controller: Number of training steps required for this stage : %d", train_size)
+
+        loss = losses.MeanSquaredError()
+        train_metrics = [metrics.MeanAbsolutePercentageError()]
+        optimizer = self.optimizer
+        model_callbacks = self.define_callbacks()
+
+        # TODO: recompiling will reset optimizer values, don't know if optimizer for b > 1 should be reset or not.
+        self.controller.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+
+        # train only on last trained CNN batch.
+        # Controller starts from the weights trained on previous CNNs, so retraining on them would cause overfitting on previous samples.
+        hist = self.controller.fit(x=rnn_dataset,
+                                   epochs=self.train_iterations,
+                                   callbacks=model_callbacks)
+        self._logger.info("losses: %s", rstr(hist.history['loss']))
+
+    def estimate_accuracy(self, child_spec: 'list[tuple]'):
+        '''
+        Use RNN controller to estimate the model accuracy.
+
+        Args:
+            child_spec (list[tuple]): plain cell specification
+
+        Returns:
+            (float): estimated accuracy predicted
+        '''
+        # TODO: Dataset of single element, maybe not much efficient...
+        pred_dataset = self.__build_rnn_dataset([child_spec])
+
+        score = self.controller.predict(x=pred_dataset)
+
         return score[0, 0]
 
 
@@ -336,12 +554,32 @@ def main():
     b_max = 5
     state_space = StateSpace(B=b_max, operators=operators, input_lookback_depth=-2)
 
+    def generate_controller_log_folder(common_log_path):
+        for i in range(sys.maxsize):
+            controller_log_path = os.path.join(common_log_path, f'config_{i}')
+            os.makedirs(controller_log_path)
+            yield controller_log_path
+
+    path_gen = generate_controller_log_folder(log_path)
+
     controller_configs = [
-        # ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=1e-5),
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002),   # this
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002),
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002, controller_cells=100, embedding_dim=100),
-        ControllerManagerTesting(state_space, b_max, logger, train_iterations=15, reg_param=4e-5, lr1=0.002, controller_cells=120, embedding_dim=25),
+        # ControllerManagerTesting(state_space, b_max, logger, train_iterations=20, reg_param=1e-4, lr1=0.0012, lr2=0.0012, use_l2_reg=True),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=1e-5, filters=12, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=5e-5, filters=12, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=1e-4, filters=12, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=5e-5, filters=12, kernel_size=3, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=1e-5, filters=8, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=5e-5, filters=8, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=1e-4, filters=8, kernel_size=2, lr=0.004),
+        ConvControllerManagerTesting(state_space, b_max, logger, model_log_path=next(path_gen),
+                                     train_iterations=25, reg_param=5e-5, filters=8, kernel_size=3, lr=0.004),
     ]
 
     # create an empty list of dicts
