@@ -29,7 +29,15 @@ def clamp(n: float, lower_bound: float, upper_bound: float):
     return max(lower_bound, min(n, upper_bound))
 
 
-def compute_spearman_rank_correlation_coefficient(df: pd.DataFrame, x_col: str, y_col: str):
+def compute_spearman_rank_correlation_coefficient(y_true: 'list[float]', y_pred: 'list[float]'):
+    '''
+    Spearman rank correlation coefficient, given two lists.
+    '''
+    df = pd.DataFrame.from_dict({'true': y_true, 'est': y_pred})
+    return df['true'].corr(df['est'], method='spearman')
+
+
+def compute_spearman_rank_correlation_coefficient_from_df(df: pd.DataFrame, x_col: str, y_col: str):
     '''
     Spearman rank correlation coefficient, computed on given Pandas dataframe.
     '''

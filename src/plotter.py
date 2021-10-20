@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.io.parsers import TextFileReader
 
 import log_service
-from utils.func_utils import compute_spearman_rank_correlation_coefficient, parse_cell_structures, compute_mape
+from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
@@ -347,7 +347,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
             max_time_errors[b - 2] = max(time_errors_b)
             min_time_errors[b - 2] = min(time_errors_b)
             time_mapes[b - 2] = compute_mape(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
-            time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'training time(seconds)', 'time')
+            time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'training time(seconds)', 'time')
 
         # always compute accuracy prediction errors (LSTM controller)
         val_accuracy_errors_b = merge_df['best val accuracy'] - merge_df['val accuracy']
@@ -360,7 +360,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
         max_acc_errors[b - 2] = max(val_accuracy_errors_b)
         min_acc_errors[b - 2] = min(val_accuracy_errors_b)
         acc_mapes[b - 2] = compute_mape(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
-        acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient(merge_df, 'best val accuracy', 'val accuracy')
+        acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'best val accuracy', 'val accuracy')
 
         # add also MAPE and spearman to legends
         scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
