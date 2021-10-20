@@ -356,6 +356,7 @@ class ControllerManager:
         techniques_iter = map(lambda s: f"'{s}'", techniques)
         techniques_str = f"[{', '.join(techniques_iter)}]"
         config['General']['techniques'] = techniques_str
+        config['General']['y'] = '"time"'
         config['DataPreparation']['input_path'] = log_service.build_path('csv', 'training_time.csv')
 
         with open(log_service.build_path('ini', 'aMLLibrary_regressors.ini'), 'w') as f:
