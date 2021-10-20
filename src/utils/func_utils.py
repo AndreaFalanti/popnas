@@ -1,4 +1,6 @@
 # TODO: extrapolate generic helper functions used by multiple modules here
+import os
+import shutil
 from configparser import ConfigParser
 import re
 from typing import Iterable
@@ -96,3 +98,16 @@ def strip_unused_amllibrary_config_sections(config: ConfigParser, techniques: li
         # delete config section not relevant to selected techniques
         if section not in techniques:
             del config[section]
+
+
+def create_empty_folder(folder_path: str):
+    '''
+    Create an empty folder. If the folder already exists, it's deleted and recreated.
+    Args:
+        folder_path: path of the folder
+    '''
+    try:
+        os.makedirs(folder_path)
+    except OSError:
+        shutil.rmtree(folder_path)
+        os.makedirs(folder_path)
