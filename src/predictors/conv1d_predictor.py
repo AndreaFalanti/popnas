@@ -10,18 +10,18 @@ from nn_predictor import NNPredictor
 from predictors.common.datasets_gen import build_temporal_serie_dataset_2i
 
 
-class LSTMPredictor(NNPredictor):
+class Conv1DPredictor(NNPredictor):
     def __init__(self, state_space: StateSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
-                 embedding_dim: int = 10, lstm_cells: int = 48, weight_reg: float = 1e-5, lr: float = 0.002, epochs: int = 15,
-                 use_previous_data: bool = True):
+                 epochs: int = 15, use_previous_data: bool = True, lr: float = 0.002, weight_reg: float = 1e-5,
+                 filters: int = 12, kernel_size: int = 2):
         # generate a relevant name if not set
         if name is None:
-            name = f'LSTM_ed({embedding_dim})_c({lstm_cells})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
+            name = f'Conv1D_kernel({kernel_size})_f({filters})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
         super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
 
         self.state_space = state_space
-        self.embedding_dim = embedding_dim
-        self.lstm_cells = lstm_cells
+        self.kernel_size = kernel_size
+        self.filters = filters
 
         self.loss = losses.MeanSquaredError()
         self.train_metrics = [metrics.MeanAbsolutePercentageError()]
@@ -43,23 +43,16 @@ class LSTMPredictor(NNPredictor):
         inputs = layers.Input(shape=(self.state_space.B, 2))
         ops = layers.Input(shape=(self.state_space.B, 2))
 
-        # input dim is the max integer value present in the embedding + 1.
-        inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim,
-                                        embeddings_regularizer=self.weight_reg, mask_zero=True)(inputs)
-        ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim,
-                                     embeddings_regularizer=self.weight_reg, mask_zero=True)(ops)
+        inputs_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(inputs)
+        ops_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(ops)
 
-        embed = layers.Concatenate()([inputs_embed, ops_embed])
-        # pass from (None, self.B, 2, 2*embedding_dim) to (None, self.B, 4*embedding_dim),
         # indicating [batch_size, serie_length, features(whole block embedding)]
-        embed = layers.Reshape((self.state_space.B, 4 * self.embedding_dim))(embed)
+        block_serie = layers.Concatenate()([inputs_temp_conv, ops_temp_conv])
 
-        # attention = layers.Attention()([ops_embed, inputs_embed])
-        # embed = layers.Reshape((self.B, 2 * self.embedding_dim))(attention)
+        block_temp_conv = layers.Conv1D(self.filters * 2, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(block_serie)
 
-        # many-to-one, so must have return_sequences = False (it is by default)
-        lstm = layers.Bidirectional(layers.LSTM(self.lstm_cells, kernel_regularizer=self.weight_reg, recurrent_regularizer=self.weight_reg))(embed)
-        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=self.weight_reg)(lstm)
+        flatten = layers.Flatten()(block_temp_conv)
+        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=self.weight_reg)(flatten)
 
         return Model(inputs=(inputs, ops), outputs=score)
 

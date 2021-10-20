@@ -55,6 +55,7 @@ class AMLLibraryPredictor(Predictor):
         techniques_iter = map(lambda s: f"'{s}'", self.techniques)
         techniques_str = f"[{', '.join(techniques_iter)}]"
         config['General']['techniques'] = techniques_str
+        config['General']['y'] = f'"{self.y_col}"'
         config['DataPreparation']['input_path'] = dataset_path
 
         save_path = os.path.join(self.log_folder, 'config.ini')
