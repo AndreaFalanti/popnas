@@ -64,7 +64,6 @@ POPNASv2 can then be launched with command (set arguments as you like):
 docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 ```
 
-
 ## Command line arguments
 **Required arguments:**
 - **-b**: defines the maximum amount of blocks B a cell can contain.
@@ -99,33 +98,33 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 ## Tensorboard
 Trained CNNs have a callback for saving info to tensorboard log files. To access all the runs, run the command:
 ```
-tensorboard --logdir {absolute_path_to_POPNAS_src}\logs\{date}\tensorboard_cnn --port 6096
+tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{date}/tensorboard_cnn --port 6096
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
 
 
 ## Additional scripts
-### Regressor testing script
-An additional script is also provided to analyze the results of multiple regressors on the data gathered in a POPNAS run.
-The script creates an additional folder (*regressors_test*) inside the log folder given as argument.
-Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
+### Time prediction testing script
+An additional script is also provided to analyze the results of multiple predictors on time target, on the data gathered in a POPNAS run.
+The script creates an additional folder (*pred_time_test*) inside the log folder given as argument.
+Script can be launched with the following command:
 ```
-python -m src.scripts.regressor_testing -p {absolute_path_to_logs}\{target_folder(date)}
+python scripts/predictors_time_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
 ```
 
 ### Controller testing script
 Another additional script is provided to analyze the results of multiple controller configurations on the data gathered in a POPNAS run.
-The script creates an additional folder (*controllers_test*) inside the log folder given as argument.
+The script creates an additional folder (*pred_acc_test*) inside the log folder given as argument.
 Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
 ```
-python -m src.scripts.controller_testing -p {absolute_path_to_logs}\{target_folder(date)}
+python scripts/predictors_acc_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
 ```
 
 ### Plot slideshow script
 The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way. To use it, only the log folder must be provided.
 An example of the command usage (from src folder):
 ```
-python .\scripts\plot_slideshow.py -p {absolute_path_to_logs}\{target_folder(date)}
+python ./scripts/plot_slideshow.py -p {absolute_path_to_logs}/{target_folder(date)}
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
@@ -142,15 +141,18 @@ in additional slides at the end.
 - Equivalent blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality.
   Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
-- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments
+- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments.
   A script is provided to train the best model.
-- Add the input columns to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
+- Add back the input columns features to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
   Therefore, input values have a great influence on actual training time and must be used by regressor for accurate estimations.
 - Fix regressor features bug: dynamic reindexing was nullified by an int cast.
-- CatBoost can now be used as time regressor, instead of aMLLibrary supported regressors.
+- CatBoost can now be used as time regressor, instead or together aMLLibrary supported regressors.
 - Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
   Add also the plot slideshow script to visualize all produced plots easily in aggregated views.
-- Add regressor and controller testing scripts, useful to tune their hyperparameters on data of an already completed run.
+- Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
+  tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
+  algorithm and the additional scripts.
+- Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
   These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
@@ -161,22 +163,26 @@ in additional slides at the end.
   Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2).
   The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders
   at runtime and using them easily when needed. The default encoders are now categorical, so 1-indexed integers, instead of the 0-indexed used before.
+- Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
+  train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before, text logs were printed only on console.
 - Add --cpu option to easily choose between running on cpu or gpu.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add --abc and -f options, to make cell structure more configurable and flexible.
+- Add --abc and -f options, to make the cell structure more configurable and flexible.
+- Add -m and -n options, allowing to change the CNN structure (how the cells are stacked).
 - Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
 - Print losses on both console and file during CNN and controller training, to make easier the analysis of the training procedure while the algorithm
   is running.
 - Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat
   was wrongly used before batching.
 - Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
-- Fix tqdm bars of CNN training and add tqdm bars to LSTM training and model predictions procedure for better progress visualization.
+- Fix tqdm bars for model predictions procedure, to visualize better its progress.
 - Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
-- Format code with pep8 and flake, to follow standard python conventions.
+- Format code with pep8 and flake, to follow standard python formatting conventions.
 - General code fixes and improvements, especially improve readability of various code parts for better future maintainability.
-  Many blob functions have been finely subdivided in multiple subfunctions and properly commented.
+  Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented.
+  Right now almost the total codebase of original POPNAS version have been refactored, either due to structural or quality changes.
 
 
 ## TODO
@@ -188,5 +194,5 @@ in additional slides at the end.
   it should be completed.
 - Restore procedure logic must be revisited and fixed, it was probably not working properly from the start. This functionality has never been
   used, but it can be nice to have in case the algorithm would take a lot of time on larger dataset.
-- Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't be too difficult
+- Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't require much work
   to support other datasets.
