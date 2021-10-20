@@ -49,7 +49,7 @@ def create_logger(name, log_path):
 
 
 def get_feature_names(training_time_df: pd.DataFrame):
-    training_time_df = training_time_df.drop(columns=['time'])
+    training_time_df = training_time_df.drop(columns=['time', 'data_augmented'])
     return training_time_df.columns.values.tolist()
 
 

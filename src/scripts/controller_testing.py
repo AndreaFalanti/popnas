@@ -13,7 +13,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
 import log_service
-from utils.func_utils import to_list_of_tuples, parse_cell_structures, compute_spearman_rank_correlation_coefficient, compute_mape
+from utils.func_utils import to_list_of_tuples, parse_cell_structures, compute_spearman_rank_correlation_coefficient_from_df, compute_mape
 from utils.rstr import rstr
 from ..encoder import StateSpace
 
@@ -457,7 +457,6 @@ class ConvControllerManagerTesting:
         pred_dataset = self.__build_rnn_dataset([child_spec])
 
         score = self.controller.predict(x=pred_dataset)
-
         return score[0, 0]
 
 
@@ -610,7 +609,7 @@ def main():
 
             # spearman can be retrieved with pandas, but dataframe must be built first
             spearman_df = pd.DataFrame.from_dict({'true': pred_rewards, 'est': estimation_rewards})
-            preds_dict['spearman'].append(compute_spearman_rank_correlation_coefficient(spearman_df, 'true', 'est'))
+            preds_dict['spearman'].append(compute_spearman_rank_correlation_coefficient_from_df(spearman_df, 'true', 'est'))
             logger.info('Predictions and metrics produced successfully for config %d...', index)
 
         logger.info('--------------------------------------------------------------')
