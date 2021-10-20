@@ -72,6 +72,23 @@ def display_plot_overview(plot_paths, columns, rows, title=None, save=False, sav
         plt.show()
 
 
+def display_predictors_test_slide(test_folder_path: str, reference_plot_path: str, title: str, save: bool = False, save_name: str = None):
+    subfolders_full_path = [f.path for f in os.scandir(test_folder_path) if f.is_dir()]
+
+    predictors_plot_paths = []
+    for subfolder in subfolders_full_path:
+        plot_path = os.path.join(subfolder, 'results.png')
+        predictors_plot_paths.append(plot_path)
+
+    # add reference plot (actual run results) and compute layout info
+    predictors_plot_paths.insert(0, reference_plot_path)
+    predictors_num = len(predictors_plot_paths)
+    cols = clamp(math.ceil(predictors_num / 2.0), 0, 4)
+    rows = math.ceil(predictors_num / cols)
+
+    display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
+
+
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
@@ -97,34 +114,17 @@ def main():
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
                           2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))
 
-    # check if regressor test folder is present (regressor_testing.py output)
-    reg_test_path = os.path.join(args.p, 'regressors_test')
-    if os.path.isdir(reg_test_path):
-        subfolders_full_path = [f.path for f in os.scandir(reg_test_path) if f.is_dir()]
+    # check if predictors time test folder is present (predictors_time_testing.py output)
+    time_test_path = os.path.join(args.p, 'pred_time_test')
+    if os.path.isdir(time_test_path):
+        display_predictors_test_slide(time_test_path, *gen_paths(['time_pred_overview.png']), title='Time prediction testing overview',
+                                      save=args.save, save_name=next(gen_save_path, None))
 
-        regressor_plot_paths = []
-        for subfolder in subfolders_full_path:
-            plot_path = os.path.join(subfolder, 'results.png')
-            regressor_plot_paths.append(plot_path)
-
-        # add reference plot (actual run results) and compute layout info
-        regressor_plot_paths.insert(0, *gen_paths(['time_pred_overview.png']))
-        regressors_num = len(regressor_plot_paths)
-        cols = clamp(math.ceil(regressors_num / 2.0), 0, 4)
-        rows = math.ceil(regressors_num / cols)
-
-        display_plot_overview(regressor_plot_paths, cols, rows, title='Regressor testing overview', save=args.save, save_name=next(gen_save_path, None))
-
-    controller_test_path = os.path.join(args.p, 'controllers_test')
-    if os.path.isdir(controller_test_path):
-        png_full_paths = [f.path for f in os.scandir(controller_test_path) if f.is_file() and f.path.endswith('.png')]
-
-        # add reference plot (actual run results) and compute layout info
-        png_full_paths.insert(0, *gen_paths(['acc_pred_overview.png']))
-        controllers_num = len(png_full_paths)
-        cols = clamp(math.ceil(controllers_num / 2.0), 0, 4)
-        rows = math.ceil(controllers_num / cols)
-        display_plot_overview(png_full_paths, cols, rows, title='Controller testing overview', save=args.save, save_name=next(gen_save_path, None))
+    # check if predictors acc test folder is present (predictors_acc_testing.py output)
+    acc_test_path = os.path.join(args.p, 'pred_acc_test')
+    if os.path.isdir(acc_test_path):
+        display_predictors_test_slide(acc_test_path, *gen_paths(['acc_pred_overview.png']), title='Accuracy prediction testing overview',
+                                      save=args.save, save_name=next(gen_save_path, None))
 
 
 if __name__ == '__main__':
