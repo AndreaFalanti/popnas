@@ -1,19 +1,28 @@
 import argparse
 import math
-import os
 
 from encoder import StateSpace
 import log_service
 from predictors import *
-from utils.func_utils import create_empty_folder
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
-def setup_folders(log_path):
-    regressors_test_path = os.path.join(log_path, 'regressors_test')
-    create_empty_folder(regressors_test_path)
 
-    return regressors_test_path
+def setup_folders(log_path: str):
+    '''
+    Create folder for storing test results. If folder already exists, keep it and previous results.
+    Note: predictors will override results if have same name of an already existing folder.
+
+    Args:
+        log_path: path of run logs folder
+
+    Returns:
+        (str): path for script output
+    '''
+    test_path = os.path.join(log_path, 'pred_time_test')
+    os.makedirs(test_path, exist_ok=True)
+
+    return test_path
 
 
 def create_logger(name, log_path):
@@ -34,6 +43,8 @@ def main():
     training_time_csv_path = os.path.join(csv_path, 'training_time.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_time.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')
+    nn_y_col = 'training time(seconds)'
+    nn_y_domain = (0, math.inf)
 
     # TODO: get these info from file from keeping consistency with choices of run tested.
     #  Right now the operators set in runs executed is always this one, but could change in future.
@@ -41,18 +52,18 @@ def main():
     state_space = StateSpace(B=5, operators=operators, input_lookback_depth=-2)
 
     predictors_to_test = [
-        AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
+        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
         AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
         CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        LSTMPredictor(state_space, 'training time(seconds)', (0, math.inf), logger, log_path,
+        LSTMPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
                       lr=0.01, weight_reg=1e-6, embedding_dim=20, lstm_cells=100),
+        Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, lr=0.005, weight_reg=0, epochs=20)
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
-        # TODO: formalize a method to choose correct file
-        dataset_path = nn_training_data_path if isinstance(p, LSTMPredictor) else training_time_csv_path
+        dataset_path = nn_training_data_path if isinstance(p, NNPredictor) else training_time_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
         p.perform_prediction_test(dataset_path, 'time')
