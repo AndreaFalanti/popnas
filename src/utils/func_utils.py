@@ -111,3 +111,9 @@ def create_empty_folder(folder_path: str):
     except OSError:
         shutil.rmtree(folder_path)
         os.makedirs(folder_path)
+
+
+def chunks(lst: list, chunks_size: int):
+    '''Yield successive n-sized chunks from lst.'''
+    for i in range(0, len(lst), chunks_size):
+        yield lst[i:i + chunks_size]

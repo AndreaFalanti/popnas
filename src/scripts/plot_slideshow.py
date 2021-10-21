@@ -7,7 +7,7 @@ from sys import platform
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from utils.func_utils import clamp
+from utils.func_utils import clamp, chunks
 
 
 def path_closure(log_folder):
@@ -73,8 +73,8 @@ def display_plot_overview(plot_paths, columns, rows, title=None, save=False, sav
 
 
 def compute_dynamic_size_layout(plots_num: int):
-    cols = clamp(math.ceil(plots_num / 2.0), 0, 4)
-    rows = math.ceil(plots_num / cols)
+    rows = clamp(math.ceil(plots_num / 2.0), 1, 2)
+    cols = math.ceil(plots_num / rows)
 
     return cols, rows
 
@@ -87,11 +87,24 @@ def display_predictors_test_slide(test_folder_path: str, reference_plot_path: st
         plot_path = os.path.join(subfolder, 'results.png')
         predictors_plot_paths.append(plot_path)
 
-    # add reference plot (actual run results) and compute layout info
-    predictors_plot_paths.insert(0, reference_plot_path)
-    cols, rows = compute_dynamic_size_layout(len(predictors_plot_paths))
+    # split into multiple slides if there are too many plots for good visualization
+    chunk_size = 5
+    if len(predictors_plot_paths) > chunk_size:
+        for i, plot_subgroup in enumerate(chunks(predictors_plot_paths, chunk_size)):
+            # add reference plot (actual run results) and compute layout info
+            plot_subgroup.insert(0, reference_plot_path)
+            cols, rows = compute_dynamic_size_layout(len(plot_subgroup))
+            subgroup_title = f'{title} ({i})'
+            subgroup_save_name = None if save_name is None else f'{save_name.split(".")[0]}_{i}.png'
 
-    display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
+            display_plot_overview(plot_subgroup, cols, rows, title=subgroup_title, save=save, save_name=subgroup_save_name)
+    # plots len fit a single slide
+    else:
+        # add reference plot (actual run results) and compute layout info
+        predictors_plot_paths.insert(0, reference_plot_path)
+        cols, rows = compute_dynamic_size_layout(len(predictors_plot_paths))
+
+        display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
 
 
 def main():
