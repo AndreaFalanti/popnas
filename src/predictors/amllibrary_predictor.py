@@ -23,8 +23,14 @@ class AMLLibraryPredictor(Predictor):
 
         self.config_path = config_path
         self.techniques = techniques
-        self.threads = len(psutil.Process().cpu_affinity()) if threads <= 0 else threads
         self._redir_logger = StreamToLogger(logger)
+
+        # set default number of threads to the number of physical cores.
+        # since the algorithms are very data intensive and how the GIL mechanism limits python to prefer multiprocessing
+        # (pool actually spawns processes, so threads name is actually misleading), using only physical cores is preferred.
+        # read more at: https://stackoverflow.com/questions/40217873/multiprocessing-use-only-the-physical-cores
+        threads_div = 1 if psutil.cpu_count(logical=True) == psutil.cpu_count(logical=False) else 2
+        self.threads = (len(psutil.Process().cpu_affinity()) // threads_div) if threads <= 0 else threads
 
         self.feature_names = None
         self.y_col = None

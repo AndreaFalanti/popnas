@@ -10,18 +10,18 @@ from nn_predictor import NNPredictor
 from predictors.common.datasets_gen import build_temporal_serie_dataset_2i
 
 
-class LSTMPredictor(NNPredictor):
+class GRUPredictor(NNPredictor):
     def __init__(self, state_space: StateSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
                  embedding_dim: int = 10, rnn_cells: int = 48, weight_reg: float = 1e-5, lr: float = 0.002, epochs: int = 15,
                  use_previous_data: bool = True):
         # generate a relevant name if not set
         if name is None:
-            name = f'LSTM_ed({embedding_dim})_c({rnn_cells})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
+            name = f'GRU_ed({embedding_dim})_c({rnn_cells})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
         super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
 
         self.state_space = state_space
         self.embedding_dim = embedding_dim
-        self.lstm_cells = rnn_cells
+        self.gru_cells = rnn_cells
 
         self.loss = losses.MeanSquaredError()
         self.train_metrics = [metrics.MeanAbsolutePercentageError()]
@@ -58,7 +58,7 @@ class LSTMPredictor(NNPredictor):
         # embed = layers.Reshape((self.B, 2 * self.embedding_dim))(attention)
 
         # many-to-one, so must have return_sequences = False (it is by default)
-        lstm = layers.Bidirectional(layers.LSTM(self.lstm_cells, kernel_regularizer=self.weight_reg, recurrent_regularizer=self.weight_reg))(embed)
+        lstm = layers.Bidirectional(layers.GRU(self.gru_cells, kernel_regularizer=self.weight_reg, recurrent_regularizer=self.weight_reg))(embed)
         score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=self.weight_reg)(lstm)
 
         return Model(inputs=(inputs, ops), outputs=score)
