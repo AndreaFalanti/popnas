@@ -3,7 +3,6 @@ import argparse
 from encoder import StateSpace
 import log_service
 from predictors import *
-from utils.func_utils import create_empty_folder
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -19,7 +18,7 @@ def setup_folders(log_path: str):
     Returns:
         (str): path for script output
     '''
-    test_path = os.path.join(log_path, 'pred_time_test')
+    test_path = os.path.join(log_path, 'pred_acc_test')
     os.makedirs(test_path, exist_ok=True)
 
     return test_path
