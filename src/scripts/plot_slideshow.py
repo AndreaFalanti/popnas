@@ -72,6 +72,13 @@ def display_plot_overview(plot_paths, columns, rows, title=None, save=False, sav
         plt.show()
 
 
+def compute_dynamic_size_layout(plots_num: int):
+    cols = clamp(math.ceil(plots_num / 2.0), 0, 4)
+    rows = math.ceil(plots_num / cols)
+
+    return cols, rows
+
+
 def display_predictors_test_slide(test_folder_path: str, reference_plot_path: str, title: str, save: bool = False, save_name: str = None):
     subfolders_full_path = [f.path for f in os.scandir(test_folder_path) if f.is_dir()]
 
@@ -82,9 +89,7 @@ def display_predictors_test_slide(test_folder_path: str, reference_plot_path: st
 
     # add reference plot (actual run results) and compute layout info
     predictors_plot_paths.insert(0, reference_plot_path)
-    predictors_num = len(predictors_plot_paths)
-    cols = clamp(math.ceil(predictors_num / 2.0), 0, 4)
-    rows = math.ceil(predictors_num / cols)
+    cols, rows = compute_dynamic_size_layout(len(predictors_plot_paths))
 
     display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
 
@@ -110,6 +115,11 @@ def main():
                                          f'pareto_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
                               2, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
         b += 1
+
+    pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
+    if len(pareto_plot_paths) > 0:
+        cols, rows = compute_dynamic_size_layout(len(pareto_plot_paths))
+        display_plot_overview(gen_paths(pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save, save_name=next(gen_save_path, None))
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
                           2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))

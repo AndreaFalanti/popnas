@@ -4,6 +4,7 @@ from typing import NamedTuple
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 from pandas.io.parsers import TextFileReader
@@ -141,6 +142,22 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_
         ]
 
         ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
+
+    __save_and_close_plot(fig, save_name)
+
+
+def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
+    fig, ax = plt.subplots()
+
+    # trans_offset = mtransforms.offset_copy(ax.transData, fig=fig, x=0, y=-0.10, units='inches')
+
+    plt.plot(x_real, y_real, '--.b', x_pred, y_pred, '--.g', alpha=0.6)
+    # for i, (x, y) in enumerate(zip(x_real, y_real)):
+    #     plt.text(x, y, str(i), color='red', fontsize=12, transform=trans_offset)
+
+    plt.xlabel('time')
+    plt.ylabel('accuracy')
+    plt.title(title)
 
     __save_and_close_plot(fig, save_name)
 
@@ -389,6 +406,33 @@ def plot_predictions_error(B: int, pnas_mode: bool):
                                  'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
 
     __logger.info("Prediction error overview plots written successfully")
+
+
+def plot_pareto_front_curves(B: int):
+    training_csv_path = log_service.build_path('csv', 'training_results.csv')
+    training_df = pd.read_csv(training_csv_path)
+
+    # front built with actual values got from training
+    real_front_acc, real_front_time = [], []
+    # pareto front predicted
+    pred_front_acc, pred_front_time = [], []
+
+    for b in range(2, B + 1):
+        training_df_b = training_df[training_df['# blocks'] == b]
+        real_front_acc.append(training_df_b['best val accuracy'].to_list())
+        real_front_time.append(training_df_b['training time(seconds)'].to_list())
+
+        pareto_b_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
+        pareto_df = pd.read_csv(pareto_b_csv_path)
+        pred_front_acc.append(pareto_df['val accuracy'].to_list())
+        pred_front_time.append(pareto_df['time'].to_list())
+
+    b = 2
+    for real_time, real_acc, pred_time, pred_acc in zip(real_front_time, real_front_acc, pred_front_time, pred_front_acc):
+        __plot_pareto_front(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}.png')
+        b += 1
+
+    __logger.info("Pareto front curve plots written successfully")
 
 
 class BarInfo(NamedTuple):
