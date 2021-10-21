@@ -447,5 +447,7 @@ class Train:
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
         plotter.plot_predictions_error(self.blocks, self.pnas_mode)
+        if not self.pnas_mode:
+            plotter.plot_pareto_front_curves(self.blocks)
 
         self._logger.info("Finished!")
