@@ -1,5 +1,5 @@
+import csv
 import os
-from contextlib import redirect_stdout, redirect_stderr
 from logging import Logger
 from typing import Union, Tuple
 
@@ -7,11 +7,13 @@ import catboost
 import pandas as pd
 
 from predictor import Predictor
+from utils.func_utils import create_empty_folder
 from utils.stream_to_logger import StreamToLogger
 
 
 class CatBoostPredictor(Predictor):
-    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_grid_search: bool = False):
+    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_grid_search: bool = False,
+                 compute_feature_importance: bool = True):
         # generate a relevant name if not set
         if name is None:
             name = f'CatBoost_{"grid_search" if use_grid_search else "default"}'
@@ -21,6 +23,7 @@ class CatBoostPredictor(Predictor):
         self.column_desc_path = column_desc_path
         self._redir_logger = StreamToLogger(logger)
         self.use_grid_search = use_grid_search
+        self.compute_feature_importance = compute_feature_importance
 
         # TODO: get indexes from column_desc file and then find from indexes these fields
         self.feature_names = None
@@ -50,28 +53,33 @@ class CatBoostPredictor(Predictor):
             raise TypeError('CatBoost supports only files, conversion to file is a TODO...')
 
         train_pool = catboost.Pool(dataset, delimiter=',', has_header=True, column_description=self.column_desc_path)
+        actual_b = self.__get_max_b(pd.read_csv(dataset))
+        train_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
+        create_empty_folder(train_log_folder)
 
-        with redirect_stdout(self._redir_logger):
-            with redirect_stderr(self._redir_logger):
-                # specify the training parameters
-                # TODO: task type = 'GPU' is very slow, why?
-                self.model = catboost.CatBoostRegressor(custom_metric='MAPE', early_stopping_rounds=16, train_dir=self.log_folder)
-                # train the model with grid search
-                if self.use_grid_search:
-                    param_grid = {
-                        'learning_rate': [0.08, 0.1, 0.15],
-                        'depth': [4, 5, 6, 7],
-                        'l2_leaf_reg': [1, 3, 5, 7],
-                        'random_strength': [1, 1.25, 1.4, 2],
-                        'bagging_temperature': [0.4, 0.6, 0.75, 1],
-                        'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
-                    }
+        # specify the training parameters
+        # TODO: task type = 'GPU' is very slow, why?
+        self.model = catboost.CatBoostRegressor(early_stopping_rounds=16, train_dir=train_log_folder)
+        # train the model with grid search
+        if self.use_grid_search:
+            param_grid = {
+                'learning_rate': [0.08, 0.1, 0.15],
+                'depth': [4, 5, 6, 7],
+                'l2_leaf_reg': [1, 3, 5, 7],
+                'random_strength': [1, 1.25, 1.4, 2],
+                'bagging_temperature': [0.4, 0.6, 0.75, 1],
+                'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
+            }
 
-                    results_dict = self.model.grid_search(param_grid, train_pool, train_size=0.85)
-                    self._logger.info('Best parameters: %s', str(results_dict['params']))
-                # else simply train the model with default parameters
-                else:
-                    self.model.fit(train_pool)
+            results_dict = self.model.grid_search(param_grid, train_pool, train_size=0.85)
+            self._logger.info('Best parameters: %s', str(results_dict['params']))
+        # else simply train the model with default parameters
+        else:
+            self.model.fit(train_pool)
+
+        if self.compute_feature_importance:
+            result_pairs = self.model.get_feature_importance(train_pool, prettified=True)  # type: pd.DataFrame
+            result_pairs.to_csv(os.path.join(train_log_folder, 'feature_importance.csv'))
 
     def predict(self, sample: list) -> float:
         # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)
