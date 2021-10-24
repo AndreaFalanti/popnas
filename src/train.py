@@ -169,10 +169,10 @@ class Train:
         '''
 
         self._logger.info('Performing initial thrust with empty cell')
-        acc, timer, _, _ = self.generate_and_train_model_from_spec(state_space, manager, [])
+        acc, time, params, flops = self.generate_and_train_model_from_spec(state_space, manager, [])
 
         # last field is data augmentation, True for generated sample only
-        time_data = [timer, 0] + [0, 0, 0, 0] * self.blocks + [False]
+        time_data = [time, 0] + [0, 0, 0, 0] * self.blocks + [False]
         acc_data = [acc, 0] + [0, 0, 0, 0] * self.blocks + [False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -182,6 +182,8 @@ class Train:
         with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(acc_data)
+
+        self.write_training_results_into_csv([], acc, time, params, flops, 0)
 
     def write_overall_cnn_training_results(self, blocks, timers, rewards):
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
@@ -275,6 +277,30 @@ class Train:
         with open(log_service.build_path('csv', f'column_desc_{y_col}.csv'), mode='w', newline='') as f:
             writer = csv.writer(f, delimiter='\t')
             writer.writerows(enumerate(header_types))
+
+    def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int, flops: int, blocks: int):
+        '''
+        Append info about a single CNN training to the results csv file.
+
+        Args:
+            cell_spec:
+            acc:
+            time:
+            params:
+            flops:
+            blocks:
+        '''
+        with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
+            writer = csv.writer(f)
+
+            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            if f.tell() == 0:
+                writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'cell structure'])
+
+            cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
+            data = [acc, time, params, flops, blocks, cell_structure]
+
+            writer.writerow(data)
 
     def process(self):
         '''
@@ -400,18 +426,7 @@ class Train:
 
                 self._logger.info("Finished %d out of %d models!", (model_index + 1), len(cell_specs))
 
-                # write the results of this trial into a file
-                with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-
-                    # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
-                    if f.tell() == 0:
-                        writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'cell structure'])
-
-                    cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
-                    data = [reward, timer, total_params, flops, current_blocks, cell_structure]
-
-                    writer.writerow(data)
+                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks)
 
                 # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
                 if current_blocks > 1:
