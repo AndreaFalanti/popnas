@@ -54,13 +54,8 @@ class NNPredictor(Predictor):
 
         cells = parse_cell_structures(b_df['cell structure'])
 
-        # fix cell structure having inputs as str type instead of int
-        adjusted_cells = []
-        for cell in cells:
-            adjusted_cells.append([(int(in1), op1, int(in2), op2) for in1, op1, in2, op2 in cell])
-
         # just return two lists: one with the target, one with the cell structures
-        return b_df[self.y_col].tolist(), adjusted_cells
+        return b_df[self.y_col].tolist(), cells
 
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # TODO

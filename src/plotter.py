@@ -196,7 +196,7 @@ def plot_dynamic_reindex_related_blocks_info():
     # unpack values into separate columns
     df['in1'], df['op1'], df['in2'], df['op2'] = zip(*first_block_iter)
 
-    df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == '-1')]
+    df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == -1)]
 
     x = df['op1']
     y_time = df['training time(seconds)']

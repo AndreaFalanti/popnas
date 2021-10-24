@@ -1,4 +1,4 @@
-# TODO: extrapolate generic helper functions used by multiple modules here
+# module that contains generic helper functions used by multiple modules
 import os
 import shutil
 from configparser import ConfigParser
@@ -70,8 +70,19 @@ def parse_cell_structures(cell_structures: Iterable):
     list_of_tuple_str_lists = list(map(lambda cs: cs.split(';'), cell_structures))
 
     # parse tuple structure (trim round brackets and split by ,)
-    return [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
-            for tuple_str_list in list_of_tuple_str_lists]
+    str_cell_specs = [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
+                      for tuple_str_list in list_of_tuple_str_lists]
+
+    # fix cell structure having inputs as str type instead of int
+    adjusted_cells = []
+    for cell in str_cell_specs:
+        # initial thrust case, empty cell
+        if cell == [('',)]:
+            adjusted_cells.append([])
+        else:
+            adjusted_cells.append([(int(in1), op1, int(in2), op2) for in1, op1, in2, op2 in cell])
+
+    return adjusted_cells
 
 
 def compute_tensor_byte_size(tensor: tf.Tensor):
