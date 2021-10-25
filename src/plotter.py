@@ -162,6 +162,26 @@ def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, 
     __save_and_close_plot(fig, save_name)
 
 
+def __plot_3d_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
+    # fig, ax = plt.subplots()
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    x_real.reverse()
+    y_real.reverse()
+    x_pred.reverse()
+    y_pred.reverse()
+
+    ax.plot(list(range(len(x_real))), x_real, y_real, '--.b', alpha=0.6)
+    ax.plot(list(range(len(x_pred))), x_pred, y_pred, '--.g', alpha=0.6)
+
+    ax.set_ylabel('time')
+    ax.set_zlabel('accuracy')
+    plt.title(title)
+
+    __save_and_close_plot(fig, save_name)
+
+
 def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
     '''
     Build avg, max and min bars for multi-bar plots.
@@ -408,7 +428,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
     __logger.info("Prediction error overview plots written successfully")
 
 
-def plot_pareto_front_curves(B: int):
+def plot_pareto_front_curves(B: int, plot3d: bool = False):
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
 
@@ -429,7 +449,8 @@ def plot_pareto_front_curves(B: int):
 
     b = 2
     for real_time, real_acc, pred_time, pred_acc in zip(real_front_time, real_front_acc, pred_front_time, pred_front_acc):
-        __plot_pareto_front(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}.png')
+        plot_func = __plot_3d_pareto_front if plot3d else __plot_pareto_front
+        plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}.png')
         b += 1
 
     __logger.info("Pareto front curve plots written successfully")
