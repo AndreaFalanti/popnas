@@ -1,10 +1,8 @@
-import re
 import statistics
 from typing import NamedTuple
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 from pandas.io.parsers import TextFileReader
@@ -24,13 +22,13 @@ plt.set_loglevel('WARNING')
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
-    
+
 
 def __save_and_close_plot(fig, save_name):
     save_path = log_service.build_path('plots', save_name)
     plt.savefig(save_path, bbox_inches='tight')
     plt.close(fig)
-    
+
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
     fig = plt.figure()
@@ -254,7 +252,7 @@ def plot_cnn_train_boxplots_per_block(B: int):
     df = pd.read_csv(csv_path)
 
     times_per_block, acc_per_block = [], []
-    x = list(range(1, B+1))
+    x = list(range(1, B + 1))
     for b in x:
         b_df = df[df['# blocks'] == b]
 

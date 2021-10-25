@@ -70,7 +70,7 @@ def compute_lookback_usage_features(cell_spec: list, max_lookback: int):
     # remove inputs = None
     cell_inputs = [inp for inp in cell_inputs if inp is not None]
 
-    return [(1 if -i-1 in cell_inputs else 0) for i in range(max_lookback)]
+    return [(1 if -i - 1 in cell_inputs else 0) for i in range(max_lookback)]
 
 
 def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lookback: int):
@@ -89,6 +89,6 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lo
 
     for i, (in1, _, in2, _) in enumerate(cell_spec):
         for lb in range(max_lookback):
-            incidence_features[i * max_lookback + lb] = 1 if -lb-1 in [in1, in2] else 0
+            incidence_features[i * max_lookback + lb] = 1 if -lb - 1 in [in1, in2] else 0
 
     return incidence_features

@@ -1,14 +1,14 @@
 # module that contains generic helper functions used by multiple modules
+import operator
 import os
+import re
 import shutil
 from configparser import ConfigParser
-import re
-from typing import Iterable
-import operator
 from functools import reduce
+from typing import Iterable
 
-import tensorflow as tf
 import pandas as pd
+import tensorflow as tf
 from sklearn.metrics import mean_absolute_percentage_error
 
 

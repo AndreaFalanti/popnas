@@ -2,11 +2,10 @@ import argparse
 import csv
 import os
 
-import log_service
-from encoder import StateSpace
-
 import pandas as pd
 
+import log_service
+from encoder import StateSpace
 from utils.feature_utils import *
 from utils.func_utils import parse_cell_structures
 

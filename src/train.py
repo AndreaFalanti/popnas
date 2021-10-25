@@ -1,19 +1,18 @@
-import log_service
-import plotter
-from manager import NetworkManager
-from controller import ControllerManager
-from encoder import StateSpace
-
-from tensorflow.keras.utils import to_categorical
-from tensorflow.python.keras.datasets import cifar100
-from tensorflow.python.keras.datasets import cifar10
-from sklearn.model_selection import train_test_split
-
-import importlib.util
 import csv
+import importlib.util
+import os
 import statistics
 
-import os
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.utils import to_categorical
+from tensorflow.python.keras.datasets import cifar10
+from tensorflow.python.keras.datasets import cifar100
+
+import log_service
+import plotter
+from controller import ControllerManager
+from encoder import StateSpace
+from manager import NetworkManager
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -246,7 +245,8 @@ class Train:
         # encode cell spec, using dynamic reindex for operators in time case. Encoding is automatically flatted into plain list.
         # last field is data augmentation, false if cell is the extended original cell specification (== works for list of tuples)
         cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
-        return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec] for cell in eqv_cells],\
+        return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
+                for cell in eqv_cells],\
                [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
     def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):

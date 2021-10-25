@@ -1,4 +1,3 @@
-import csv
 import os
 from logging import Logger
 from typing import Union, Tuple

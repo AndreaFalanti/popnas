@@ -132,7 +132,8 @@ def main():
     pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
     if len(pareto_plot_paths) > 0:
         cols, rows = compute_dynamic_size_layout(len(pareto_plot_paths))
-        display_plot_overview(gen_paths(pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save, save_name=next(gen_save_path, None))
+        display_plot_overview(gen_paths(pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save,
+                              save_name=next(gen_save_path, None))
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
                           2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))

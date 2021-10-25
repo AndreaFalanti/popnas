@@ -4,10 +4,10 @@ from configparser import ConfigParser
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Union
 
-import psutil
 import catboost
 import numpy as np
 import pandas
+import psutil
 import tensorflow as tf
 from tensorflow.keras import layers, optimizers, losses, regularizers, metrics, callbacks, Model
 from tensorflow.keras.utils import plot_model
@@ -18,8 +18,8 @@ import log_service
 from aMLLibrary import sequence_data_processing
 from aMLLibrary.regressor import Regressor
 from encoder import StateSpace
-from utils.stream_to_logger import StreamToLogger
 from utils.func_utils import to_list_of_tuples, strip_unused_amllibrary_config_sections
+from utils.stream_to_logger import StreamToLogger
 
 
 class ControllerManager:

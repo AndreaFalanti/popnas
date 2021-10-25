@@ -1,10 +1,10 @@
+import os
 from abc import ABC, abstractmethod
 from logging import Logger
-import os
 from typing import Union
 
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 import numpy as np
 
 from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coefficient, create_empty_folder
@@ -34,7 +34,7 @@ class Predictor(ABC):
     def save_scatter_plot(self, pred_label: str, save_path: str = None, plot_reference=True):
         fig, ax = plt.subplots()
 
-        legend_labels = [f'B{i+2} (MAPE: {mape:.3f}%, ρ: {spearman:.3f})'
+        legend_labels = [f'B{i + 2} (MAPE: {mape:.3f}%, ρ: {spearman:.3f})'
                          for i, (mape, spearman) in enumerate(zip(self._mape, self._spearman))]
 
         colors = cm.rainbow(np.linspace(0, 1, len(self._x_real)))

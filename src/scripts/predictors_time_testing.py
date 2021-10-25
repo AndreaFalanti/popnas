@@ -1,8 +1,8 @@
 import argparse
 import math
 
-from encoder import StateSpace
 import log_service
+from encoder import StateSpace
 from predictors import *
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
@@ -46,24 +46,30 @@ def main():
     nn_y_col = 'training time(seconds)'
     nn_y_domain = (0, math.inf)
 
+    new_catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_time.csv')
+    new_training_time_csv_path = os.path.join(csv_path, 'new_training_time.csv')
+
     # TODO: get these info from file from keeping consistency with choices of run tested.
     #  Right now the operators set in runs executed is always this one, but could change in future.
     operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
     state_space = StateSpace(B=5, operators=operators, input_lookback_depth=-2)
 
     predictors_to_test = [
-        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
-        AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path),
+        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path, name='aMLLibrary_NNLS (new features)'),
+        # AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path, name='aMLLibrary_LRRidge (new features)'),
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
-        # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
-        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        LSTMPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
-                      lr=0.01, weight_reg=1e-6, embedding_dim=20, lstm_cells=100),
-        Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, lr=0.005, weight_reg=0, epochs=20)
+        # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path, name='aMLLibrary_XGBoost (new features)'),
+        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
+        # LSTMPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
+        #               lr=0.01, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
+        # Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, lr=0.005, weight_reg=0, epochs=20),
+        # GRUPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
+        #              epochs=20, lr=0.01, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
+        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
-        dataset_path = nn_training_data_path if isinstance(p, NNPredictor) else training_time_csv_path
+        dataset_path = nn_training_data_path if isinstance(p, NNPredictor) else new_training_time_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
         p.perform_prediction_test(dataset_path, 'time')

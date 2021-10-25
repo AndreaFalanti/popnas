@@ -1,13 +1,13 @@
 import os
+from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
+from tensorflow.keras.applications.imagenet_utils import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import plot_model
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
-from tensorflow.keras.applications.imagenet_utils import preprocess_input
-from typing import Tuple
 
 import log_service
 from model import ModelGenerator

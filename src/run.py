@@ -1,10 +1,10 @@
 import argparse
 import sys
 
+import tensorflow as tf
+
 import log_service
 from train import Train
-
-import tensorflow as tf
 
 
 def main():
