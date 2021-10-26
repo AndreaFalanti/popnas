@@ -8,6 +8,7 @@ import cell_pruning
 import log_service
 from encoder import StateSpace
 from predictors import Predictor
+from utils.feature_utils import generate_time_features
 
 
 class ControllerManager:
@@ -61,25 +62,6 @@ class ControllerManager:
         time_predictor = self.get_time_predictor(self.actual_b)
         time_predictor.train(csv_path)
 
-    def get_time_features_from_cell_spec(self, child_spec: list):
-        '''
-        Produce the time features to be used in time predictor
-
-        Args:
-            child_spec (list[str]): model encoding
-
-        Returns:
-            (list): features list
-        '''
-        # regressor uses dynamic reindex for operations, instead of categorical
-        encoded_child = self.state_space.encode_cell_spec(child_spec, op_enc_name='dynamic_reindex')
-
-        # add missing blocks num feature (see training_time.csv, all columns except time are needed)
-        regressor_features = [self.actual_b] + encoded_child
-
-        # complete features with missing blocks (0 is for null)
-        return regressor_features + [0, 0, 0, 0] * (self.B - self.actual_b)
-
     def __write_predictions_on_csv(self, model_estimates):
         '''
         Write predictions on csv for further data analysis.
@@ -119,7 +101,7 @@ class ControllerManager:
             for cell_spec in pbar:
                 # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
                 #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
-                time_features = None if self.pnas_mode else self.get_time_features_from_cell_spec(cell_spec)
+                time_features = None if self.pnas_mode else generate_time_features(cell_spec, self.state_space)
                 estimated_time = None if self.pnas_mode else time_predictor.predict(time_features)
 
                 estimated_score = acc_predictor.predict(cell_spec)

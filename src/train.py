@@ -14,7 +14,7 @@ from controller import ControllerManager
 from encoder import StateSpace
 from manager import NetworkManager
 from predictors import *
-from utils.feature_utils import generate_dynamic_reindex_function
+from utils.feature_utils import *
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -32,6 +32,7 @@ class Train:
         # search space parameters
         self.blocks = blocks
         self.children_max_size = children_max_size
+        self.input_lookback_depth = -2
 
         # dataset parameters
         self.dataset = dataset
@@ -46,6 +47,8 @@ class Train:
         self.concat_only_unused = not all_blocks_concat
         self.cell_stacks = cell_stacks
         self.normal_cells_per_stack = normal_cells_per_stack
+
+        self.max_cells = cell_stacks * (normal_cells_per_stack + 1) - 1
 
         self.pnas_mode = pnas_mode
 
@@ -136,7 +139,7 @@ class Train:
 
         return reward, timer, total_params, flops
 
-    def perform_initial_thrust(self, state_space: StateSpace, manager: NetworkManager):
+    def perform_initial_thrust(self, state_space: StateSpace, manager: NetworkManager, time_features_len: int, acc_features_len: int):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
 
@@ -149,8 +152,8 @@ class Train:
         acc, time, params, flops = self.generate_and_train_model_from_spec(state_space, manager, [])
 
         # last field is data augmentation, True for generated sample only
-        time_data = [time, 0] + [0, 0, 0, 0] * self.blocks + [False]
-        acc_data = [acc, 0] + [0, 0, 0, 0] * self.blocks + [False]
+        time_data = [time] + [0] * (time_features_len - 2) + [False]
+        acc_data = [acc] + [0] * (acc_features_len - 2) + [False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -180,52 +183,35 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    # TODO: not really necessary, even b=1 could use the more powerful generate_eqv_cells_encodings. Keep it or not?
-    def generate_sliding_block_encodings(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
+    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, state_space: StateSpace):
         '''
-        Usable for cells with b = 1. Simply slide the block in different positions. Very fast since it doesn't need to
-        build all possible permutations.
+        Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
+        Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
 
         Returns:
-            (list): encoded cells with additional data, to write in csv (list of lists)
-        '''
-
-        # encode and flat the lists
-        time_encoded_cell = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')
-        acc_encoded_cell = state_space.encode_cell_spec(cell_spec)
-
-        time_csv_rows, acc_csv_rows = [], []
-        for i in range(current_blocks, self.blocks + 1):
-            # slide block forward
-            forward_pad = [0, 0, 0, 0] * (i - current_blocks)
-
-            # fill with empty blocks up to B, if necessary
-            filling_pad = [0, 0, 0, 0] * (self.blocks - i)
-
-            # last field is data augmentation
-            time_csv_rows.append([timer, current_blocks] + forward_pad + time_encoded_cell + filling_pad + [i != current_blocks])
-            acc_csv_rows.append([accuracy, current_blocks] + forward_pad + acc_encoded_cell + filling_pad + [i != current_blocks])
-
-        return time_csv_rows, acc_csv_rows
-
-    def generate_eqv_cells_encodings(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
-        '''
-        Needed for cells with b > 1, compared to sliding blocks it also builds the allowed permutations of the blocks
-        present in the cell.
-
-        Returns:
-            (list): encoded cells with additional data, to write in csv (list of lists)
+            (list): features to be used in predictors (ML techniques)
         '''
 
         # equivalent cells can be useful to train better the regressor
         eqv_cells, _ = state_space.generate_eqv_cells(cell_spec, size=self.blocks)
 
-        # encode cell spec, using dynamic reindex for operators in time case. Encoding is automatically flatted into plain list.
-        # last field is data augmentation, false if cell is the extended original cell specification (== works for list of tuples)
+        # expand cell_spec for bool comparison of data_augmented field
         cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
-        return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
-                for cell in eqv_cells],\
-               [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
+
+        time_features_list, acc_features_list = [], []
+        for eqv_cell in eqv_cells:
+            time_features, acc_features = generate_all_feature_sets(cell_spec, state_space)
+
+            # features are expanded with labels and data_augmented field
+            time_features_list.append([time] + time_features + [eqv_cell != cell_spec])
+            acc_features_list.append([accuracy] + acc_features + [eqv_cell != cell_spec])
+
+        return time_features_list, acc_features_list
+
+        # TODO: legacy features
+        # return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
+        #         for cell in eqv_cells],\
+        #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
     def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
         '''
@@ -240,8 +226,7 @@ class Train:
             state_space (StateSpace): [description]
         '''
 
-        time_rows, acc_rows = self.generate_sliding_block_encodings(current_blocks, timer, accuracy, cell_spec, state_space) if current_blocks == 1 \
-            else self.generate_eqv_cells_encodings(current_blocks, timer, accuracy, cell_spec, state_space)
+        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, state_space)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -250,11 +235,6 @@ class Train:
         with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(acc_rows)
-
-    def write_catboost_column_desc_file(self, header_types, y_col: str):
-        with open(log_service.build_path('csv', f'column_desc_{y_col}.csv'), mode='w', newline='') as f:
-            writer = csv.writer(f, delimiter='\t')
-            writer.writerows(enumerate(header_types))
 
     def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int, flops: int, blocks: int):
         '''
@@ -304,10 +284,6 @@ class Train:
         '''
         Main function, executed by run.py to start POPNAS algorithm.
         '''
-
-        # create the complete headers row of the CSV files
-        time_csv_headers = ['time', 'blocks']
-        time_header_types, acc_header_types = ['Label', 'Num'], ['Label', 'Num']
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
 
@@ -319,41 +295,17 @@ class Train:
             starting_b = self.checkpoint  # change the starting point of B
 
         starting_b = 0
+        self._logger.info('Total cells stacked in each CNN: %d', self.max_cells)
 
-        # create headers for csv files
-        for b in range(1, self.blocks + 1):
-            a = b * 2
-            c = a - 1
-            time_csv_headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
-            time_header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
-            acc_header_types.extend(['Categ', 'Categ', 'Categ', 'Categ'])
-
-        # deep copy substituting first element (y column)
-        # deep copy could be not necessary, but better than fighting with side-effect later on
-        acc_csv_headers = ['acc'] + [header for header in time_csv_headers[1:]]
-
-        # extra boolean field that simply state if the entry has been generated from data augmentation (False for original samples).
-        # this field will be dropped during training, so it is not relevant for algorithms (catboost drops 'Auxiliary' header_type).
-        time_csv_headers.append('data_augmented')
-        time_header_types.append('Auxiliary')
-        acc_csv_headers.append('data_augmented')
-        acc_header_types.append('Auxiliary')
-
-        # add headers
-        with open(log_service.build_path('csv', 'training_time.csv'), mode='w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(time_csv_headers)
-
-        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(acc_csv_headers)
-
-        self.write_catboost_column_desc_file(time_header_types, 'time')
-        self.write_catboost_column_desc_file(acc_header_types, 'acc')
-
-        self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
         # construct a state space
-        state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
+        state_space = StateSpace(self.blocks, operators, self.max_cells, input_lookback_depth=self.input_lookback_depth, input_lookforward_depth=None)
+
+        max_lookback_depth = abs(self.input_lookback_depth)
+        time_headers, time_feature_types = build_feature_names('time', self.blocks, max_lookback_depth)
+        acc_headers, acc_feature_types = build_feature_names('acc', self.blocks, max_lookback_depth)
+
+        # add headers to csv and create CatBoost feature files
+        initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
 
         # load correct dataset (based on self.dataset), test data is not used actually
         (x_train_init, y_train_init), _ = self.load_dataset()
@@ -375,7 +327,7 @@ class Train:
 
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_b == 0:
-            self.perform_initial_thrust(state_space, manager)
+            self.perform_initial_thrust(state_space, manager, len(time_headers), len(acc_headers))
             starting_b = 1
 
         monoblocks_info = []

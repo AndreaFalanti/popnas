@@ -10,40 +10,11 @@ from utils.feature_utils import *
 from utils.func_utils import parse_cell_structures
 
 
-def compute_headers(target: str, max_blocks: int, max_lookback: int):
-    op_headers, op_headers_types = [], []
-    block_incidence_headers, block_incidence_headers_types = [], []
-    lookback_incidence_headers, lookback_incidence_headers_types = [], []
-
-    for i in range(max_blocks):
-        op_headers.extend([f'op{i * 2}', f'op{i * 2 + 1}'])
-
-        for j in range(i):
-            block_incidence_headers.append(f'b{j}b{i}')
-
-        for lb in range(max_lookback):
-            lookback_incidence_headers.append(f'lb{lb + 1}b{i}')
-
-    lookback_usage_headers = [f'lb{i + 1}' for i in range(max_lookback)]
-
-    op_headers_types = ['Num'] * len(op_headers) if target == 'time' else ['Categ'] * len(op_headers)
-    block_incidence_headers_types = ['Num'] * len(block_incidence_headers)
-    lookback_incidence_headers_types = ['Num'] * len(lookback_incidence_headers)
-    lookback_usage_headers_types = ['Num'] * len(lookback_usage_headers)
-
-    headers = [target, 'blocks', 'cells'] + op_headers + lookback_usage_headers + \
-              lookback_incidence_headers + block_incidence_headers + ['data_augmented']
-    header_types = ['Label', 'Num', 'Num'] + op_headers_types + lookback_usage_headers_types + \
-                   lookback_incidence_headers_types + block_incidence_headers_types + ['Auxiliary']
-
-    return headers, header_types
-
-
 def write_new_dataset_csv(label_col: str, cells_info: 'list[tuple[list, float, int]]', state_space: StateSpace, max_cells: int):
     max_blocks = state_space.B
     max_lookback = abs(state_space.input_lookback_depth)
 
-    headers, header_types = compute_headers(label_col, max_blocks, max_lookback)
+    headers, header_types = build_feature_names(label_col, max_blocks, max_lookback)
 
     csv_rows = []
 
@@ -55,8 +26,7 @@ def write_new_dataset_csv(label_col: str, cells_info: 'list[tuple[list, float, i
         # equivalent cells can be useful to train better the regressor
         eqv_cells, _ = state_space.generate_eqv_cells(cell_spec, size=max_blocks)
 
-        # encode cell spec, using dynamic reindex for operators in time case. Encoding is automatically flatted into plain list.
-        # last field is data augmentation, false if cell is the extended original cell specification (== works for list of tuples)
+        # expand cell_spec for bool comparison of data_augmented field
         cell_spec = cell_spec + [(None, None, None, None)] * (max_blocks - blocks)
 
         for eqv_cell in eqv_cells:
@@ -99,7 +69,7 @@ def main():
     log_service.set_log_path(os.path.join(args.p))
 
     operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-    state_space = StateSpace(5, operators, input_lookback_depth=-2)
+    state_space = StateSpace(5, operators, 8, input_lookback_depth=-2)
 
     print('Processing old dataset...')
     old_dataset_file_path = os.path.join(args.p, 'csv', 'training_results.csv')

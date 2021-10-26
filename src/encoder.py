@@ -16,9 +16,8 @@ class StateSpace:
     Also provides a more convenient way to define the search space
     '''
 
-    def __init__(self, B, operators,
-                 input_lookback_depth=-1,
-                 input_lookforward_depth=None):
+    def __init__(self, B: int, operators: 'list[str]', cell_stack_depth: int,
+                 input_lookback_depth: int = -1, input_lookforward_depth: int = None):
         '''
         Constructs a search space which models the NAS and PNAS papers
 
@@ -71,6 +70,8 @@ class StateSpace:
         self.input_lookback_depth = input_lookback_depth
         self.input_lookforward_depth = input_lookforward_depth
         assert self.input_lookback_depth < 0, "Invalid lookback_depth value"
+
+        self.cell_stack_depth = cell_stack_depth
 
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
