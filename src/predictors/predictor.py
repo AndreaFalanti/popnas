@@ -12,6 +12,14 @@ from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coe
 
 class Predictor(ABC):
     def __init__(self, logger: Logger, log_folder: str, name: str = None):
+        '''
+        Abstract class that provides a common interface to all ML and NN predictors tested in POPNAS work.
+
+        Args:
+            logger: logger to use
+            log_folder: root folder for predictor logs
+            name: optional name to identify the predictor. If not provided, a meaningful one will be produced from arguments provided.
+        '''
         self._logger = logger
         self.name = name
         self.log_folder = os.path.join(log_folder, name)
