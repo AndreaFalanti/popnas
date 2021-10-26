@@ -35,7 +35,7 @@ def initialize_log_folders():
     os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
     os.mkdir(os.path.join(log_path, 'tensorboard_cnn'))  # create folder for saving tensorboard logs
     os.mkdir(os.path.join(log_path, 'plots'))  # create folder for saving data plots
-    os.mkdir(os.path.join(log_path, 'regressors'))  # create folder for saving regressor outputs
+    os.mkdir(os.path.join(log_path, 'predictors'))  # create folder for saving predictors' outputs
 
 
 def initialize_log_folders_best_model_script():

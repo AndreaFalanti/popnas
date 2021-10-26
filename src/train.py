@@ -13,6 +13,7 @@ import plotter
 from controller import ControllerManager
 from encoder import StateSpace
 from manager import NetworkManager
+from predictors import *
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -302,6 +303,34 @@ class Train:
 
             writer.writerow(data)
 
+    def initialize_predictors(self, state_space):
+        acc_col = 'best val accuracy'
+        acc_domain = (0, 1)
+        predictors_log_path = log_service.build_path('predictors')
+        catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
+        amllibrary_config_path = os.path.join('configs', 'regressors_hyperopt.ini')
+
+        self._logger.info('Initializing predictors...')
+
+        # accuracy predictors to be used
+        acc_lstm = LSTMPredictor(state_space, acc_col, acc_domain, self._logger, predictors_log_path,
+                                 lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100, epochs=20)
+
+        # time predictors to be used
+        time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path)
+        time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path)
+        time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path)
+
+        def get_acc_predictor_for_b(b: int):
+            return acc_lstm
+
+        def get_time_predictor_for_b(b: int):
+            return time_lrridge if b == 1 else time_catboost
+
+        self._logger.info('Predictors generated successfully')
+
+        return get_acc_predictor_for_b, get_time_predictor_for_b
+
     def process(self):
         '''
         Main function, executed by run.py to start POPNAS algorithm.
@@ -378,9 +407,12 @@ class Train:
                                  cell_stacks=self.cell_stacks, normal_cells_per_stack=self.normal_cells_per_stack,
                                  concat_only_unused=self.concat_only_unused)
 
+        # create the predictors
+        acc_pred_func, time_pred_func = self.initialize_predictors(state_space)
+
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(state_space, self.checkpoint, B=self.blocks, K=self.children_max_size,
-                                       train_iterations=15, reg_param=3e-5, lr1=0.002, controller_cells=60, embedding_dim=10,
+        controller = ControllerManager(state_space, self.checkpoint, acc_pred_func, time_pred_func,
+                                       B=self.blocks, K=self.children_max_size,
                                        pnas_mode=self.pnas_mode, restore_controller=self.restore)
 
         # add dynamic reindex
@@ -445,10 +477,8 @@ class Train:
 
             # avoid controller training, pareto front estimation and plot at final step
             if current_blocks != self.blocks:
-                loss = controller.train_step(rewards)
-                self._logger.info("Trial %d: ControllerManager loss : %0.6f", current_blocks, loss)
-
-                controller.update_step(time_csv_headers)
+                controller.train_step(rewards)
+                controller.update_step()
 
                 # remove invalid input values for current blocks
                 inputs_to_prune_count = current_blocks + 1 - self.blocks
