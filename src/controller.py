@@ -18,10 +18,8 @@ class ControllerManager:
     cull non-optimal children model configurations and resume training.
     '''
 
-    def __init__(self, state_space: StateSpace, checkpoint_B,
-                 get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 B=5, K=256, T=np.inf,
-                 pnas_mode: bool = False, restore_controller: bool = False):
+    def __init__(self, state_space: StateSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
+                 B=5, K=256, T=np.inf, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -32,8 +30,6 @@ class ControllerManager:
             T: maximum training time.
             pnas_mode: if True, do not build a regressor to estimate time. Use only LSTM controller,
                 like original PNAS.
-            restore_controller: flag whether to restore a pre-trained RNN controller
-                upon construction.
         '''
         self._logger = log_service.get_logger(__name__)
         self.state_space = state_space
@@ -41,22 +37,12 @@ class ControllerManager:
         self.B = B
         self.K = K
         self.T = T
+        self.actual_b = 1
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
 
         self.pnas_mode = pnas_mode
-        self.restore_controller = restore_controller
-
-        self.build_regressor_config = True
-
-        # restore controller
-        # TODO: surely not working by beginning, it used csv files that don't exist!
-        if self.restore_controller:
-            # TODO
-            raise NotImplementedError('Restoring controller is not implemented right now')
-        else:
-            self.actual_b = 1
 
     def train_step(self, rewards):
         '''

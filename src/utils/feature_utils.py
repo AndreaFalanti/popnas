@@ -92,3 +92,23 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lo
             incidence_features[i * max_lookback + lb] = 1 if -lb - 1 in [in1, in2] else 0
 
     return incidence_features
+
+
+def generate_dynamic_reindex_function(operators: 'list[str]', op_timers: 'dict[str, float]'):
+    '''
+    Closure for generating a function to easily apply dynamic reindex where necessary.
+
+    Args:
+        operators: allowed operations
+        op_timers: dict with op as key and time as value
+
+    Returns:
+        Callable[[str], float]: dynamic reindex function
+    '''
+    t_max = max(op_timers.values())
+
+    def apply_dynamic_reindex(op_value: str):
+        # TODO: remove len(operators) to normalize in 0-1?
+        return len(operators) * op_timers[op_value] / t_max
+
+    return apply_dynamic_reindex

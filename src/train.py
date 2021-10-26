@@ -14,6 +14,7 @@ from controller import ControllerManager
 from encoder import StateSpace
 from manager import NetworkManager
 from predictors import *
+from utils.feature_utils import generate_dynamic_reindex_function
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -24,8 +25,7 @@ class Train:
                  dataset, sets,
                  epochs, batch_size, learning_rate, filters, weight_reg,
                  cell_stacks, normal_cells_per_stack,
-                 all_blocks_concat, pnas_mode,
-                 checkpoint, restore):
+                 all_blocks_concat, pnas_mode):
 
         self._logger = log_service.get_logger(__name__)
 
@@ -48,10 +48,6 @@ class Train:
         self.normal_cells_per_stack = normal_cells_per_stack
 
         self.pnas_mode = pnas_mode
-
-        # for restoring a run
-        self.checkpoint = checkpoint
-        self.restore = restore
 
         plotter.initialize_logger()
 
@@ -139,25 +135,6 @@ class Train:
         self._logger.info("Total FLOPS: %s", format(flops, ','))
 
         return reward, timer, total_params, flops
-
-    def generate_dynamic_reindex_function(self, operators, op_timers: 'dict[str, float]'):
-        '''
-        Closure for generating a function to easily apply dynamic reindex where necessary.
-
-        Args:
-            operators (list<str>): allowed operations
-            op_timers (list<float>): timers for each block with same operations, in order
-
-        Returns:
-            Callable[[str], float]: dynamic reindex function
-        '''
-        t_max = max(op_timers.values())
-
-        def apply_dynamic_reindex(op_value: str):
-            # TODO: remove len(operators) to normalize in 0-1?
-            return len(operators) * op_timers[op_value] / t_max
-
-        return apply_dynamic_reindex
 
     def perform_initial_thrust(self, state_space: StateSpace, manager: NetworkManager):
         '''
@@ -282,14 +259,6 @@ class Train:
     def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int, flops: int, blocks: int):
         '''
         Append info about a single CNN training to the results csv file.
-
-        Args:
-            cell_spec:
-            acc:
-            time:
-            params:
-            flops:
-            blocks:
         '''
         with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -341,7 +310,6 @@ class Train:
         time_header_types, acc_header_types = ['Label', 'Num'], ['Label', 'Num']
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
-        reindex_function = None
 
         # TODO: restore search space
         operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
@@ -350,47 +318,38 @@ class Train:
         if self.restore:
             starting_b = self.checkpoint  # change the starting point of B
 
-            self._logger.info("Loading operator indexes!")
-            with open(log_service.build_path('csv', 'reindex_op_times.csv')) as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    # row is [time, op]
-                    op_timers[row[1]] = float(row[0])
+        starting_b = 0
 
-            reindex_function = self.generate_dynamic_reindex_function(operators, op_timers)
-        else:
-            starting_b = 0
+        # create headers for csv files
+        for b in range(1, self.blocks + 1):
+            a = b * 2
+            c = a - 1
+            time_csv_headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
+            time_header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
+            acc_header_types.extend(['Categ', 'Categ', 'Categ', 'Categ'])
 
-            # create headers for csv files
-            for b in range(1, self.blocks + 1):
-                a = b * 2
-                c = a - 1
-                time_csv_headers.extend([f"input_{c}", f"operation_{c}", f"input_{a}", f"operation_{a}"])
-                time_header_types.extend(['Categ', 'Num', 'Categ', 'Num'])
-                acc_header_types.extend(['Categ', 'Categ', 'Categ', 'Categ'])
+        # deep copy substituting first element (y column)
+        # deep copy could be not necessary, but better than fighting with side-effect later on
+        acc_csv_headers = ['acc'] + [header for header in time_csv_headers[1:]]
 
-            # deep copy substituting first element (y column)
-            # deep copy could be not necessary, but better than fighting with side-effect later on
-            acc_csv_headers = ['acc'] + [header for header in time_csv_headers[1:]]
+        # extra boolean field that simply state if the entry has been generated from data augmentation (False for original samples).
+        # this field will be dropped during training, so it is not relevant for algorithms (catboost drops 'Auxiliary' header_type).
+        time_csv_headers.append('data_augmented')
+        time_header_types.append('Auxiliary')
+        acc_csv_headers.append('data_augmented')
+        acc_header_types.append('Auxiliary')
 
-            # extra boolean field that simply state if the entry has been generated from data augmentation (False for original samples).
-            # this field will be dropped during training, so it is not relevant for algorithms (catboost drops 'Auxiliary' header_type).
-            time_csv_headers.append('data_augmented')
-            time_header_types.append('Auxiliary')
-            acc_csv_headers.append('data_augmented')
-            acc_header_types.append('Auxiliary')
+        # add headers
+        with open(log_service.build_path('csv', 'training_time.csv'), mode='w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(time_csv_headers)
 
-            # add headers
-            with open(log_service.build_path('csv', 'training_time.csv'), mode='w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(time_csv_headers)
+        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(acc_csv_headers)
 
-            with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(acc_csv_headers)
-
-            self.write_catboost_column_desc_file(time_header_types, 'time')
-            self.write_catboost_column_desc_file(acc_header_types, 'acc')
+        self.write_catboost_column_desc_file(time_header_types, 'time')
+        self.write_catboost_column_desc_file(acc_header_types, 'acc')
 
         self._logger.info('Total cells stacked in each CNN: %d', (self.normal_cells_per_stack + 1) * self.cell_stacks - 1)
         # construct a state space
@@ -411,13 +370,8 @@ class Train:
         acc_pred_func, time_pred_func = self.initialize_predictors(state_space)
 
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(state_space, self.checkpoint, acc_pred_func, time_pred_func,
-                                       B=self.blocks, K=self.children_max_size,
-                                       pnas_mode=self.pnas_mode, restore_controller=self.restore)
-
-        # add dynamic reindex
-        if self.restore:
-            state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+        controller = ControllerManager(state_space, acc_pred_func, time_pred_func,
+                                       B=self.blocks, K=self.children_max_size, pnas_mode=self.pnas_mode)
 
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_b == 0:
@@ -466,7 +420,7 @@ class Train:
 
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
-                reindex_function = self.generate_dynamic_reindex_function(operators, op_timers)
+                reindex_function = generate_dynamic_reindex_function(operators, op_timers)
                 state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 

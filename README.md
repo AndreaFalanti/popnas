@@ -77,10 +77,7 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **-h**: defines how many times a child network has to be trained from scratch, each time with a different dataset train-validation split,
   in order to minimize the accuracy dependence of the child networks on the splitting.
   The default value is 1, if it is set as higher the resulting accuracy is the arithmetic mean of all the accuracies.
-- **-r**: if the user specifies this argument, the algorithm will restore a previous run.
-  The correct checkpoint B value, i.e. the number of blocks per cell, needs to be indicated in -c, while the run to recover has to be specified in -t.
-- **-c**: defines the checkpoint B value from which restart if the argument -r is specified in the input command.
-- **-t**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
+- **-r**: defines the log folder to restore, if user want to resume a previous interrupted run. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
 - **-f**: defines the initial number of filters to use. Defaults to 24.
 - **-wr**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
 - **-m**: defines the number of "cell stacks" to use in each CNN built. Defaults to 3. A cell stack is intended as N normal cells (1-stride)
