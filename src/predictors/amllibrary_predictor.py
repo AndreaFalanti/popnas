@@ -75,8 +75,12 @@ class AMLLibraryPredictor(Predictor):
         if not isinstance(dataset, str):
             raise TypeError('aMLLibrary supports only files, conversion to file is a TODO...')
 
+        dataset_df = pd.read_csv(dataset)
+        actual_b = self.__get_max_b(dataset_df)
+        if self.feature_names is None:
+            self.__setup_features_data(dataset_df)
+
         train_config = self.__prepare_config_file(dataset)
-        actual_b = self.__get_max_b(pd.read_csv(dataset))
         output_folder = os.path.join(self.log_folder, f'B{actual_b}')
 
         self._logger.info("Running regressors training on %d threads", self.threads)

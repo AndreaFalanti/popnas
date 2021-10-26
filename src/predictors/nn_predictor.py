@@ -36,7 +36,7 @@ class NNPredictor(Predictor):
         else:
             self.output_activation = 'linear'
 
-        self._logger.info('Using %s as final activation, based on y domain provided', self.output_activation)
+        self._logger.debug('Using %s as final activation, based on y domain provided', self.output_activation)
 
     @abstractmethod
     def _build_model(self):

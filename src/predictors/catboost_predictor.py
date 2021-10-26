@@ -51,8 +51,12 @@ class CatBoostPredictor(Predictor):
         if not isinstance(dataset, str):
             raise TypeError('CatBoost supports only files, conversion to file is a TODO...')
 
+        dataset_df = pd.read_csv(dataset)
+        actual_b = self.__get_max_b(dataset_df)
+        if self.feature_names is None:
+            self.__setup_features_data(dataset_df)
+
         train_pool = catboost.Pool(dataset, delimiter=',', has_header=True, column_description=self.column_desc_path)
-        actual_b = self.__get_max_b(pd.read_csv(dataset))
         train_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
         create_empty_folder(train_log_folder)
 
