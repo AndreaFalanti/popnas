@@ -80,7 +80,7 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **-r**: if the user specifies this argument, the algorithm will restore a previous run.
   The correct checkpoint B value, i.e. the number of blocks per cell, needs to be indicated in -c, while the run to recover has to be specified in -t.
 - **-c**: defines the checkpoint B value from which restart if the argument -r is specified in the input command.
-- **-d**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
+- **-t**: defines the log folder to restore, if the argument -r is specified in the input command. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
 - **-f**: defines the initial number of filters to use. Defaults to 24.
 - **-wr**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
 - **-m**: defines the number of "cell stacks" to use in each CNN built. Defaults to 3. A cell stack is intended as N normal cells (1-stride)
@@ -156,7 +156,7 @@ in additional slides at the end.
   These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
-  New training method supports ImageGenerators and allows using weight regularization if --wn parameter is provided.
+  New training method supports ImageGenerators and allows using weight regularization if --wr parameter is provided.
 - LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
   This make the whole procedure easier to interpret and also more flexible to further changes and additions.
 - Encoder has been totally changed as it was a total mess, causing also a lot of confusion inside the other modules.
