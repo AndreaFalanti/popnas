@@ -65,7 +65,10 @@ def main():
         # Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6),
         # GRUPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
         #              lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
+        # CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
+        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-5),
+        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.002, weight_reg=1e-6),
+        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6, kernel_size=3),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:

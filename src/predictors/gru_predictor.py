@@ -7,7 +7,7 @@ from tensorflow.keras.utils import plot_model
 
 from encoder import StateSpace
 from nn_predictor import NNPredictor
-from predictors.common.datasets_gen import build_temporal_serie_dataset_2i
+from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 
 class GRUPredictor(NNPredictor):
@@ -77,4 +77,4 @@ class GRUPredictor(NNPredictor):
         '''
         # data augmentation is used only in training (rewards are given), if the respective flag is set.
         # if data augment is performed, the cell_specs and rewards parameters are replaced with their augmented counterpart.
-        return build_temporal_serie_dataset_2i(self.state_space, cell_specs, rewards, use_data_augmentation)
+        return build_temporal_series_dataset_2i(self.state_space, cell_specs, rewards, use_data_augmentation)

@@ -9,6 +9,8 @@ from catboost_predictor import CatBoostPredictor
 from lstm_predictor import LSTMPredictor
 from nn_predictor import NNPredictor
 from conv1d_predictor import Conv1DPredictor
+from conv1d1i_predictor import Conv1D1IPredictor
 from gru_predictor import GRUPredictor
 
-__all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'LSTMPredictor', 'NNPredictor', 'Conv1DPredictor', 'GRUPredictor']
+__all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'LSTMPredictor', 'NNPredictor',
+           'Conv1DPredictor', 'Conv1D1IPredictor', 'GRUPredictor']
