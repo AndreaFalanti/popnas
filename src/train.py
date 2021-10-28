@@ -165,6 +165,8 @@ class Train:
 
         self.write_training_results_into_csv([], acc, time, params, flops, 0)
 
+        return time
+
     def write_overall_cnn_training_results(self, blocks, timers, rewards):
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -325,9 +327,10 @@ class Train:
         controller = ControllerManager(state_space, acc_pred_func, time_pred_func,
                                        B=self.blocks, K=self.children_max_size, pnas_mode=self.pnas_mode)
 
+        initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_b == 0:
-            self.perform_initial_thrust(state_space, manager, len(time_headers), len(acc_headers))
+            initial_thrust_time = self.perform_initial_thrust(state_space, manager, len(time_headers), len(acc_headers))
             starting_b = 1
 
         monoblocks_info = []
@@ -372,7 +375,7 @@ class Train:
 
             # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
             if current_blocks == 1:
-                reindex_function = generate_dynamic_reindex_function(operators, op_timers)
+                reindex_function = generate_dynamic_reindex_function(op_timers, initial_thrust_time)
                 state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 

@@ -97,7 +97,29 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lo
     return incidence_features
 
 
-def generate_dynamic_reindex_function(operators: 'list[str]', op_timers: 'dict[str, float]'):
+def generate_dynamic_reindex_function(op_timers: 'dict[str, float]', initial_thrust_time: float):
+    '''
+    Closure for generating a function to easily apply dynamic reindex where necessary.
+
+    Args:
+        initial_thrust_time: training time of CNN generated from empty cell specification
+        op_timers: dict with op as key and time as value
+
+    Returns:
+        Callable[[str], float]: dynamic reindex function
+    '''
+    for key, val in op_timers.items():
+        op_timers[key] = abs(val - initial_thrust_time)
+
+    t_max = max(op_timers.values())
+
+    def apply_dynamic_reindex(op_value: str):
+        return op_timers[op_value] / t_max
+
+    return apply_dynamic_reindex
+
+
+def generate_legacy_dynamic_reindex_function(operators: 'list[str]', op_timers: 'dict[str, float]'):
     '''
     Closure for generating a function to easily apply dynamic reindex where necessary.
 
