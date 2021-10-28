@@ -4,25 +4,26 @@ from typing import Union, Tuple
 
 import catboost
 import pandas as pd
+from scipy.stats import randint, loguniform, uniform
 
 from predictor import Predictor
 from utils.func_utils import create_empty_folder
-from utils.stream_to_logger import StreamToLogger
 
 
 class CatBoostPredictor(Predictor):
-    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_grid_search: bool = False,
-                 compute_feature_importance: bool = True):
+    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_random_search: bool = False,
+                 task_type: str = 'CPU', compute_feature_importance: bool = True):
         # generate a relevant name if not set
         if name is None:
-            name = f'CatBoost_{"grid_search" if use_grid_search else "default"}'
+            name = f'CatBoost_{task_type}_{"rs" if use_random_search else "default"}'
 
         super().__init__(logger, log_folder, name)
 
         self.column_desc_path = column_desc_path
-        self._redir_logger = StreamToLogger(logger)
-        self.use_grid_search = use_grid_search
+
+        self.use_random_search = use_random_search
         self.compute_feature_importance = compute_feature_importance
+        self.task_type = task_type
 
         # TODO: get indexes from column_desc file and then find from indexes these fields
         self.feature_names = None
@@ -62,19 +63,19 @@ class CatBoostPredictor(Predictor):
 
         # specify the training parameters
         # TODO: task type = 'GPU' is very slow, why?
-        self.model = catboost.CatBoostRegressor(early_stopping_rounds=16, train_dir=train_log_folder)
-        # train the model with grid search
-        if self.use_grid_search:
+        self.model = catboost.CatBoostRegressor(early_stopping_rounds=20, train_dir=train_log_folder, task_type=self.task_type)
+        # train the model with random search
+        if self.use_random_search:
             param_grid = {
-                'learning_rate': [0.08, 0.1, 0.15],
-                'depth': [4, 5, 6, 7],
-                'l2_leaf_reg': [1, 3, 5, 7],
-                'random_strength': [1, 1.25, 1.4, 2],
-                'bagging_temperature': [0.4, 0.6, 0.75, 1],
-                'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
+                'learning_rate': uniform(0.03, 0.3),
+                'depth': randint(3, 8),
+                'l2_leaf_reg': loguniform(0.1, 7),
+                'random_strength': uniform(0.3, 3),
+                'bagging_temperature': uniform(0.3, 3),
+                # 'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
             }
 
-            results_dict = self.model.grid_search(param_grid, train_pool, train_size=0.85)
+            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=25, train_size=0.85)
             self._logger.info('Best parameters: %s', str(results_dict['params']))
         # else simply train the model with default parameters
         else:

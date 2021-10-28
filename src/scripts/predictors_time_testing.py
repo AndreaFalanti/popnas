@@ -66,7 +66,8 @@ def main():
         # Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, lr=0.005, weight_reg=0, epochs=20),
         # GRUPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
         #              epochs=20, lr=0.01, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
+        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, use_random_search=True),
+        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU'),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
