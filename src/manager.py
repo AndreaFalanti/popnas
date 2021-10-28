@@ -152,8 +152,15 @@ class NetworkManager:
         train_datagen.fit(x_train)
         validation_datagen.fit(x_val)
 
-        train_dataset = train_datagen.flow(x_train, y_train, batch_size=self.batchsize)
-        validation_dataset = validation_datagen.flow(x_val, y_val, batch_size=self.batchsize)
+        cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
+                             tf.TensorSpec(shape=(None, 10), dtype=tf.float32))
+        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batchsize),
+                                                       output_signature=cifar10_signature)
+        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batchsize),
+                                                            output_signature=cifar10_signature)
+
+        train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+        validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
 
         train_batches = np.ceil(len(x_train) / self.batchsize)
         val_batches = np.ceil(len(x_val) / self.batchsize)
