@@ -47,7 +47,7 @@ class Predictor(ABC):
 
         colors = cm.rainbow(np.linspace(0, 1, len(self._x_real)))
         for xs, ys, color, lab in zip(self._x_real, self._y_pred, colors, legend_labels):
-            plt.scatter(xs, ys, color=color, label=lab)
+            plt.scatter(xs, ys, marker='.', color=color, label=lab)
 
         plt.xlabel(f'Real {pred_label}')
         plt.ylabel(f'Predicted {pred_label}')

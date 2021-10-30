@@ -121,7 +121,7 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_
 
         colors = cm.rainbow(np.linspace(0, 1, len(x)))
         for xs, ys, color, lab in zip(x, y, colors, legend_labels):
-            plt.scatter(xs, ys, color=color, label=lab)
+            plt.scatter(xs, ys, marker='.', color=color, label=lab)
     else:
         plt.scatter(x, y)
 
@@ -173,6 +173,7 @@ def __plot_3d_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: lis
     ax.plot(list(range(len(x_real))), x_real, y_real, '--.b', alpha=0.6)
     ax.plot(list(range(len(x_pred))), x_pred, y_pred, '--.g', alpha=0.6)
 
+    ax.set_xlabel('rank')
     ax.set_ylabel('time')
     ax.set_zlabel('accuracy')
     plt.title(title)
