@@ -1,6 +1,8 @@
 import os
 
+import numpy as np
 import pandas as pd
+import seaborn as sns
 import shap
 from matplotlib import pyplot as plt
 
@@ -37,3 +39,23 @@ def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: st
             plt.close()
 
     print('Shap plots written successfully')
+
+
+# inspired from: https://towardsdatascience.com/the-art-of-finding-the-best-features-for-machine-learning-a9074e2ca60d
+def generate_dataset_correlation_heatmap(csv_path: str, save_folder: str, save_name: str = 'dataset_corr_heatmap.png'):
+    dataset_df = pd.read_csv(csv_path).drop(columns=['data_augmented'])
+
+    # use the pands .corr() function to compute pairwise correlations for the dataframe
+    corr = dataset_df.corr()
+
+    # visualise the data with seaborn
+    # upper triangular mask
+    mask = np.triu(np.ones_like(corr, dtype=np.bool))
+
+    sns.set_style(style='white')
+    f, ax = plt.subplots(figsize=(12, 12))
+    cmap = sns.diverging_palette(10, 250, as_cmap=True)
+    sns.heatmap(corr, vmin=-1, vmax=1, mask=mask, cmap=cmap, square=True, linewidths=1, xticklabels=True, yticklabels=True,
+                cbar_kws={"shrink": .5}, ax=ax)  # type: plt.Axes
+    f.savefig(os.path.join(save_folder, save_name), bbox_inches='tight')
+    plt.close(f)

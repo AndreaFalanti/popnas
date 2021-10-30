@@ -3,13 +3,11 @@ from logging import Logger
 from typing import Union, Tuple
 
 import catboost
-import matplotlib.pyplot as plt
 import pandas as pd
-import shap
 from scipy.stats import randint, loguniform, uniform
 
 from predictor import Predictor
-from predictors.common.feature_analysis import save_feature_analysis_plots
+from utils.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import create_empty_folder
 
 

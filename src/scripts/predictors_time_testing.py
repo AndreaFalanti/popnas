@@ -5,6 +5,7 @@ import os
 import log_service
 from encoder import StateSpace
 from predictors import *
+from utils.feature_analysis import generate_dataset_correlation_heatmap
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -49,6 +50,11 @@ def main():
 
     new_catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_time.csv')
     new_training_time_csv_path = os.path.join(csv_path, 'new_training_time.csv')
+
+    # compute dataset correlation
+    generate_dataset_correlation_heatmap(new_training_time_csv_path, log_path)
+    generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap_old.png')
+    logger.info('Dataset correlation heatmap generated')
 
     # TODO: get these info from file from keeping consistency with choices of run tested.
     #  Right now the operators set in runs executed is always this one, but could change in future.
