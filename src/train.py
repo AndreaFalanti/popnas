@@ -293,9 +293,6 @@ class Train:
         operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
         # operators = ['identity', '3x3 dconv']
 
-        if self.restore:
-            starting_b = self.checkpoint  # change the starting point of B
-
         starting_b = 0
         self._logger.info('Total cells stacked in each CNN: %d', self.max_cells)
 

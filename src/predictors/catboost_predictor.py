@@ -3,16 +3,19 @@ from logging import Logger
 from typing import Union, Tuple
 
 import catboost
+import matplotlib.pyplot as plt
 import pandas as pd
+import shap
 from scipy.stats import randint, loguniform, uniform
 
 from predictor import Predictor
+from predictors.common.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import create_empty_folder
 
 
 class CatBoostPredictor(Predictor):
     def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_random_search: bool = False,
-                 task_type: str = 'CPU', compute_feature_importance: bool = True):
+                 task_type: str = 'CPU', perform_feature_analysis: bool = True):
         # generate a relevant name if not set
         if name is None:
             name = f'CatBoost_{task_type}_{"rs" if use_random_search else "default"}'
@@ -22,7 +25,7 @@ class CatBoostPredictor(Predictor):
         self.column_desc_path = column_desc_path
 
         self.use_random_search = use_random_search
-        self.compute_feature_importance = compute_feature_importance
+        self.perform_feature_analysis = perform_feature_analysis
         self.task_type = task_type
 
         # TODO: get indexes from column_desc file and then find from indexes these fields
@@ -75,15 +78,18 @@ class CatBoostPredictor(Predictor):
                 # 'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
             }
 
-            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=25, train_size=0.85)
+            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=25, train_size=0.8)
             self._logger.info('Best parameters: %s', str(results_dict['params']))
         # else simply train the model with default parameters
         else:
             self.model.fit(train_pool)
 
-        if self.compute_feature_importance:
+        if self.perform_feature_analysis:
             result_pairs = self.model.get_feature_importance(train_pool, prettified=True)  # type: pd.DataFrame
             result_pairs.to_csv(os.path.join(train_log_folder, 'feature_importance.csv'))
+
+            features_df = dataset_df.drop(columns=self.drop_columns)
+            save_feature_analysis_plots(self.model, features_df, train_log_folder, save_pred_every=500)
 
     def predict(self, sample: list) -> float:
         # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)

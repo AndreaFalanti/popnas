@@ -7,14 +7,16 @@ from typing import Union, Tuple
 import pandas as pd
 import psutil
 
-from aMLLibrary import sequence_data_processing
+from aMLLibrary import sequence_data_processing, regressor
 from predictor import Predictor
+from predictors.common.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import strip_unused_amllibrary_config_sections
 from utils.stream_to_logger import StreamToLogger
 
 
 class AMLLibraryPredictor(Predictor):
-    def __init__(self, config_path: str, techniques: 'list[str]', logger: Logger, log_folder: str, name: str = None, threads: int = -1):
+    def __init__(self, config_path: str, techniques: 'list[str]', logger: Logger, log_folder: str, name: str = None,
+                 threads: int = -1, perform_feature_analysis: int = True):
         # generate a relevant name if not set
         if name is None:
             name = f'aMLLibrary_{"_".join(techniques)}'
@@ -35,6 +37,8 @@ class AMLLibraryPredictor(Predictor):
         self.feature_names = None
         self.y_col = None
         self.drop_columns = None
+
+        self.perform_feature_analysis = perform_feature_analysis
 
     def __setup_features_data(self, df: pd.DataFrame):
         # y to predict is always the first column in POPNAS case
@@ -89,7 +93,12 @@ class AMLLibraryPredictor(Predictor):
                 sequence_data_processor = sequence_data_processing.SequenceDataProcessing(train_config, output=output_folder, j=self.threads)
                 best_regressor = sequence_data_processor.process()
 
-        self.model = best_regressor
+        self.model = best_regressor  # type: regressor
+
+        # TODO: actually tested only on linear models, SVR should use kernel probably while XGBoost the tree explainer
+        if self.perform_feature_analysis and set(self.techniques).issubset({'NNLS', 'LRRidge'}):
+            features_df = dataset_df.drop(columns=self.drop_columns)
+            save_feature_analysis_plots(self.model.get_regressor(), features_df, output_folder, save_pred_every=500, model_type='linear')
 
     def predict(self, sample: list) -> float:
         features_df = pd.DataFrame([sample], columns=self.feature_names)

@@ -18,12 +18,13 @@ mypy = "0.910"
 catboost = "0.26.1"
 pydot = "1.4.2"
 numba = "0.53.1"
+psutil = "5.8.0"
+shap = "0.40.0"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
 hyperopt = "0.2.5"
 eli5 = "0.11.0"
-psutil = "5.8.0"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.7"
