@@ -268,7 +268,7 @@ class Train:
                                  lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100, epochs=20)
 
         # time predictors to be used
-        time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path)
+        time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True)
         time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path)
         time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path)
 
