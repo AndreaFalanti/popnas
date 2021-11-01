@@ -15,13 +15,14 @@ from encoder import StateSpace
 from manager import NetworkManager
 from predictors import *
 from utils.feature_utils import *
+from utils.func_utils import get_valid_inputs_for_block_size
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
 
 class Train:
 
-    def __init__(self, blocks, children_max_size,
+    def __init__(self, blocks, children_max_size, exploration_max_size,
                  dataset, sets,
                  epochs, batch_size, learning_rate, filters, weight_reg,
                  cell_stacks, normal_cells_per_stack,
@@ -32,6 +33,7 @@ class Train:
         # search space parameters
         self.blocks = blocks
         self.children_max_size = children_max_size
+        self.exploration_max_size = exploration_max_size
         self.input_lookback_depth = -2
 
         # dataset parameters
@@ -185,7 +187,8 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, state_space: StateSpace):
+    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list,
+                                    state_space: StateSpace, exploration: bool):
         '''
         Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
         Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
@@ -205,8 +208,8 @@ class Train:
             time_features, acc_features = generate_all_feature_sets(cell_spec, state_space)
 
             # features are expanded with labels and data_augmented field
-            time_features_list.append([time] + time_features + [eqv_cell != cell_spec])
-            acc_features_list.append([accuracy] + acc_features + [eqv_cell != cell_spec])
+            time_features_list.append([time] + time_features + [exploration, eqv_cell != cell_spec])
+            acc_features_list.append([accuracy] + acc_features + [exploration, eqv_cell != cell_spec])
 
         return time_features_list, acc_features_list
 
@@ -215,7 +218,8 @@ class Train:
         #         for cell in eqv_cells],\
         #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
-    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, state_space: StateSpace):
+    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list,
+                            state_space: StateSpace, exploration: bool = False):
         '''
         Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
         Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
@@ -226,9 +230,10 @@ class Train:
             accuracy (float):
             cell_spec (list): [description]
             state_space (StateSpace): [description]
+            exploration:
         '''
 
-        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, state_space)
+        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, state_space, exploration)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -238,7 +243,8 @@ class Train:
             writer = csv.writer(f)
             writer.writerows(acc_rows)
 
-    def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int, flops: int, blocks: int):
+    def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int,
+                                        flops: int, blocks: int, exploration: bool = False):
         '''
         Append info about a single CNN training to the results csv file.
         '''
@@ -247,10 +253,10 @@ class Train:
 
             # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
             if f.tell() == 0:
-                writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'cell structure'])
+                writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'exploration', 'cell structure'])
 
             cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
-            data = [acc, time, params, flops, blocks, cell_structure]
+            data = [acc, time, params, flops, blocks, exploration, cell_structure]
 
             writer.writerow(data)
 
@@ -366,11 +372,26 @@ class Train:
 
                 self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks)
 
-                # in current_blocks = 1 case, we need all CNN to be able to dynamic reindex, so it is done outside the loop
+                # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
                 if current_blocks > 1:
                     self.write_training_data(current_blocks, timer, reward, cell_spec, state_space)
 
-            # current_blocks = 1 case, same mechanism but wait all CNN for applying dynamic reindex
+            # train the models built from exploration pareto front
+            for model_index, cell_spec in enumerate(state_space.exploration_front):
+                if model_index == 0:
+                    self._logger.info('Starting exploration step...')
+
+                self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(state_space.exploration_front))
+                self._logger.debug("\t%s", cell_spec)
+
+                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(state_space, manager, cell_spec)
+                rewards.append(reward)
+                self._logger.info("Finished %d out of %d exploration models!", (model_index + 1), len(state_space.exploration_front))
+
+                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks, exploration=True)
+                self.write_training_data(current_blocks, timer, reward, cell_spec, state_space, exploration=True)
+
+            # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
                 reindex_function = generate_dynamic_reindex_function(op_timers, initial_thrust_time)
                 state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
@@ -381,19 +402,22 @@ class Train:
 
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
-            # avoid controller training, pareto front estimation and plot at final step
+            # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:
                 controller.train_step(rewards)
                 controller.update_step()
 
-                # remove invalid input values for current blocks
-                inputs_to_prune_count = current_blocks + 1 - self.blocks
-                valid_inputs = state_space.input_values if inputs_to_prune_count >= 0 else state_space.input_values[:inputs_to_prune_count]
+                # controller new cells have 1 more block
+                expansion_step_blocks = current_blocks + 1
+                valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, current_blocks=expansion_step_blocks, max_blocks=self.blocks)
+
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:
-                    plotter.plot_pareto_inputs_and_operators_usage(current_blocks + 1, operators, valid_inputs)
+                    plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs)
+                    plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs)
+
                 # state_space.children are updated in controller.update_step, CNN to train in next step
-                plotter.plot_children_inputs_and_operators_usage(current_blocks + 1, operators, valid_inputs, state_space.children)
+                plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, state_space.children)
 
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)

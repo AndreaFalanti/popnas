@@ -60,8 +60,9 @@ class StateSpace:
         '''
         self._logger = log_service.get_logger(__name__)
 
-        self.children = None
-        self.intermediate_children = None
+        self.children = []
+        self.intermediate_children = []
+        self.exploration_front = []
 
         self.input_encoders = {}  # type: dict[str, Encoder]
         self.operator_encoders = {}  # type: dict[str, Encoder]

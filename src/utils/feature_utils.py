@@ -188,9 +188,9 @@ def build_feature_names(target: str, max_blocks: int, max_lookback: int):
     lookback_usage_headers_types = ['Num'] * len(lookback_usage_headers)
 
     headers = [target, 'blocks', 'cells'] + op_headers + lookback_usage_headers + \
-              lookback_incidence_headers + block_incidence_headers + ['data_augmented']
+              lookback_incidence_headers + block_incidence_headers + ['exploration', 'data_augmented']
     header_types = ['Label', 'Num', 'Num'] + op_headers_types + lookback_usage_headers_types + \
-                   lookback_incidence_headers_types + block_incidence_headers_types + ['Auxiliary']
+                   lookback_incidence_headers_types + block_incidence_headers_types + ['Auxiliary', 'Auxiliary']
 
     return headers, header_types
 

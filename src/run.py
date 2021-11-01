@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-b', metavar='BLOCKS', type=int, help="maximum number of blocks a cell can contain", required=True)
     parser.add_argument('-k', metavar='CHILDREN', type=int, help="number of top-K cells to expand at each iteration", required=True)
+    parser.add_argument('-ex', metavar='EXPLORATION_CHILDREN', type=int, help="number of exploration cells to train at each iteration", default=16)
     parser.add_argument('-d', metavar='DATASET', type=str, help="python file to use as dataset", default="cifar10")
     parser.add_argument('-s', metavar='NUM_DATASETS', type=int, help="how many times a child network has to be trained", default=1)
     parser.add_argument('-e', metavar='EPOCHS', type=int, help="number of epochs each child network has to be trained", default=20)
@@ -63,7 +64,7 @@ def main():
         logger.info('%s: %s', arg, getattr(args, arg))
     logger.info('%s', '*' * 101)
 
-    run = Train(args.b, args.k,
+    run = Train(args.b, args.k, args.ex,
                 dataset=args.d, sets=args.s,
                 epochs=args.e, batch_size=args.z, learning_rate=args.l, filters=args.f, weight_reg=args.wr,
                 cell_stacks=args.m, normal_cells_per_stack=args.n,

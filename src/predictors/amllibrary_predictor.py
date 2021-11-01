@@ -43,7 +43,7 @@ class AMLLibraryPredictor(Predictor):
     def __setup_features_data(self, df: pd.DataFrame):
         # y to predict is always the first column in POPNAS case
         self.y_col = df.columns.values.tolist()[0]
-        self.drop_columns = [self.y_col, 'data_augmented']
+        self.drop_columns = [self.y_col, 'exploration', 'data_augmented']
         df = df.drop(columns=self.drop_columns)
 
         self.feature_names = df.columns.values.tolist()

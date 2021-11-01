@@ -320,6 +320,32 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
     __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
 
+# TODO: remove duplication with function above
+def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]'):
+    op_counters = __initialize_dict_usage_data(operators)
+    input_counters = __initialize_dict_usage_data(inputs)
+
+    __logger.info("Analyzing operators and inputs usage of exploration pareto front for b=%d", b)
+    csv_path = log_service.build_path('csv', f'exploration_pareto_front_B{b}.csv')
+
+    try:
+        df = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        __logger.info('No exploration data found, skip plot generation')
+        return
+
+    cells = parse_cell_structures(df['cell structure'])
+
+    op_counters, input_counters = __update_counters(cells, op_counters, input_counters)
+    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
+    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
+
+    __plot_pie_chart(operators, op_values, f'Operators usage in b={b} exploration pareto front', f'exploration_op_usage_B{b}')
+    __logger.info("Pareto operators usage plot for b=%d written successfully", b)
+    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} exploration pareto front', f'exploration_inputs_usage_B{b}')
+    __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
+
+
 def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[str]'):
     op_counters = __initialize_dict_usage_data(operators)
     input_counters = __initialize_dict_usage_data(inputs)
@@ -430,6 +456,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
 def plot_pareto_front_curves(B: int, plot3d: bool = False):
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
+    training_df = training_df[training_df['exploration'] == False]
 
     # front built with actual values got from training
     real_front_acc, real_front_time = [], []
