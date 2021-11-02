@@ -239,7 +239,7 @@ class StateSpace:
         used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
 
         # a block is swappable (can change position inside the cell) if its output is not used by other blocks
-        swappable_blocks_mask = [i not in used_block_outputs for i in range(len(cell_inputs))]
+        swappable_blocks_mask = [(i not in used_block_outputs) for i in range(len(cell_spec))]
         swappable_blocks = [block for block, flag in zip(cell_spec, swappable_blocks_mask) if flag]
 
         # add NULL blocks (all None) to swappable blocks, to reach the given cell size

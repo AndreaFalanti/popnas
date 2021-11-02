@@ -227,7 +227,7 @@ def generate_shared_features(cell_spec: list, state_space: StateSpace):
 
 
 def generate_time_features(cell_spec: list, state_space: StateSpace):
-    # expand cell spec to maximum amount of blocks
+    # expand cell spec to maximum amount of blocks, if needed
     cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
 
     op_features = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
@@ -237,7 +237,7 @@ def generate_time_features(cell_spec: list, state_space: StateSpace):
 
 
 def generate_acc_features(cell_spec: list, state_space: StateSpace):
-    # expand cell spec to maximum amount of blocks
+    # expand cell spec to maximum amount of blocks, if needed
     cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
 
     op_features = state_space.encode_cell_spec(cell_spec)[1::2]
@@ -248,7 +248,7 @@ def generate_acc_features(cell_spec: list, state_space: StateSpace):
 
 def generate_all_feature_sets(cell_spec: list, state_space: StateSpace):
     ''' More efficient than calling them separately since shared part is computed only one time. '''
-    # expand cell spec to maximum amount of blocks
+    # expand cell spec to maximum amount of blocks, if needed
     cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
 
     op_features_time = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]

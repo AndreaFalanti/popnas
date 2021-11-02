@@ -205,7 +205,7 @@ class Train:
 
         time_features_list, acc_features_list = [], []
         for eqv_cell in eqv_cells:
-            time_features, acc_features = generate_all_feature_sets(cell_spec, state_space)
+            time_features, acc_features = generate_all_feature_sets(eqv_cell, state_space)
 
             # features are expanded with labels and data_augmented field
             time_features_list.append([time] + time_features + [exploration, eqv_cell != cell_spec])
