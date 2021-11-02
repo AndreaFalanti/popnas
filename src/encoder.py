@@ -176,18 +176,22 @@ class StateSpace:
         search_space = (inputs, self.operator_values)
         self.children = list(self.__construct_permutations(search_space))
 
-    def prepare_intermediate_children(self, new_b):
+    def prepare_intermediate_children(self, new_b, use_exploration_front: bool = True):
         '''
         Generates the intermediate product of the previous children
         and the current generation of children.
 
-        # Args:
+        Args:
             new_b: the number of blocks in current stage
+            use_exploration_front: use exploration front networks as baseline for progressive expansion
 
-        # Returns:
+        Returns:
             A function that returns a generator that produces a joint of
             the previous and current child models
         '''
+
+        if use_exploration_front:
+            self.children = self.children + self.exploration_front
 
         new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
             else min(self.input_lookforward_depth, new_b)
