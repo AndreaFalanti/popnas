@@ -8,7 +8,9 @@ def _get_counter_total(counter: Counter):
 
 
 def _remove_unwanted_keys(counter: Counter, key_list: list):
-    for key in counter.keys():
+    # deep copy keys to avoid changes during iteration (that would lead to RuntimeError)
+    keys = [key for key in counter.keys()]
+    for key in keys:
         if key not in key_list:
             del counter[key]
 

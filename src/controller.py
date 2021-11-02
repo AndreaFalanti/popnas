@@ -178,19 +178,18 @@ class ControllerManager:
             self._logger.info('Pareto front built successfully')
 
             # exploration step, avoid it if expanding cells with last block or if there is no need for exploration at all
-            op_exp, input_exp = self.compute_exploration_value_sets(pareto_front, self.state_space)
+            pareto_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
+            op_exp, input_exp = self.compute_exploration_value_sets(pareto_front[:pareto_limit], self.state_space)
 
             if self.actual_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
                 self._logger.info('Building exploration pareto front...')
                 self._logger.info('Operators to explore: %s', rstr(op_exp))
                 self._logger.info('Inputs to explore: %s', rstr(input_exp))
 
+                exp_cell_counter = CellCounter(input_exp, op_exp)
                 exploration_pareto_front = []
                 last_el_time = math.inf
                 pruned_count = 0
-
-                op_exp, input_exp = self.compute_exploration_value_sets(pareto_front, self.state_space)
-                exp_cell_counter = CellCounter(op_exp, input_exp)
 
                 for model_est in model_estimations[1:]:
                     # continue searching until we have <ex> elements in the exploration pareto front
@@ -261,8 +260,8 @@ class ControllerManager:
         for model in pareto_front_models:
             cell_counter.update_from_cell_spec(model.cell_spec)
 
-        op_usage_threshold = cell_counter.ops_total() / (len(valid_ops) * 6)
-        input_usage_threshold = cell_counter.inputs_total() / (len(valid_inputs) * 6)
+        op_usage_threshold = cell_counter.ops_total() / (len(valid_ops) * 5)
+        input_usage_threshold = cell_counter.inputs_total() / (len(valid_inputs) * 5)
 
         op_exp = [key for key, val in cell_counter.op_counter.items() if val < op_usage_threshold]
         input_exp = [key for key, val in cell_counter.input_counter.items() if val < input_usage_threshold]
@@ -293,8 +292,8 @@ class ControllerManager:
 
         # give a bonus to the least searched set between inputs and operators (to both if equal)
         # in case one exploration set is empty, after first step the bonus will not be granted anymore.
-        input_bonus = exp_ops_total_count <= exp_inputs_total_count
-        op_bonus = exp_inputs_total_count <= exp_ops_total_count
+        op_bonus = exp_ops_total_count <= exp_inputs_total_count
+        input_bonus = exp_inputs_total_count <= exp_ops_total_count
 
         for in1, op1, in2, op2 in model_est.cell_spec:
             exp_score += self.get_block_element_exploration_score(in1, exp_cell_counter.input_counter, exp_inputs_total_count, input_bonus)
