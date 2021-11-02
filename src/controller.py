@@ -1,5 +1,6 @@
 import csv
 import math
+from collections import Counter
 from typing import Callable
 
 import numpy as np
@@ -9,6 +10,7 @@ import cell_pruning
 import log_service
 from encoder import StateSpace
 from predictors import Predictor
+from utils.cell_counter import CellCounter
 from utils.feature_utils import generate_time_features
 from utils.func_utils import get_valid_inputs_for_block_size
 from utils.rstr import rstr
@@ -182,13 +184,13 @@ class ControllerManager:
                 self._logger.info('Building exploration pareto front...')
                 self._logger.info('Operators to explore: %s', rstr(op_exp))
                 self._logger.info('Inputs to explore: %s', rstr(input_exp))
-                
+
                 exploration_pareto_front = []
                 last_el_time = math.inf
                 pruned_count = 0
 
                 op_exp, input_exp = self.compute_exploration_value_sets(pareto_front, self.state_space)
-                exp_op_counters, exp_input_counters = self.initialize_counter_dicts(op_exp, input_exp)
+                exp_cell_counter = CellCounter(op_exp, input_exp)
 
                 for model_est in model_estimations[1:]:
                     # continue searching until we have <ex> elements in the exploration pareto front
@@ -196,8 +198,7 @@ class ControllerManager:
                         break
 
                     # less time than last pareto element
-                    if model_est.time < last_el_time and self.has_sufficient_exploration_score(model_est, exp_op_counters, exp_input_counters,
-                                                                                               exploration_pareto_front):
+                    if model_est.time < last_el_time and self.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front):
                         cell_repr = cell_pruning.CellEncoding(model_est.cell_spec)
 
                         # existing_model_reprs contains the pareto front and exploration cells will be progressively added to it
@@ -207,7 +208,7 @@ class ControllerManager:
                             existing_model_reprs.append(cell_repr)
                             last_el_time = model_est.time
 
-                            self.update_counters(model_est.cell_spec, exp_op_counters, exp_input_counters)
+                            exp_cell_counter.update_from_cell_spec(model_est.cell_spec)
                         else:
                             pruned_count += 1
 
@@ -251,80 +252,62 @@ class ControllerManager:
     #   ///////////////////////////////////////////////////
     #  ///   EXPLORATION MECHANISM RELATED FUNCTIONS   ///
     # ///////////////////////////////////////////////////
-    # TODO: there is a class called Counter that could be probably used instead of custom code, i didn't know it. Try to refactor it if you want.
-
-    def initialize_counter_dicts(self, ops: list, inputs: list):
-        input_counters = {}
-        op_counters = {}
-
-        for op in ops:
-            op_counters[op] = 0
-        for inp in inputs:
-            input_counters[inp] = 0
-
-        op_counters['_TOTAL'] = 0
-        input_counters['_TOTAL'] = 0
-
-        return op_counters, input_counters
-
-    def increment_if_in_keys(self, key, target_dict: dict):
-        if key in target_dict.keys():
-            target_dict[key] += 1
-
-    def update_counters(self, cell_spec: list, op_counters: dict, input_counters: dict):
-        for in1, op1, in2, op2 in cell_spec:
-            self.increment_if_in_keys(op1, op_counters)
-            self.increment_if_in_keys(op2, op_counters)
-            self.increment_if_in_keys(in1, input_counters)
-            self.increment_if_in_keys(in2, input_counters)
-
-        op_counters['_TOTAL'] = sum(op_counters.values())
-        input_counters['_TOTAL'] += sum(input_counters.values())
 
     def compute_exploration_value_sets(self, pareto_front_models: 'list[ModelEstimate]', state_space: StateSpace):
         valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, self.actual_b, self.B)
         valid_ops = state_space.operator_values
-        op_counters, input_counters = self.initialize_counter_dicts(valid_ops, valid_inputs)
+        cell_counter = CellCounter(valid_inputs, valid_ops)
 
         for model in pareto_front_models:
-            self.update_counters(model.cell_spec, op_counters, input_counters)
+            cell_counter.update_from_cell_spec(model.cell_spec)
 
-        op_usage_threshold = op_counters['_TOTAL'] / (len(valid_ops) * 6)
-        input_usage_threshold = input_counters['_TOTAL'] / (len(valid_inputs) * 6)
+        op_usage_threshold = cell_counter.ops_total() / (len(valid_ops) * 6)
+        input_usage_threshold = cell_counter.inputs_total() / (len(valid_inputs) * 6)
 
-        op_exp = [key for key, val in op_counters.items() if val < op_usage_threshold]
-        input_exp = [key for key, val in input_counters.items() if val < input_usage_threshold]
+        op_exp = [key for key, val in cell_counter.op_counter.items() if val < op_usage_threshold]
+        input_exp = [key for key, val in cell_counter.input_counter.items() if val < input_usage_threshold]
 
         return op_exp, input_exp
 
-    def get_block_element_exploration_score(self, el, exploration_counter_dict: dict):
+    def get_block_element_exploration_score(self, el, exploration_counter: Counter, total_count: int, bonus: bool):
         score = 0
 
-        # el in exploration set
-        if el in exploration_counter_dict.keys():
+        # el in exploration set (dict is initialized with valid keys)
+        if el in exploration_counter.keys():
             score += 1
-            # el underused condition (less than average)
-            if exploration_counter_dict['_TOTAL'] == 0 or \
-                    exploration_counter_dict[el] < (exploration_counter_dict['_TOTAL'] / len(exploration_counter_dict.keys())):
+
+            # el underused condition (less than average). If only one element is present, it will be always True.
+            if total_count == 0 or exploration_counter[el] <= (total_count / len(exploration_counter.keys())):
                 score += 2
+
+            if bonus:
+                score += 1
 
         return score
 
-    def has_sufficient_exploration_score(self, model_est: ModelEstimate, exploration_op_counters: dict, exploration_input_counters: dict,
-                                              exploration_pareto_front: 'list[ModelEstimate]'):
+    def has_sufficient_exploration_score(self, model_est: ModelEstimate, exp_cell_counter: CellCounter,
+                                         exploration_pareto_front: 'list[ModelEstimate]'):
         exp_score = 0
-        for in1, op1, in2, op2 in model_est.cell_spec:
-            exp_score += self.get_block_element_exploration_score(in1, exploration_input_counters)
-            exp_score += self.get_block_element_exploration_score(in2, exploration_input_counters)
-            exp_score += self.get_block_element_exploration_score(op1, exploration_op_counters)
-            exp_score += self.get_block_element_exploration_score(op1, exploration_op_counters)
+        exp_inputs_total_count = exp_cell_counter.inputs_total()
+        exp_ops_total_count = exp_cell_counter.ops_total()
 
-        # additional conditions for pareto variety (more than 4% of accuracy and/or 10% of time difference with previous pareto entry)
-        # considered only for cells with elements in exploration sets, when exploration pareto front is not empty
+        # give a bonus to the least searched set between inputs and operators (to both if equal)
+        # in case one exploration set is empty, after first step the bonus will not be granted anymore.
+        input_bonus = exp_ops_total_count <= exp_inputs_total_count
+        op_bonus = exp_inputs_total_count <= exp_ops_total_count
+
+        for in1, op1, in2, op2 in model_est.cell_spec:
+            exp_score += self.get_block_element_exploration_score(in1, exp_cell_counter.input_counter, exp_inputs_total_count, input_bonus)
+            exp_score += self.get_block_element_exploration_score(in2, exp_cell_counter.input_counter, exp_inputs_total_count, input_bonus)
+            exp_score += self.get_block_element_exploration_score(op1, exp_cell_counter.op_counter, exp_ops_total_count, op_bonus)
+            exp_score += self.get_block_element_exploration_score(op1, exp_cell_counter.op_counter, exp_ops_total_count, op_bonus)
+
+        # additional conditions for pareto variety (float values, 1 point every difference of 4% of accuracy or 10% of time difference
+        # with previous pareto entry). Considered only for cells with elements in exploration sets, when exploration pareto front is not empty.
         if exp_score > 0 and len(exploration_pareto_front) > 0:
-            exp_score += (1 - exploration_pareto_front[-1].score / model_est.score) / 0.04
-            exp_score += (1 - exploration_pareto_front[-1].time / model_est.time) / 0.10
+            exp_score += (1 - model_est.score / exploration_pareto_front[-1].score) / 0.04
+            exp_score += (1 - model_est.time / exploration_pareto_front[-1].time) / 0.10
 
         # adapt threshold if one of the two sets is empty
-        exp_score_threshold = 6 if (len(exploration_op_counters) > 0 and len(exploration_input_counters) > 0) else 3
+        exp_score_threshold = 8 if (exp_cell_counter.ops_keys_len() > 0 and exp_cell_counter.inputs_keys_len() > 0) else 4
         return exp_score >= exp_score_threshold

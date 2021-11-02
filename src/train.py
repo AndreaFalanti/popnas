@@ -328,7 +328,7 @@ class Train:
 
         # create the ControllerManager and build the internal policy network
         controller = ControllerManager(state_space, acc_pred_func, time_pred_func,
-                                       B=self.blocks, K=self.children_max_size, pnas_mode=self.pnas_mode)
+                                       B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size, pnas_mode=self.pnas_mode)
 
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
