@@ -413,11 +413,12 @@ class Train:
 
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:
-                    plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs)
+                    plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, limit=self.children_max_size)
                     plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs)
 
-                # state_space.children are updated in controller.update_step, CNN to train in next step
-                plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, state_space.children)
+                # state_space.children are updated in controller.update_step, CNN to train in next step. Add also exploration networks.
+                trained_cells = state_space.children + state_space.exploration_front
+                plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, trained_cells)
 
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)

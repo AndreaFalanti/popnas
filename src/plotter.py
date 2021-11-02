@@ -1,5 +1,6 @@
 import statistics
 from typing import NamedTuple
+import logging
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
 
-__logger = None
+__logger = None  # type: logging.Logger
 # disable matplotlib info messages
 plt.set_loglevel('WARNING')
 
@@ -300,13 +301,17 @@ def __generate_value_list_from_inputs_counters_dict(input_counters: 'dict[int, i
     return [input_counters[inp] for inp in inputs]
 
 
-def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]'):
+def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', limit: int = None):
     op_counters = __initialize_dict_usage_data(operators)
     input_counters = __initialize_dict_usage_data(inputs)
 
     __logger.info("Analyzing operators and inputs usage of pareto front for b=%d", b)
     csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
     df = pd.read_csv(csv_path)
+
+    # used to limit the pareto front to the actual K children trained, if provided
+    if limit:
+        df = df.head(limit)
 
     cells = parse_cell_structures(df['cell structure'])
 
