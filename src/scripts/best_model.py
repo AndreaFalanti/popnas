@@ -1,15 +1,18 @@
 import argparse
 import importlib.util
+import operator
+import os
 
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-from tensorflow import keras
-from tensorflow.keras import datasets
+from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
 import log_service
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
 
 def load_dataset(dataset):
@@ -37,13 +40,43 @@ def apply_data_augmentation():
 
     # Create training ImageDataGenerator object
     if use_data_augmentation:
-        train_datagen = ImageDataGenerator(horizontal_flip=True, rescale=1. / 255)
-        validation_datagen = ImageDataGenerator(horizontal_flip=True, rescale=1. / 255)
+        train_datagen = ImageDataGenerator(horizontal_flip=True,
+                                           rotation_range=20,
+                                           width_shift_range=6,
+                                           height_shift_range=6,
+                                           rescale=1. / 255)
+        validation_datagen = ImageDataGenerator(horizontal_flip=True,
+                                                rotation_range=20,
+                                                width_shift_range=6,
+                                                height_shift_range=6,
+                                                rescale=1. / 255)
     else:
         train_datagen = ImageDataGenerator()
         validation_datagen = ImageDataGenerator()
 
     return train_datagen, validation_datagen
+
+
+def generate_dataset(batch_size: int):
+    (x_train_init, y_train_init), _ = load_dataset('cifar10')
+    x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, train_size=0.85, shuffle=True, stratify=y_train_init)
+
+    train_datagen, validation_datagen = apply_data_augmentation()
+    train_datagen.fit(x_train)
+    validation_datagen.fit(x_val)
+
+    cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
+                         tf.TensorSpec(shape=(None, 10), dtype=tf.float32))
+    train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, batch_size), output_signature=cifar10_signature)
+    validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, batch_size), output_signature=cifar10_signature)
+
+    train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+    validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
+
+    train_batches = np.ceil(len(x_train) / batch_size)
+    val_batches = np.ceil(len(x_val) / batch_size)
+
+    return train_dataset, validation_dataset, train_batches, val_batches
 
 
 def define_callbacks():
@@ -53,25 +86,17 @@ def define_callbacks():
     Returns:
         (tf.keras.Callback[]): Keras callbacks
     '''
-    callbacks = []
-
     # Save best weights
-    ckpt_callback = tf.keras.callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', 'cp_e{epoch:02d}_vl{val_loss:.2f}.ckpt'),
-                                                       save_weights_only=True, save_best_only=True, monitor='val_loss', mode='min')
-    callbacks.append(ckpt_callback)
-
+    ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_vacc{val_accuracy:.4f}.ckpt'
+    ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
+                                              save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max')
     # By default shows losses and metrics for both training and validation
-    tb_callback = tf.keras.callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
+    tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
 
-    callbacks.append(tb_callback)
+    es_callback = callbacks.EarlyStopping(monitor='val_loss', patience=12, restore_best_weights=True, verbose=1)
+    plateau_callback = callbacks.ReduceLROnPlateau(factor=0.4, patience=5, verbose=1)
 
-    # TODO: convert into a parameter
-    early_stop = True
-    if early_stop:
-        es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=8, restore_best_weights=True, verbose=1)
-        callbacks.append(es_callback)
-
-    return callbacks
+    return [ckpt_callback, tb_callback, es_callback, plateau_callback]
 
 
 def main():
@@ -83,42 +108,48 @@ def main():
     logger = log_service.get_logger(__name__)
 
     logger.info('Loading best model from provided folder...')
-    model = keras.models.load_model(args.p)
+    model = models.load_model(args.p)  # type: models.Model
     model.summary(line_length=140, print_fn=logger.info)
 
     # Load and prepare the dataset
-    logger.info('Preparing dataset...')
-    (x_train_init, y_train_init), _ = load_dataset('cifar10')
-    x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, train_size=0.8,
-                                                                    shuffle=True)  # use only 80% of the samples
-
-    bs = 128  # TODO: batch size, make it a parameter?
-
-    train_datagen, validation_datagen = apply_data_augmentation()
-    train_datagen.fit(x_train)
-    validation_datagen.fit(x_validation)
-
-    train_dataset = train_datagen.flow(x_train, y_train, batch_size=bs)
-    validation_dataset = validation_datagen.flow(x_validation, y_validation, batch_size=bs)
+    logger.info('Preparing datasets...')
+    train_dataset, validation_dataset, train_batches, val_batches = generate_dataset(batch_size=128)
 
     # Define training procedure and hyperparameters
-    loss = tf.keras.losses.CategoricalCrossentropy()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
-    metrics = ['accuracy', tf.keras.metrics.TopKCategoricalAccuracy(k=5)]
+    loss = losses.CategoricalCrossentropy()
+    optimizer = optimizers.Adam(learning_rate=0.01)
+    train_metrics = ['accuracy', metrics.TopKCategoricalAccuracy(k=3)]
 
     # Compile model (should also reinitialize the weights, providing training from scratch)
-    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+    model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
 
     # Define callbacks
-    callbacks = define_callbacks()
+    train_callbacks = define_callbacks()
 
-    model.fit(x=train_dataset,
-              epochs=300,
-              batch_size=128,
-              steps_per_epoch=np.ceil(len(x_train) / bs),
-              validation_data=validation_dataset,
-              validation_steps=np.ceil(len(x_validation) / bs),
-              callbacks=callbacks)
+    hist = model.fit(x=train_dataset,
+                     epochs=2,
+                     steps_per_epoch=train_batches,
+                     validation_data=validation_dataset,
+                     validation_steps=val_batches,
+                     callbacks=train_callbacks)
+
+    # hist.history is a dictionary of lists (each metric is a key)
+    epoch_index, best_val_accuracy = max(enumerate(hist.history['val_accuracy']), key=operator.itemgetter(1))
+    loss, acc, top3 = hist.history['loss'][epoch_index], hist.history['accuracy'][epoch_index],\
+                      hist.history['top_k_categorical_accuracy'][epoch_index]
+    val_loss, top3_val = hist.history['val_loss'][epoch_index], hist.history['val_top_k_categorical_accuracy'][epoch_index]
+
+    logger.info('*' * 52)
+    logger.info('Best epoch (val_accuracy) stats:')
+    logger.info('-' * 20 + ' Validation ' + '-' * 20)
+    logger.info('Validation accuracy: %0.4f', best_val_accuracy)
+    logger.info('Validation loss: %0.4f', val_loss)
+    logger.info('Validation top3 accuracy: %0.4f', top3_val)
+    logger.info('-' * 21 + ' Training ' + '-' * 21)
+    logger.info('Accuracy: %0.4f', acc)
+    logger.info('Loss: %0.4f', loss)
+    logger.info('Top3 accuracy: %0.4f', top3)
+    logger.info('*' * 60)
 
 
 if __name__ == '__main__':
