@@ -47,7 +47,7 @@ After that you should be able to run POPNASv2 with this command:
 python run.py -b 5 -k 256
 ```
 
-## GPU support
+### GPU support
 To use GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
 Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
 to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https://www.tensorflow.org/install/source#linux).
@@ -91,16 +91,7 @@ docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
 - **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation.
   This will make the computation extremely similar to PNAS algorithm.
 
-
-## Tensorboard
-Trained CNNs have a callback for saving info to tensorboard log files. To access all the runs, run the command:
-```
-tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{date}/tensorboard_cnn --port 6096
-```
-In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
-
-
-## Additional scripts
+## Additional scripts and utils
 ### Time prediction testing script
 An additional script is also provided to analyze the results of multiple predictors on time target, on the data gathered in a POPNAS run.
 The script creates an additional folder (*pred_time_test*) inside the log folder given as argument.
@@ -131,6 +122,14 @@ If regressor_testing and/or controller_testing scripts have been run on data con
 in additional slides at the end.
 
 
+### Tensorboard
+Trained CNNs have a callback for saving info to tensorboard log files. To access all the runs, run the command:
+```
+tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{date}/tensorboard_cnn --port 6096
+```
+In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
+
+
 ## Changelog from original version
 - Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
 - Fix blocks not having addition of the two operations output.
@@ -149,6 +148,11 @@ in additional slides at the end.
 - Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
   tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
   algorithm and the additional scripts.
+- Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
+  networks (or appear very rarely) due to their early performance, making the predictors penalizing them heavily also
+  in future steps. Since these inputs and operators could be actually quite effective in later cell expansions,
+  the exploration step now trains a small set of networks that contains these underused values. It also helps to
+  discover faster the value of input values >= 0, since they are unknown in B=1 step and progressively added in future steps.
 - Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
   These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
 - Migrate code to Tensorflow 2.
