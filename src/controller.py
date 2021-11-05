@@ -83,9 +83,10 @@ class ControllerManager:
         acc_predictor.train(dataset)
 
         # train time predictor with new data
-        csv_path = log_service.build_path('csv', 'training_time.csv')
-        time_predictor = self.get_time_predictor(self.actual_b)
-        time_predictor.train(csv_path)
+        if not self.pnas_mode:
+            csv_path = log_service.build_path('csv', 'training_time.csv')
+            time_predictor = self.get_time_predictor(self.actual_b)
+            time_predictor.train(csv_path)
 
     def __write_predictions_on_csv(self, model_estimates):
         '''

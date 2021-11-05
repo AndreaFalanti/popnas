@@ -274,15 +274,19 @@ class Train:
                                  lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100, epochs=20)
 
         # time predictors to be used
-        time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True)
-        time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path)
-        time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path)
+        if not self.pnas_mode:
+            # TODO: shap (0.40.0) is bugged, avoid feature analysis for now since the local fixes can't be easily replicated on all servers on which
+            #  the algorithm is ran. Hopefully pull requests will be merged in near future.
+            time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True,
+                                              perform_feature_analysis=False)
+            time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path, perform_feature_analysis=False)
+            time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, perform_feature_analysis=False)
 
         def get_acc_predictor_for_b(b: int):
             return acc_lstm
 
         def get_time_predictor_for_b(b: int):
-            return time_lrridge if b == 1 else time_catboost
+            return None if self.pnas_mode else (time_lrridge if b == 1 else time_catboost)
 
         self._logger.info('Predictors generated successfully')
 
