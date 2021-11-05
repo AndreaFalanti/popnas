@@ -61,7 +61,7 @@ docker build -f ../docker/Dockerfile -t falanti/popnas:py3.6.9-tf2.6.0gpu .
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 2 -e 1 --cpu
+docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 20 -e 10 --cpu
 ```
 
 ## Command line arguments
@@ -131,59 +131,82 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 
 ## Changelog from original version
-- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output as input of another block).
+
+### Generated CNN structure changes
+- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output
+  as input of another block).
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
+- Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
+
+
+### Equivalent networks detection
 - Equivalent blocks are now excluded from the search space, like in PNAS.
 - Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality.
   Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
-- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments.
-  A script is provided to train the best model.
+
+
+### Predictors changes
+- CatBoost can now be used as time regressor, instead or together aMLLibrary supported regressors.
 - Add back the input columns features to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
   Therefore, input values have a great influence on actual training time and must be used by regressor for accurate estimations.
-- Fix regressor features bug: dynamic reindexing was nullified by an int cast.
-- CatBoost can now be used as time regressor, instead or together aMLLibrary supported regressors.
-- Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
-  Add also the plot slideshow script to visualize all produced plots easily in aggregated views.
-- Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
-  tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
-  algorithm and the additional scripts.
+- Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
+  train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
+- Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value)
+  like specified in PNAS paper.
+- Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
+  These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
+
+### Exploration step
 - Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
   networks (or appear very rarely) due to their early performance, making the predictors penalizing them heavily also
   in future steps. Since these inputs and operators could be actually quite effective in later cell expansions,
   the exploration step now trains a small set of networks that contains these underused values. It also helps to
   discover faster the value of input values >= 0, since they are unknown in B=1 step and progressively added in future steps.
-- Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
-  These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
+
+
+### Data extrapolation and data analysis
+- Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
+  Add also the plot slideshow script to visualize all produced plots easily in aggregated views.
+- Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
+
+
+### Software improvements and refactors
 - Migrate code to Tensorflow 2.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
   New training method supports ImageGenerators and allows using weight regularization if --wr parameter is provided.
 - LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
   This make the whole procedure easier to interpret and also more flexible to further changes and additions.
-- Encoder has been totally changed as it was a total mess, causing also a lot of confusion inside the other modules.
+- Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
+  tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
+  algorithm and the additional scripts.
+- Encoder has been totally refactored since it was a total mess, causing also a lot of confusion inside the other modules.
   Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2).
   The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders
-  at runtime and using them easily when needed. The default encoders are now categorical, so 1-indexed integers, instead of the 0-indexed used before.
-- Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
-  train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
+  at runtime and using them easily when needed. The default encoders are now 1-indexed categorical integers, instead of the 0-indexed used before. 
 - Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before, text logs were printed only on console.
-- Add --cpu option to easily choose between running on cpu or gpu.
-- Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add --abc and -f options, to make the cell structure more configurable and flexible.
-- Add -m and -n options, allowing to change the CNN structure (how the cells are stacked).
-- Tweak both controller and child CNN training hyperparameters, to make them more similar to PNAS paper.
-- Print losses on both console and file during CNN and controller training, to make easier the analysis of the training procedure while the algorithm
-  is running.
-- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat
-  was wrongly used before batching.
-- Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value) like specified in PNAS paper.
-- Fix tqdm bars for model predictions procedure, to visualize better its progress.
-- Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
+- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided
+  to train the best model.
 - Format code with pep8 and flake, to follow standard python formatting conventions.
 - General code fixes and improvements, especially improve readability of various code parts for better future maintainability.
   Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented.
   Right now almost the total codebase of original POPNAS version have been refactored, either due to structural or quality changes.
+
+
+### Command line arguments changes
+- Add --cpu option to easily choose between running on cpu or gpu.
+- Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
+- Add --abc and -f options, to make the cell structure more configurable and flexible.
+- Add -m and -n options, allowing to change the CNN structure (how the cells are stacked).
+
+
+### Other bug fixes
+- Fix regressor features bug: dynamic reindexing was nullified by an int cast.
+- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat
+  was wrongly used before batching.
+- Fix tqdm bars for model predictions procedure, to visualize better its progress.
+
 
 
 ## TODO
