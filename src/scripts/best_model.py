@@ -155,7 +155,8 @@ def main():
     logger.info('Loss: %0.4f', loss)
     logger.info('Top3 accuracy: %0.4f', top3)
     logger.info('*' * 60)
-    logger.info('Total training time (without callbacks): %0.4f seconds', training_time)
+    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
+                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
 
 
 if __name__ == '__main__':

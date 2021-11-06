@@ -2,6 +2,7 @@ import csv
 import importlib.util
 import os
 import statistics
+from timeit import default_timer as _timer
 
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
@@ -29,6 +30,7 @@ class Train:
                  all_blocks_concat, pnas_mode):
 
         self._logger = log_service.get_logger(__name__)
+        self._start_time = _timer()
 
         # search space parameters
         self.blocks = blocks
@@ -292,6 +294,19 @@ class Train:
 
         return get_acc_predictor_for_b, get_time_predictor_for_b
 
+    def log_run_final_results(self):
+        total_time = _timer() - self._start_time
+
+        training_results_path = log_service.build_path('csv', 'training_results.csv')
+        with open(training_results_path) as f:
+            trained_cnn_count = len(f.readlines())
+
+        self._logger.info('%s', '*' * 40 + ' RUN RESULTS ' + '*' * 40)
+        self._logger.info('Trained networks: %d', trained_cnn_count)
+        self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time,
+                          total_time // 3600, (total_time // 60) % 60, total_time % 60)
+        self._logger.info('*' * 47 + 'RUN RESULTS' + '*' * 47)
+
     def process(self):
         '''
         Main function, executed by run.py to start POPNAS algorithm.
@@ -431,3 +446,4 @@ class Train:
             plotter.plot_pareto_front_curves(self.blocks, plot3d=True)
 
         self._logger.info("Finished!")
+        self.log_run_final_results()
