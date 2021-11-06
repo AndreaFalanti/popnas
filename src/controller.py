@@ -145,7 +145,7 @@ class ControllerManager:
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
         self.__write_predictions_on_csv(model_estimations)
 
-        self._logger.info('Model evaluation completed')
+        self._logger.info('Models evaluation completed')
 
         # start process by putting first model into pareto front (best score, ordered array),
         # then comparing the rest only by time because of ordering trick.

@@ -126,5 +126,3 @@ class Predictor(ABC):
         self._logger.info('Build plot about training results...')
         self.save_scatter_plot(plot_label)
         self._logger.info('Plot saved successfully')
-
-    # TODO: expand the interface to use this class type for both testing and actual implementation
