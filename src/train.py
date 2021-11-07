@@ -3,6 +3,7 @@ import importlib.util
 import os
 import statistics
 from timeit import default_timer as _timer
+from typing import Any
 
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
@@ -23,38 +24,42 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
 class Train:
 
-    def __init__(self, blocks, children_max_size, exploration_max_size,
-                 dataset, sets,
-                 epochs, batch_size, learning_rate, filters, weight_reg,
-                 cell_stacks, normal_cells_per_stack,
-                 all_blocks_concat, pnas_mode):
+    def __init__(self, run_config: 'dict[str, Any]'):
 
         self._logger = log_service.get_logger(__name__)
         self._start_time = _timer()
 
         # search space parameters
-        self.blocks = blocks
-        self.children_max_size = children_max_size
-        self.exploration_max_size = exploration_max_size
-        self.input_lookback_depth = -2
+        ss_config = run_config['search_space']
+        self.blocks = ss_config['blocks']
+        self.children_max_size = ss_config['max_children']
+        self.exploration_max_size = ss_config['max_exploration_children']
+        self.input_lookback_depth = -ss_config['lookback_depth']
+        self.input_lookforward_depth = ss_config['lookforward_depth']
+        self.operators = ss_config['operators']
 
         # dataset parameters
-        self.dataset = dataset
-        self.sets = sets
+        ds_config = run_config['dataset']
+        self.dataset = ds_config['name']
+        self.folds = ds_config['folds']
+        self.samples_limit = ds_config['samples']
 
         # CNN models parameters
-        self.epochs = epochs
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.filters = filters
-        self.weight_reg = weight_reg
-        self.concat_only_unused = not all_blocks_concat
-        self.cell_stacks = cell_stacks
-        self.normal_cells_per_stack = normal_cells_per_stack
+        cnn_config = run_config['cnn_hp']
+        self.epochs = cnn_config['epochs']
+        self.batch_size = cnn_config['batch_size']
+        self.learning_rate = cnn_config['learning_rate']
+        self.filters = cnn_config['filters']
+        self.weight_reg = cnn_config['weight_reg']
+        arc_config = run_config['architecture_parameters']
+        self.concat_only_unused = not arc_config['all_blocks_concatenation']
+        self.cell_stacks = arc_config['motifs']
+        self.normal_cells_per_stack = arc_config['normal_cells_per_motif']
+        self.max_cells = self.cell_stacks * (self.normal_cells_per_stack + 1) - 1
 
-        self.max_cells = cell_stacks * (normal_cells_per_stack + 1) - 1
+        self.pnas_mode = run_config['pnas_mode']
 
-        self.pnas_mode = pnas_mode
+        self.lstm_config = run_config['lstm_hp']
 
         plotter.initialize_logger()
 
@@ -88,15 +93,14 @@ class Train:
         datasets = []
         # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or it's possible to deprecate this feature?
         # TODO: splits for other datasets are actually not defined
-        for i in range(0, self.sets):
-            # TODO: take only 10000 images for fast training (one batch of cifar10), make it random in future?
-            # limit = 10000
-            # x_train_init = x_train_init[:limit]
-            # y_train_init = y_train_init[:limit]
+        for i in range(0, self.folds):
+            if self.samples_limit is not None:
+                x_train_init = x_train_init[:self.samples_limit]
+                y_train_init = y_train_init[:self.samples_limit]
 
             # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, random_state=0,
-                                                                            stratify=y_train_init)
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
+                                                                            random_state=0, stratify=y_train_init)
 
             if self.dataset == "cifar10":
                 # cifar10
@@ -273,7 +277,9 @@ class Train:
 
         # accuracy predictors to be used
         acc_lstm = LSTMPredictor(state_space, acc_col, acc_domain, self._logger, predictors_log_path,
-                                 lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100, epochs=20)
+                                 lr=self.lstm_config['learning_rate'], weight_reg=self.lstm_config['weight_reg'],
+                                 embedding_dim=self.lstm_config['embedding_dim'], rnn_cells=self.lstm_config['cells'],
+                                 epochs=self.lstm_config['epochs'])
 
         # time predictors to be used
         if not self.pnas_mode:
@@ -305,7 +311,7 @@ class Train:
         self._logger.info('Trained networks: %d', trained_cnn_count)
         self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time,
                           total_time // 3600, (total_time // 60) % 60, total_time % 60)
-        self._logger.info('*' * 47 + 'RUN RESULTS' + '*' * 47)
+        self._logger.info('*' * 94)
 
     def process(self):
         '''
@@ -314,15 +320,11 @@ class Train:
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
 
-        # TODO: restore search space
-        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        # operators = ['identity', '3x3 dconv']
-
         starting_b = 0
         self._logger.info('Total cells stacked in each CNN: %d', self.max_cells)
 
         # construct a state space
-        state_space = StateSpace(self.blocks, operators, self.max_cells, input_lookback_depth=self.input_lookback_depth, input_lookforward_depth=None)
+        state_space = StateSpace(self.blocks, self.operators, self.max_cells, input_lookback_depth=self.input_lookback_depth, input_lookforward_depth=None)
 
         max_lookback_depth = abs(self.input_lookback_depth)
         time_headers, time_feature_types = build_feature_names('time', self.blocks, max_lookback_depth)
@@ -337,7 +339,7 @@ class Train:
         dataset = self.prepare_dataset(x_train_init, y_train_init)
 
         # create the Network Manager
-        manager = NetworkManager(dataset, data_num=self.sets, epochs=self.epochs, batchsize=self.batch_size,
+        manager = NetworkManager(dataset, data_num=self.folds, epochs=self.epochs, batchsize=self.batch_size,
                                  learning_rate=self.learning_rate, filters=self.filters, weight_reg=self.weight_reg,
                                  cell_stacks=self.cell_stacks, normal_cells_per_stack=self.normal_cells_per_stack,
                                  concat_only_unused=self.concat_only_unused)
@@ -432,12 +434,12 @@ class Train:
 
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:
-                    plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, limit=self.children_max_size)
-                    plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs)
+                    plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, limit=self.children_max_size)
+                    plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs)
 
                 # state_space.children are updated in controller.update_step, CNN to train in next step. Add also exploration networks.
                 trained_cells = state_space.children + state_space.exploration_front
-                plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, operators, valid_inputs, trained_cells)
+                plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, trained_cells)
 
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)

@@ -1,4 +1,6 @@
 import argparse
+import json
+import os.path
 import sys
 
 import tensorflow as tf
@@ -9,21 +11,9 @@ from train import Train
 
 def main():
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-b', metavar='BLOCKS', type=int, help="maximum number of blocks a cell can contain", required=True)
-    parser.add_argument('-k', metavar='CHILDREN', type=int, help="number of top-K cells to expand at each iteration", required=True)
-    parser.add_argument('-ex', metavar='EXPLORATION_CHILDREN', type=int, help="number of exploration cells to train at each iteration", default=16)
-    parser.add_argument('-d', metavar='DATASET', type=str, help="python file to use as dataset", default="cifar10")
-    parser.add_argument('-s', metavar='NUM_DATASETS', type=int, help="how many times a child network has to be trained", default=1)
-    parser.add_argument('-e', metavar='EPOCHS', type=int, help="number of epochs each child network has to be trained", default=20)
-    parser.add_argument('-z', metavar='BATCH_SIZE', type=int, help="batch size dimension of the dataset", default=128)
-    parser.add_argument('-l', metavar='LEARNING_RATE', type=float, help="learning rate of the child networks", default=0.01)
     parser.add_argument('-r', metavar='RESTORE_FOLDER', type=str, help="log folder to restore", default=None)
-    parser.add_argument('-f', metavar='FILTERS', type=int, help="initial number of filters", default=24)
-    parser.add_argument('-m', metavar='CELL_STACKS', type=int, help="number of cell stacks to use when building the CNNs", default=3)
-    parser.add_argument('-n', metavar='NORMAL_CELLS', type=int, help="number of normal cells (stride 1) to use in a cell stack", default=2)
-    parser.add_argument('-wr', metavar='WEIGHT_REG', type=float, help="L2 weight regularization factor, not applied if not specified", default=None)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help="path to config json with run parameters", default=None)
     parser.add_argument('--cpu', help="use CPU instead of GPU", action="store_true")
-    parser.add_argument('--abc', help="concat all blocks output in a cell output, otherwise use unused only", action="store_true")
     parser.add_argument('--pnas', help="run in PNAS mode (no regressor, only LSTM controller)", action="store_true")
     args = parser.parse_args()
 
@@ -54,6 +44,13 @@ def main():
     else:
         log_service.initialize_log_folders()
 
+        json_path = os.path.join('configs', 'run.json') if args.j is None else args.j
+        with open(json_path, 'r') as f:
+            run_config = json.load(f)
+
+    run_config['pnas_mode'] = args.pnas
+    run_config['use_cpu'] = args.cpu
+
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
@@ -64,12 +61,7 @@ def main():
         logger.info('%s: %s', arg, getattr(args, arg))
     logger.info('%s', '*' * 101)
 
-    run = Train(args.b, args.k, args.ex,
-                dataset=args.d, sets=args.s,
-                epochs=args.e, batch_size=args.z, learning_rate=args.l, filters=args.f, weight_reg=args.wr,
-                cell_stacks=args.m, normal_cells_per_stack=args.n,
-                all_blocks_concat=args.abc, pnas_mode=args.pnas)
-
+    run = Train(run_config)
     run.process()
 
 
