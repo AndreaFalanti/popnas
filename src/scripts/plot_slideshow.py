@@ -5,6 +5,7 @@ import shutil
 from sys import platform
 
 import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
 
 from utils.func_utils import clamp, chunks
@@ -34,15 +35,18 @@ def generate_slide_save_path(log_folder):
     return gen_save_name()
 
 
-def display_plot_overview(plot_paths, columns, rows, title=None, save=False, save_name=None):
+def display_plot_overview(plot_paths: 'list[str]', columns: int, rows: int, title: str = None, save: bool = False, save_name: str = None):
     assert len(plot_paths) <= (columns * rows)
 
     # force TkAgg for maximizing the window with code below
     plt.switch_backend('TkAgg')
-    fig, ax = plt.subplots(nrows=rows, ncols=columns)
+    # basically use an aspect ratio of 16:9, figsize is in inches and pixels for inches are given by dpi
+    fig, ax = plt.subplots(nrows=rows, ncols=columns, figsize=(16, 9), dpi=100)  # type: plt.Figure, np.ndarray[plt.Axes]
+    fig.tight_layout(pad=2.0)
 
     for i, axi in enumerate(ax.flat):
         # disable axis visualization around image
+        axi = axi  # type: plt.Axes
         axi.axis('off')
 
         if i < len(plot_paths):
@@ -50,7 +54,7 @@ def display_plot_overview(plot_paths, columns, rows, title=None, save=False, sav
                 with Image.open(plot_paths[i]) as img:
                     axi.imshow(img)
             except FileNotFoundError:
-                axi.text(0.5, 0.5, s='Image not found', ha='center', va='center', fontsize='x-large', fontweight='semibold')
+                axi.text(0.5, 0.5, s='Image not found', ha='center', va='center', fontsize='medium', fontweight='semibold')
 
     plt.tight_layout()
 
@@ -59,7 +63,7 @@ def display_plot_overview(plot_paths, columns, rows, title=None, save=False, sav
 
     # if in save mode, just save plot to file
     if save:
-        fig.savefig(save_name, bbox_inches='tight', dpi=300)
+        fig.savefig(save_name, bbox_inches='tight', dpi=120)
     # if not in save mode, display the plot on screen
     else:
         # maximize graph (TKAgg backend)
@@ -124,9 +128,9 @@ def main():
 
     b = 2
     while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
-        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
-                                         f'pareto_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
-                              2, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
+        display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'exploration_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
+                                         f'pareto_inputs_usage_B{b}.png', f'exploration_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
+                              3, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
         b += 1
 
     pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
