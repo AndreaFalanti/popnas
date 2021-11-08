@@ -81,7 +81,7 @@ class SearchSpace:
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
         self.input_values = list(range(input_lookback_depth, self.B - 1))
-        if operators is None:
+        if operators is None or len(operators) == 0:
             self.operator_values = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv',
                                     '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
         else:
@@ -277,7 +277,8 @@ class SearchSpace:
         self._logger.info('Block values: %s', rstr(list(range(1, self.B + 1))))
         self._logger.info('Inputs: %s', rstr(self.input_values))
         self._logger.info('Operators: %s', rstr(self.operator_values))
-        self._logger.info('%s', '*' * 101)
+        self._logger.info('Total cells stacked in each CNN: %d', self.cell_stack_depth)
+        self._logger.info('%s', '*' * 100)
 
     def print_cell_spec(self, cell_spec):
         ''' Print the cell specification space properly '''

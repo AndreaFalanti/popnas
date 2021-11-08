@@ -38,6 +38,7 @@
     "dataset": {
         "name": "cifar10",
         "path": null,
+        "classes_count": 10,
         "folds": 1,
         "samples": null
     },

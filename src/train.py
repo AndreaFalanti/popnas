@@ -1,14 +1,8 @@
 import csv
-import importlib.util
 import os
 import statistics
 from timeit import default_timer as _timer
 from typing import Any
-
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.utils import to_categorical
-from tensorflow.python.keras.datasets import cifar10
-from tensorflow.python.keras.datasets import cifar100
 
 import log_service
 import plotter
@@ -17,7 +11,7 @@ from encoder import SearchSpace
 from manager import NetworkManager
 from model import ModelGenerator
 from predictors import *
-from utils.feature_utils import *
+from utils.feature_utils import generate_all_feature_sets, build_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function
 from utils.func_utils import get_valid_inputs_for_block_size
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
@@ -42,26 +36,23 @@ class Train:
 
         # dataset parameters
         ds_config = run_config['dataset']
-        self.dataset = ds_config['name']
-        self.folds = ds_config['folds']
-        self.samples_limit = ds_config['samples']
 
-        # CNN models parameters
+        # CNN models hyperparameters
         cnn_config = run_config['cnn_hp']
-        self.epochs = cnn_config['epochs']
-        self.batch_size = cnn_config['batch_size']
-        self.learning_rate = cnn_config['learning_rate']
-        self.filters = cnn_config['filters']
-        self.weight_reg = cnn_config['weight_reg']
 
+        # CNN architecture parameters
         arc_config = run_config['architecture_parameters']
-        self.concat_only_unused = arc_config['concat_only_unused_blocks']
-        self.cell_stacks = arc_config['motifs']
-        self.normal_cells_per_stack = arc_config['normal_cells_per_motif']
-        self.max_cells = self.cell_stacks * (self.normal_cells_per_stack + 1) - 1
+        max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
 
-        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], arc_config['normal_cells_per_motif'],
-                                   arc_config['motifs'], arc_config['concat_only_unused_blocks'], cnn_config['weight_reg'])
+        # construct a state space
+        self.search_space = SearchSpace(ss_config['blocks'], ss_config['operators'], max_cells,
+                                        input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
+
+        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], cnn_config['weight_reg'],
+                                        arc_config['normal_cells_per_motif'], arc_config['motifs'], arc_config['concat_only_unused_blocks'])
+
+        # create the Network Manager
+        self.cnn_manager = NetworkManager(self.model_gen, ds_config, epochs=cnn_config['epochs'], batch_size=cnn_config['batch_size'])
 
         self.pnas_mode = run_config['pnas_mode']
 
@@ -69,25 +60,23 @@ class Train:
 
         plotter.initialize_logger()
 
-    def generate_and_train_model_from_spec(self, state_space: SearchSpace, manager: NetworkManager, cell_spec: list):
+    def generate_and_train_model_from_spec(self, cell_spec: list):
         """
         Generate a model given the actions and train it to get reward and time
 
         Args:
-            state_space (SearchSpace): ...
-            manager (NetworkManager): ...
             cell_spec (list): plain cell specification
 
         Returns:
             tuple: 4 elements: (max accuracy, training time, params, flops) of trained CNN
         """
         # print the cell in a more comprehensive way
-        state_space.print_cell_spec(cell_spec)
+        self.search_space.print_cell_spec(cell_spec)
 
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params, flops = manager.get_rewards(cell_spec, save_best_model=last_block_train)
+        reward, timer, total_params, flops = self.cnn_manager.get_rewards(cell_spec, save_best_model=last_block_train)
 
         self._logger.info("Best accuracy reached: %0.6f", reward)
         self._logger.info("Training time: %0.6f", timer)
@@ -97,17 +86,13 @@ class Train:
 
         return reward, timer, total_params, flops
 
-    def perform_initial_thrust(self, state_space: SearchSpace, manager: NetworkManager, time_features_len: int, acc_features_len: int):
+    def perform_initial_thrust(self, time_features_len: int, acc_features_len: int):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
-
-        Args:
-            state_space (SearchSpace): [description]
-            manager (NetworkManager): [description]
         '''
 
         self._logger.info('Performing initial thrust with empty cell')
-        acc, time, params, flops = self.generate_and_train_model_from_spec(state_space, manager, [])
+        acc, time, params, flops = self.generate_and_train_model_from_spec([])
 
         # last field is data augmentation, True for generated sample only
         time_data = [time] + [0] * (time_features_len - 2) + [False]
@@ -143,8 +128,7 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list,
-                                    state_space: SearchSpace, exploration: bool):
+    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool):
         '''
         Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
         Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
@@ -154,14 +138,14 @@ class Train:
         '''
 
         # equivalent cells can be useful to train better the regressor
-        eqv_cells, _ = state_space.generate_eqv_cells(cell_spec, size=self.blocks)
+        eqv_cells, _ = self.search_space.generate_eqv_cells(cell_spec, size=self.blocks)
 
         # expand cell_spec for bool comparison of data_augmented field
         cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
 
         time_features_list, acc_features_list = [], []
         for eqv_cell in eqv_cells:
-            time_features, acc_features = generate_all_feature_sets(eqv_cell, state_space)
+            time_features, acc_features = generate_all_feature_sets(eqv_cell, self.search_space)
 
             # features are expanded with labels and data_augmented field
             time_features_list.append([time] + time_features + [exploration, eqv_cell != cell_spec])
@@ -174,8 +158,7 @@ class Train:
         #         for cell in eqv_cells],\
         #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
-    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list,
-                            state_space: SearchSpace, exploration: bool = False):
+    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, exploration: bool = False):
         '''
         Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
         Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
@@ -185,11 +168,10 @@ class Train:
             timer (float): [description]
             accuracy (float):
             cell_spec (list): [description]
-            state_space (SearchSpace): [description]
             exploration:
         '''
 
-        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, state_space, exploration)
+        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, exploration)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -216,7 +198,7 @@ class Train:
 
             writer.writerow(data)
 
-    def initialize_predictors(self, state_space):
+    def initialize_predictors(self):
         acc_col = 'best val accuracy'
         acc_domain = (0, 1)
         predictors_log_path = log_service.build_path('predictors')
@@ -226,7 +208,7 @@ class Train:
         self._logger.info('Initializing predictors...')
 
         # accuracy predictors to be used
-        acc_lstm = LSTMPredictor(state_space, acc_col, acc_domain, self._logger, predictors_log_path,
+        acc_lstm = LSTMPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path,
                                  lr=self.lstm_config['learning_rate'], weight_reg=self.lstm_config['weight_reg'],
                                  embedding_dim=self.lstm_config['embedding_dim'], rnn_cells=self.lstm_config['cells'],
                                  epochs=self.lstm_config['epochs'])
@@ -271,11 +253,6 @@ class Train:
         op_timers = {}
 
         starting_b = 0
-        self._logger.info('Total cells stacked in each CNN: %d', self.max_cells)
-
-        # construct a state space
-        state_space = SearchSpace(self.blocks, self.operators, self.max_cells, input_lookback_depth=self.input_lookback_depth,
-                                  input_lookforward_depth=None)
 
         max_lookback_depth = abs(self.input_lookback_depth)
         time_headers, time_feature_types = build_feature_names('time', self.blocks, max_lookback_depth)
@@ -284,25 +261,17 @@ class Train:
         # add headers to csv and create CatBoost feature files
         initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
 
-        # load correct dataset (based on self.dataset), test data is not used actually
-        (x_train_init, y_train_init), _ = self.load_dataset()
-
-        dataset = self.prepare_dataset(x_train_init, y_train_init)
-
-        # create the Network Manager
-        manager = NetworkManager(self.model_gen, dataset, data_num=self.folds, epochs=self.epochs, batch_size=self.batch_size)
-
         # create the predictors
-        acc_pred_func, time_pred_func = self.initialize_predictors(state_space)
+        acc_pred_func, time_pred_func = self.initialize_predictors()
 
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(state_space, acc_pred_func, time_pred_func,
+        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func,
                                        B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size, pnas_mode=self.pnas_mode)
 
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
         if starting_b == 0:
-            initial_thrust_time = self.perform_initial_thrust(state_space, manager, len(time_headers), len(acc_headers))
+            initial_thrust_time = self.perform_initial_thrust(len(time_headers), len(acc_headers))
             starting_b = 1
 
         monoblocks_info = []
@@ -312,13 +281,13 @@ class Train:
             rewards = []
             timers = []
 
-            cell_specs = state_space.get_cells_to_train()
+            cell_specs = self.search_space.get_cells_to_train()
 
             for model_index, cell_spec in enumerate(cell_specs):
                 self._logger.info("Model #%d / #%d", model_index + 1, len(cell_specs))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(state_space, manager, cell_spec)
+                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
                 rewards.append(reward)
                 timers.append(timer)
 
@@ -343,31 +312,31 @@ class Train:
 
                 # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
                 if current_blocks > 1:
-                    self.write_training_data(current_blocks, timer, reward, cell_spec, state_space)
+                    self.write_training_data(current_blocks, timer, reward, cell_spec)
 
             # train the models built from exploration pareto front
-            for model_index, cell_spec in enumerate(state_space.exploration_front):
+            for model_index, cell_spec in enumerate(self.search_space.exploration_front):
                 if model_index == 0:
                     self._logger.info('Starting exploration step...')
 
-                self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(state_space.exploration_front))
+                self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(self.search_space.exploration_front))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(state_space, manager, cell_spec)
+                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
                 rewards.append(reward)
-                self._logger.info("Finished %d out of %d exploration models!", (model_index + 1), len(state_space.exploration_front))
+                self._logger.info("Finished %d out of %d exploration models!", (model_index + 1), len(self.search_space.exploration_front))
 
                 self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks, exploration=True)
-                self.write_training_data(current_blocks, timer, reward, cell_spec, state_space, exploration=True)
+                self.write_training_data(current_blocks, timer, reward, cell_spec, exploration=True)
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
                 reindex_function = generate_dynamic_reindex_function(op_timers, initial_thrust_time)
-                state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+                self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
                 for time, acc, cell_spec in monoblocks_info:
-                    self.write_training_data(current_blocks, time, acc, cell_spec, state_space)
+                    self.write_training_data(current_blocks, time, acc, cell_spec)
 
             self.write_overall_cnn_training_results(current_blocks, timers, rewards)
 
@@ -378,7 +347,8 @@ class Train:
 
                 # controller new cells have 1 more block
                 expansion_step_blocks = current_blocks + 1
-                valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, current_blocks=expansion_step_blocks, max_blocks=self.blocks)
+                valid_inputs = get_valid_inputs_for_block_size(self.search_space.input_values, current_blocks=expansion_step_blocks,
+                                                               max_blocks=self.blocks)
 
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:
@@ -386,7 +356,7 @@ class Train:
                     plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs)
 
                 # state_space.children are updated in controller.update_step, CNN to train in next step. Add also exploration networks.
-                trained_cells = state_space.children + state_space.exploration_front
+                trained_cells = self.search_space.children + self.search_space.exploration_front
                 plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, trained_cells)
 
         plotter.plot_training_info_per_block()

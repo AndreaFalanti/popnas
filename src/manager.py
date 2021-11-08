@@ -1,12 +1,14 @@
+import importlib.util
 import os
 from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import Model
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import Model, datasets
 from tensorflow.keras.applications.imagenet_utils import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.utils import plot_model
+from tensorflow.keras.utils import plot_model, to_categorical
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
 import log_service
@@ -28,27 +30,128 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, model_gen: ModelGenerator, dataset, data_num=1, epochs=20, batch_size=64):
+    def __init__(self, model_gen: ModelGenerator, dataset_config: dict, epochs=20, batch_size=64):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
-
-        Args:
-            dataset: a tuple of 4 arrays (X_train, y_train, X_val, y_val)
-            epochs: number of epochs to train the subnetworks
+        It also preprocess the dataset, based on the run configuration.
         '''
         self._logger = log_service.get_logger(__name__)
 
-        assert data_num > 0
+        self.dataset_name = dataset_config['name']
+        self.dataset_path = dataset_config['path']
+        self.dataset_folds_count = dataset_config['folds']
+        self.samples_limit = dataset_config['samples']
+        self.dataset_classes_count = dataset_config['classes_count']
+
+        self.dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
         self.model_gen = model_gen
-        self.data_num = data_num
-        self.dataset = dataset
         self.epochs = epochs
         self.batch_size = batch_size
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
+
+        # set in dataset initialization, used for displaying progress during training
+        self.train_batches = 0
+        self.validation_batches = 0
+
+        (x_train_init, y_train_init), _ = self.__load_dataset()
+        self.__prepare_datasets(x_train_init, y_train_init)
+        self._logger.info('Dataset folds built successfully')
+
+    def __load_dataset(self):
+        self._logger.info('Loading dataset...')
+        # for known names, load dataset from Keras and set the correct number of classes, in case there is a mismatch in the json
+        if self.dataset_name == 'cifar10':
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar10.load_data()
+            self.dataset_classes_count = 10
+        elif self.dataset_name == 'cifar100':
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar100.load_data()
+            self.dataset_classes_count = 100
+        # TODO: untested legacy code, not sure this is working
+        # if dataset name is not recognized, try to import it from path
+        else:
+            spec = importlib.util.spec_from_file_location(self.dataset_path)
+            dataset = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(dataset)
+            (x_train_init, y_train_init), (x_test_init, y_test_init) = dataset.load_data()
+
+        return (x_train_init, y_train_init), (x_test_init, y_test_init)
+
+    def __prepare_datasets(self, x_train_init, y_train_init):
+        """Build a validation set from training set and do some preprocessing
+
+        Args:
+            x_train_init (ndarray): x training
+            y_train_init (ndarray): y training
+
+        Returns:
+            list:
+        """
+        # normalize image RGB values into [0, 1] domain
+        x_train_init = x_train_init.astype('float32') / 255.
+
+        # TODO: is it ok to generate the splits by shuffling randomly?
+        for i in range(self.dataset_folds_count):
+            self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
+            if self.samples_limit is not None:
+                x_train_init = x_train_init[:self.samples_limit]
+                y_train_init = y_train_init[:self.samples_limit]
+
+            y_train_init = to_categorical(y_train_init, self.dataset_classes_count)
+
+            # create a validation set for evaluation of the child models
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
+                                                                            random_state=0, stratify=y_train_init)
+
+            train_ds, val_ds, train_batches, val_batches = self.__build_tf_datasets((x_train, y_train, x_validation, y_validation),
+                                                                                    use_data_augmentation=True)
+            self.train_batches = train_batches
+            self.validation_batches = val_batches
+
+            self.dataset_folds.append((train_ds, val_ds))
+
+    def __build_tf_datasets(self, samples_fold: 'tuple(list, list, list, list)', use_data_augmentation: bool):
+        '''
+        Build the training and validation datasets to be used in model.fit().
+
+        Args:
+            samples_fold: dataset index
+            use_data_augmentation (bool): [description]
+
+        Returns:
+            [type]: [description]
+        '''
+
+        x_train, y_train, x_val, y_val = samples_fold
+
+        if use_data_augmentation:
+            train_datagen = ImageDataGenerator(horizontal_flip=True)
+            validation_datagen = ImageDataGenerator(horizontal_flip=True)
+        else:
+            train_datagen = ImageDataGenerator()
+            validation_datagen = ImageDataGenerator()
+
+        train_datagen.fit(x_train)
+        validation_datagen.fit(x_val)
+
+        # TODO: generalize for other datasets
+        cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
+                             tf.TensorSpec(shape=(None, self.dataset_classes_count), dtype=tf.float32))
+        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
+                                                       output_signature=cifar10_signature)
+        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batch_size),
+                                                            output_signature=cifar10_signature)
+
+        train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+        validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
+
+        train_batches = np.ceil(len(x_train) / self.batch_size)
+        val_batches = np.ceil(len(x_val) / self.batch_size)
+
+        return train_dataset, validation_dataset, train_batches, val_batches
 
     # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
     # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
@@ -114,45 +217,6 @@ class NetworkManager:
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 
-    def __build_datasets(self, dataset_index: int, use_data_augmentation: bool):
-        '''
-        Build the training and validation datasets to be used in model.fit().
-
-        Args:
-            dataset_index (int): dataset index
-            use_data_augmentation (bool): [description]
-
-        Returns:
-            [type]: [description]
-        '''
-
-        x_train, y_train, x_val, y_val = self.dataset[dataset_index]
-
-        if use_data_augmentation:
-            train_datagen = ImageDataGenerator(horizontal_flip=True)
-            validation_datagen = ImageDataGenerator(horizontal_flip=True)
-        else:
-            train_datagen = ImageDataGenerator()
-            validation_datagen = ImageDataGenerator()
-
-        train_datagen.fit(x_train)
-        validation_datagen.fit(x_val)
-
-        cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
-                             tf.TensorSpec(shape=(None, 10), dtype=tf.float32))
-        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
-                                                       output_signature=cifar10_signature)
-        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batch_size),
-                                                            output_signature=cifar10_signature)
-
-        train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-        validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
-
-        train_batches = np.ceil(len(x_train) / self.batch_size)
-        val_batches = np.ceil(len(x_val) / self.batch_size)
-
-        return train_dataset, validation_dataset, train_batches, val_batches
-
     def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''
         Creates a CNN given the actions predicted by the controller RNN,
@@ -178,9 +242,9 @@ class NetworkManager:
         # generate a CNN model given the cell specification
         # TODO: tests are now always done with data_num = 1, if > 1 it should do the mean of the metrics computed.
         #  Also, instead of rebuilding the model it should be better to just reset the weights.
-        for index in range(self.data_num):
-            if self.data_num > 1:
-                self._logger.info("Training dataset #%d / #%d", index + 1, self.data_num)
+        for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
+            if self.dataset_folds_count > 1:
+                self._logger.info("Training dataset #%d / #%d", i + 1, self.dataset_folds_count)
 
             # build the model, given the actions
             model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
@@ -188,17 +252,15 @@ class NetworkManager:
             time_cb = TimingCallback()
             callbacks.append(time_cb)
 
-            train_ds, val_ds, train_batches, val_batches = self.__build_datasets(index, True)
-
             hist = model.fit(x=train_ds,
                              epochs=self.epochs,
                              batch_size=self.batch_size,
-                             steps_per_epoch=train_batches,
+                             steps_per_epoch=self.train_batches,
                              validation_data=val_ds,
-                             validation_steps=val_batches,
+                             validation_steps=self.validation_batches,
                              callbacks=callbacks)
 
-            timer = sum(time_cb.logs)
+            training_time = sum(time_cb.logs)
 
         # compute the reward (best validation accuracy)
         reward = max(hist.history.get('val_accuracy'))
@@ -230,4 +292,4 @@ class NetworkManager:
         # clean up resources and GPU memory
         del model
 
-        return reward, timer, total_params, flops
+        return reward, training_time, total_params, flops
