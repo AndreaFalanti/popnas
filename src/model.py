@@ -8,58 +8,55 @@ import ops
 from utils.func_utils import to_int_tuple, list_flatten, compute_tensor_byte_size
 
 
+class CellInfo:
+    '''
+    Helper class that extrapolate and store some relevant info from the cell specification, used for building the actual CNN.
+    '''
+    def __init__(self, cell_spec: 'list[tuple]') -> None:
+        self.specification = cell_spec
+        # it's a list of tuples, so already grouped by 4
+        self.blocks = len(cell_spec)
+
+        flat_cell_spec = list_flatten(cell_spec)
+        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
+        used_block_outputs = set(filter(lambda el: el >= 0, flat_cell_spec[::2]))
+        self.used_lookbacks = set(filter(lambda el: el < 0, flat_cell_spec[::2]))
+        self.unused_block_outputs = [x for x in range(0, self.blocks) if x not in used_block_outputs]
+        self.use_skip = self.used_lookbacks.issuperset({-2})
+
+
 class ModelGenerator:
+    '''
+    Class used to build a CNN Keras model, given a cell specification.
+    '''
 
-    def __init__(self, cell_spec, filters=24, normal_cells_per_stack=2, cell_stacks=3, concat_only_unused=True, weight_norm=None):
-        '''
-        Utility class to build a CNN with structure provided in the action list.
-
-        # Args:
-            actions: list of [input; action] pairs that define the cell.
-            filters (int): initial number of filters.
-            concat_only_unused (bool): concatenates only unused states at the end of each cell if true, otherwise concatenates all blocks output.
-        '''
-
+    # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
+    def __init__(self, lr: float = 0.01, filters: int = 24, weight_norm: float = None,
+                 normal_cells_per_motif: int = 2, motifs: int = 3, concat_only_unused: bool = True):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
-        # it's a list of tuples, so already grouped by 4
-        self.B = len(cell_spec)
-        # TODO: flat the list to use old logic, with a refactor it could be avoided
-        cell_spec = list_flatten(cell_spec)
-
         self.concat_only_unused = concat_only_unused
-        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_inputs = set(filter(lambda el: el >= 0, cell_spec[::2]))
-        self.unused_inputs = [x for x in range(0, self.B) if x not in used_inputs]
-
-        self.use_skip = -2 in cell_spec[::2]
-        self.use_prev = -1 in cell_spec[::2]
-
-        if len(cell_spec) > 0:
-            self.action_list = [x for x in zip(*[iter(cell_spec)] * 2)]  # generate a list of tuples (pairs)
-            self.M = cell_stacks
-            self.N = normal_cells_per_stack
-        else:
-            self.action_list = []
-            self.M = 1
-            self.N = 0
-
+        self.lr = lr
         self.filters = filters
-        # for depth adaptation purposes
-        self.prev_cell_filters = 0
+        self.motifs = motifs
+        self.normal_cells_per_motif = normal_cells_per_motif
 
         self.weight_norm = regularizers.l2(weight_norm) if weight_norm is not None else None
 
-        # used for layers naming, defined in class to avoid to pass them across multiple functions
+        # attributes defined below are manipulated and used during model building.
+        # defined in class to avoid having lots of parameter passing in each function.
+
+        # used for layers naming
         self.cell_index = 0
         self.block_index = 0
 
-        # store partition sizes (computed between each two adjacent cells and between last cell and GAP
-        self.partitions_dict = {
-            'sizes': [],
-            'use_skip_only': self.use_skip and not self.use_prev
-        }
+        # for depth adaptation purposes
+        self.prev_cell_filters = 0
+
+        # info about the actual cell processed
+        # noinspection PyTypeChecker
+        self.cell = None  # type: CellInfo
 
     def __compile_op_regexes(self):
         '''
@@ -76,15 +73,24 @@ class ModelGenerator:
     def __compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
         input_tensors_size = 0
 
-        # TODO: generalize it for lookback sizes != -2, if want to conduct experiments on different lookbacks. For now not a priority.
-        if self.use_skip:
-            input_tensors_size += compute_tensor_byte_size(cell_inputs[-2])
-        if self.use_prev:
-            input_tensors_size += compute_tensor_byte_size(cell_inputs[-1])
+        for lb in self.cell.used_lookbacks:
+            input_tensors_size += compute_tensor_byte_size(cell_inputs[lb])
 
         return input_tensors_size
 
-    def __build_cell_util(self, filters, inputs, reduction=False):
+    def __adjust_partitions(self, partitions_dict: dict, output_tensor: tf.Tensor):
+        # adjust partition sizes, by replacing the last element with only the last cell output, since only that is passed
+        # to GAP (no -2, even if used in cell specification).
+        if len(partitions_dict['sizes']) > 1:
+            partitions_dict['sizes'][-1] = compute_tensor_byte_size(output_tensor)
+            # remove skipped cells from feasible partitions, when using only skip inputs
+            if partitions_dict['use_skip_only']:
+                partitions_dict['sizes'][1:-1] = partitions_dict['sizes'][2:-1:2]
+        # initial thrust case, use append since no partitions have been made (only input size is present)
+        else:
+            partitions_dict['sizes'].append(compute_tensor_byte_size(output_tensor))
+
+    def __build_cell_util(self, filters: int, inputs: list, partitions_dict: dict, reduction: bool = False):
         '''
         Simple helper function for building a cell and quickly return the inputs for next cell.
 
@@ -100,7 +106,7 @@ class ModelGenerator:
         stride = (2, 2) if reduction else (1, 1)
         adapt_depth = filters != self.prev_cell_filters
 
-        cell_output = self.__build_cell(self.B, self.action_list, filters, stride, inputs, adapt_depth)
+        cell_output = self.__build_cell(filters, stride, inputs, adapt_depth)
         self.cell_index += 1
         self.prev_cell_filters = filters
 
@@ -108,17 +114,36 @@ class ModelGenerator:
         # while -1 is the output of the created cell
         new_inputs = [inputs[-1], cell_output]
 
-        self.partitions_dict['sizes'].append(self.__compute_partition_size(new_inputs))
+        partitions_dict['sizes'].append(self.__compute_partition_size(new_inputs))
         return new_inputs
 
-    def build_model(self):
+    def build_model(self, cell_spec: 'list[tuple]'):
+        self.cell = CellInfo(cell_spec)
+
+        if len(cell_spec) > 0:
+            M = self.motifs
+            N = self.normal_cells_per_motif
+        # initial thrust case, empty cell
+        else:
+            M = 0
+            N = 0
+
+        # store partition sizes (computed between each two adjacent cells and between last cell and GAP
+        partitions_dict = {
+            'sizes': [],
+            'use_skip_only': self.cell.used_lookbacks.issubset({-2})
+        }
+
         filters = self.filters
+        # reset indexes
+        self.cell_index = 0
+        self.block_index = 0
 
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
         model_input = layers.Input(shape=(32, 32, 3))
         # save initial input size in bytes into partition list
-        self.partitions_dict['sizes'].append(compute_tensor_byte_size(model_input))
+        partitions_dict['sizes'].append(compute_tensor_byte_size(model_input))
         # put prev filters = input depth
         self.prev_cell_filters = 3
 
@@ -128,70 +153,51 @@ class ModelGenerator:
         cell_inputs = [None, model_input]  # [skip, last]
 
         # add (M - 1) times N normal cells and a reduction cell
-        for _ in range(self.M - 1):
+        for motif_index in range(M):
             # add N times a normal cell
-            for _ in range(self.N):
-                cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs)
+            for _ in range(N):
+                cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict)
 
-            # add 1 time a reduction cell
-            filters = filters * 2
-            cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs, reduction=True)
-
-        # add N time a normal cell
-        for _ in range(self.N):
-            cell_inputs = self.__build_cell_util(filters, inputs=cell_inputs)
+            # add 1 time a reduction cell, except for last motif
+            if motif_index + 1 < M:
+                filters = filters * 2
+                cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
 
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
-        # adjust partition sizes, by replacing the last element with only the last cell output, since only that is passed
-        # to GAP (no -2, even if used in cell specification).
-        if len(self.partitions_dict['sizes']) > 1:
-            self.partitions_dict['sizes'][-1] = compute_tensor_byte_size(last_output)
-            # remove skipped cells from feasible partitions, when using only skip inputs
-            if self.partitions_dict['use_skip_only']:
-                self.partitions_dict['sizes'][1:-1] = self.partitions_dict['sizes'][2:-1:2]
-        # initial thrust case, use append since no partitions have been made (only input size is present)
-        else:
-            self.partitions_dict['sizes'].append(compute_tensor_byte_size(last_output))
+        self.__adjust_partitions(partitions_dict, last_output)
 
         gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
         output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
 
-        return Model(inputs=model_input, outputs=output), self.partitions_dict
+        return Model(inputs=model_input, outputs=output), partitions_dict
 
-    def __build_cell(self, B, action_list, filters, stride, inputs, adapt_depth: bool):
+    def __build_cell(self, filters, stride, inputs, adapt_depth: bool):
         '''
         Generate cell from action list. Following PNAS paper, addition is used to combine block results.
 
         Args:
-            B (int): Number of blocks in the cell
-            action_list (list<tuple<int, string>): List of tuples of 2 elements -> (input, action_name).
-                Input can be either -1 (last cell output) or -2 (skip connection).
             filters (int): Initial filters to use
             stride (tuple<int, int>): (1, 1) for normal cells, (2, 2) for reduction cells
             inputs (list<tf.tensor>): Possible tensors to use as input (based on action_list index value)
             adapt_depth (bool): True if there is a change in filter size, operations that don't alter depth must be addressed accordingly.
 
         Returns:
-            (tf.keras.layers.Add | tf.keras.layers.Concatenate): [description]
+            (tf.Tensor): output tensor of the cell
         '''
         # normalize inputs if necessary (also avoid normalization if model doesn't use -2 input)
         # TODO: a refactor could also totally remove -2 from inputs in this case
-        if self.use_skip:
+        if self.cell.use_skip:
             inputs = self.__normalize_inputs(inputs)
-
-        # if cell size is 1 block only
-        if B == 1:
-            return self.__build_block(action_list[0], action_list[1], filters, stride, inputs, adapt_depth)
 
         # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
         total_inputs = inputs  # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
-        for i in range(B):
+        for i, block in enumerate(self.cell.specification):
             self.block_index = i
-            block_out = self.__build_block(action_list[i * 2], action_list[i * 2 + 1], filters, stride, total_inputs, adapt_depth)
+            block_out = self.__build_block(block, filters, stride, total_inputs, adapt_depth)
 
             # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
@@ -199,15 +205,16 @@ class ModelGenerator:
             total_inputs = block_outputs + inputs
 
         if self.concat_only_unused:
-            block_outputs = [block_outputs[i] for i in self.unused_inputs]
+            block_outputs = [block_outputs[i] for i in self.cell.unused_block_outputs]
 
-        # reduce depth to filters value, otherwise concatenation would lead to (b * filters) tensor depth
+        # concatenate and reduce depth to filters value, otherwise cell output would be a (b * filters) tensor depth
         if len(block_outputs) > 1:
             # concatenate all 'Add' layers, outputs of each single block
             concat_layer = layers.Concatenate(axis=-1)(block_outputs)
             x = ops.Convolution(filters, (1, 1), (1, 1))
             x._name = f'concat_pointwise_conv_c{self.cell_index}'
             return x(concat_layer)
+        # avoids also concatenation, since it is unnecessary
         else:
             return block_outputs[0]
 
@@ -256,51 +263,49 @@ class ModelGenerator:
 
         return inputs
 
-    def __build_block(self, action_L, action_R, filters, stride, inputs, adapt_depth: bool):
+    def __build_block(self, block_spec: tuple, filters: int, stride: 'tuple(int, int)', inputs: list, adapt_depth: bool):
         '''
         Generate a block, following PNAS conventions.
 
         Args:
-            action_L (tuple<int, string>): [description]
-            action_R (tuple<int, string>): [description]
-            filters (int): [description]
-            stride (tuple<int, int>): [description]
-            inputs (list<tf.keras.layers.Layer>): [description]
-            adapt_depth (bool): [description]
+            block_spec: [description]
+            filters: [description]
+            stride: [description]
+            inputs: [description]
+            adapt_depth: [description]
 
         Returns:
             (tf.tensor): Output of Add keras layer
         '''
-        input_index_L, action_name_L = action_L
-        input_index_R, action_name_R = action_R
+        input_L, op_L, input_R, op_R = block_spec
 
         # in reduction cell, still use stride (1, 1) if not using "original inputs" (-1, -2, no reduction for other blocks' outputs)
-        stride_L = stride if input_index_L < 0 else (1, 1)
-        stride_R = stride if input_index_R < 0 else (1, 1)
+        stride_L = stride if input_L < 0 else (1, 1)
+        stride_R = stride if input_R < 0 else (1, 1)
 
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.__parse_action(filters, action_name_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_index_L])
-        right_layer = self.__parse_action(filters, action_name_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_index_R])
+        left_layer = self.__build_layer(filters, op_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_L])
+        right_layer = self.__build_layer(filters, op_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_R])
         return layers.Add()([left_layer, right_layer])
 
-    def __parse_action(self, filters, action, adapt_depth: bool, strides=(1, 1), tag='L'):
+    def __build_layer(self, filters, operator, adapt_depth: bool, strides=(1, 1), tag='L'):
         '''
         Generate correct custom layer for provided action. Certain cases are handled incorrectly,
         so that model can still be built, albeit not with original specification
 
         # Args:
             filters: number of filters
-            action: action string
-            adapt_depth (bool): adapt depth of operations that don't alter it
+            operator: operator to use
+            adapt_depth (bool): adapt depth of operators that don't alter it
             strides: stride to reduce spatial size
-            tag (string): either L or R, identifing the block operation
+            tag (string): either L or R, identifying the block operation
 
         # Returns:
             (tf.keras.Model): The custom layer corresponding to the action (see ops.py)
         '''
 
         # check non parametrized operations first since they don't require a regex and are faster
-        if action == 'identity':
+        if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2):
                 model_name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
@@ -313,7 +318,7 @@ class ModelGenerator:
                 return x
 
         # check for separable conv
-        match = self.op_regexes['dconv'].match(action)  # type: re.Match
+        match = self.op_regexes['dconv'].match(operator)  # type: re.Match
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
@@ -321,7 +326,7 @@ class ModelGenerator:
             return x
 
         # check for stacked conv operation
-        match = self.op_regexes['stack_conv'].match(action)  # type: re.Match
+        match = self.op_regexes['stack_conv'].match(operator)  # type: re.Match
         if match:
             f = [filters, filters]
             k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
@@ -332,7 +337,7 @@ class ModelGenerator:
             return x
 
         # check for standard conv
-        match = self.op_regexes['conv'].match(action)  # type: re.Match
+        match = self.op_regexes['conv'].match(operator)  # type: re.Match
         if match:
             model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
@@ -340,7 +345,7 @@ class ModelGenerator:
             return x
 
         # check for pooling
-        match = self.op_regexes['pool'].match(action)  # type: re.Match
+        match = self.op_regexes['pool'].match(operator)  # type: re.Match
         if match:
             size = to_int_tuple(match.group(1, 2))
             pool_type = match.group(3)
@@ -353,35 +358,24 @@ class ModelGenerator:
 
         raise ValueError('Operation not covered by POPNAS algorithm')
 
-    def define_callbacks(self, tb_logdir):
+    def define_callbacks(self, tb_logdir: str):
         '''
         Define callbacks used in model training.
 
         Returns:
             (tf.keras.Callback[]): Keras callbacks
         '''
-        model_callbacks = []
-
-        # TODO: Save best weights, not really necessary? Was used only to get best val_accuracy...
-        # ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('temp_weights', 'cp_e{epoch:02d}_vl{val_accuracy:.2f}.ckpt'),
-        #                                           save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max', verbose=1)
-        # model_callbacks.append(ckpt_callback)
-
         # By default shows losses and metrics for both training and validation
         tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
-        model_callbacks.append(tb_callback)
 
-        # TODO: convert into a parameter
-        early_stop = False
-        if early_stop:
-            es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
-            model_callbacks.append(es_callback)
+        # TODO: if you want to use early stopping, training time should be rescaled for predictor
+        # es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
 
-        return model_callbacks
+        return [tb_callback]
 
-    def define_training_hyperparams_and_metrics(self, lr=0.01):
+    def define_training_hyperparams_and_metrics(self):
         loss = losses.CategoricalCrossentropy()
-        optimizer = optimizers.Adam(learning_rate=lr)
+        optimizer = optimizers.Adam(learning_rate=self.lr)
         metrics = ['accuracy']
 
         # TODO: pnas used cosine decay with SGD, instead of Adam. Investigate which alternative is better

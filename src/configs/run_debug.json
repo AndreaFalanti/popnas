@@ -20,7 +20,7 @@
     "architecture_parameters": {
         "motifs": 2,
         "normal_cells_per_motif": 1,
-        "all_blocks_concatenation": false
+        "concat_only_unused_blocks": true
     },
     "lstm_hp": {
         "epochs": 20,

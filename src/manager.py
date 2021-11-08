@@ -28,8 +28,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset, data_num=1, epochs=20, batchsize=64, learning_rate=0.01, filters=24,
-                 weight_reg=None, cell_stacks=3, normal_cells_per_stack=2, concat_only_unused=True):
+    def __init__(self, model_gen: ModelGenerator, dataset, data_num=1, epochs=20, batch_size=64):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -37,28 +36,16 @@ class NetworkManager:
         Args:
             dataset: a tuple of 4 arrays (X_train, y_train, X_val, y_val)
             epochs: number of epochs to train the subnetworks
-            batchsize: batchsize
-            learning_rate: learning rate for the Optimizer
-            weight_reg (float): weight regularization factor
-            cell_stacks (int): cell stacks used to build each CNN
-            normal_cells_per_stack (int): normal cells used in each cell stack
-            filters (int): initial number of filters
-            concat_only_unused (bool): use only blocks' outputs not used internally in cell in the final concatenation layer
         '''
         self._logger = log_service.get_logger(__name__)
 
         assert data_num > 0
 
+        self.model_gen = model_gen
         self.data_num = data_num
         self.dataset = dataset
         self.epochs = epochs
-        self.batchsize = batchsize
-        self.lr = learning_rate
-        self.filters = filters
-        self.cell_stacks = cell_stacks
-        self.normal_cells_per_stack = normal_cells_per_stack
-        self.weight_reg = weight_reg
-        self.concat_only_unused = concat_only_unused
+        self.batch_size = batch_size
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
@@ -119,14 +106,13 @@ class NetworkManager:
         Returns:
             (tf.keras.Model, list[tf.keras.callbacks.Callback], dict): model and callbacks to use while training
         '''
-        model_gen = ModelGenerator(cell_spec, self.filters, self.normal_cells_per_stack, self.cell_stacks,
-                                   self.concat_only_unused, self.weight_reg)  # type: ModelGenerator
-        model, partition_dict = model_gen.build_model()
 
-        loss, optimizer, metrics = model_gen.define_training_hyperparams_and_metrics(self.lr)
+        model, partition_dict = self.model_gen.build_model(cell_spec)
+
+        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
         model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-        return model, model_gen.define_callbacks(tb_logdir), partition_dict
+        return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 
     def __build_datasets(self, dataset_index: int, use_data_augmentation: bool):
         '''
@@ -154,16 +140,16 @@ class NetworkManager:
 
         cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
                              tf.TensorSpec(shape=(None, 10), dtype=tf.float32))
-        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batchsize),
+        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
                                                        output_signature=cifar10_signature)
-        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batchsize),
+        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batch_size),
                                                             output_signature=cifar10_signature)
 
         train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
         validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
 
-        train_batches = np.ceil(len(x_train) / self.batchsize)
-        val_batches = np.ceil(len(x_val) / self.batchsize)
+        train_batches = np.ceil(len(x_train) / self.batch_size)
+        val_batches = np.ceil(len(x_val) / self.batch_size)
 
         return train_dataset, validation_dataset, train_batches, val_batches
 
@@ -206,7 +192,7 @@ class NetworkManager:
 
             hist = model.fit(x=train_ds,
                              epochs=self.epochs,
-                             batch_size=self.batchsize,
+                             batch_size=self.batch_size,
                              steps_per_epoch=train_batches,
                              validation_data=val_ds,
                              validation_steps=val_batches,

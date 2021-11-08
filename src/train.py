@@ -15,6 +15,7 @@ import plotter
 from controller import ControllerManager
 from encoder import StateSpace
 from manager import NetworkManager
+from model import ModelGenerator
 from predictors import *
 from utils.feature_utils import *
 from utils.func_utils import get_valid_inputs_for_block_size
@@ -29,6 +30,7 @@ class Train:
         self._logger = log_service.get_logger(__name__)
         self._start_time = _timer()
 
+        # TODO: instantiate relevant classes here and avoid to store unnecessary config parameters
         # search space parameters
         ss_config = run_config['search_space']
         self.blocks = ss_config['blocks']
@@ -51,11 +53,15 @@ class Train:
         self.learning_rate = cnn_config['learning_rate']
         self.filters = cnn_config['filters']
         self.weight_reg = cnn_config['weight_reg']
+
         arc_config = run_config['architecture_parameters']
-        self.concat_only_unused = not arc_config['all_blocks_concatenation']
+        self.concat_only_unused = arc_config['concat_only_unused_blocks']
         self.cell_stacks = arc_config['motifs']
         self.normal_cells_per_stack = arc_config['normal_cells_per_motif']
         self.max_cells = self.cell_stacks * (self.normal_cells_per_stack + 1) - 1
+
+        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], arc_config['normal_cells_per_motif'],
+                                   arc_config['motifs'], arc_config['concat_only_unused_blocks'], cnn_config['weight_reg'])
 
         self.pnas_mode = run_config['pnas_mode']
 
@@ -339,10 +345,7 @@ class Train:
         dataset = self.prepare_dataset(x_train_init, y_train_init)
 
         # create the Network Manager
-        manager = NetworkManager(dataset, data_num=self.folds, epochs=self.epochs, batchsize=self.batch_size,
-                                 learning_rate=self.learning_rate, filters=self.filters, weight_reg=self.weight_reg,
-                                 cell_stacks=self.cell_stacks, normal_cells_per_stack=self.normal_cells_per_stack,
-                                 concat_only_unused=self.concat_only_unused)
+        manager = NetworkManager(self.model_gen, dataset, data_num=self.folds, epochs=self.epochs, batch_size=self.batch_size)
 
         # create the predictors
         acc_pred_func, time_pred_func = self.initialize_predictors(state_space)
