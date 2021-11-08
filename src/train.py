@@ -44,7 +44,7 @@ class Train:
         arc_config = run_config['architecture_parameters']
         max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
 
-        # construct a state space
+        # build a search space
         self.search_space = SearchSpace(ss_config['blocks'], ss_config['operators'], max_cells,
                                         input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
 
@@ -251,12 +251,10 @@ class Train:
         '''
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_timers = {}
-
         starting_b = 0
 
-        max_lookback_depth = abs(self.input_lookback_depth)
-        time_headers, time_feature_types = build_feature_names('time', self.blocks, max_lookback_depth)
-        acc_headers, acc_feature_types = build_feature_names('acc', self.blocks, max_lookback_depth)
+        time_headers, time_feature_types = build_feature_names('time', self.blocks, self.input_lookback_depth)
+        acc_headers, acc_feature_types = build_feature_names('acc', self.blocks, self.input_lookback_depth)
 
         # add headers to csv and create CatBoost feature files
         initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
@@ -290,8 +288,14 @@ class Train:
                 reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
                 rewards.append(reward)
                 timers.append(timer)
+                self._logger.info("Finished %d out of %d models!", (model_index + 1), len(cell_specs))
 
-                if current_blocks == 1:
+                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks)
+
+                # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
+                if current_blocks > 1:
+                    self.write_training_data(current_blocks, timer, reward, cell_spec)
+                else:
                     monoblocks_info.append([timer, reward, cell_spec])
                     # unpack the block (only tuple present in the list) into its components
                     in1, op1, in2, op2 = cell_spec[0]
@@ -306,14 +310,6 @@ class Train:
                             writer.writerow([timer, op1])
                             op_timers[op1] = timer
 
-                self._logger.info("Finished %d out of %d models!", (model_index + 1), len(cell_specs))
-
-                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks)
-
-                # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
-                if current_blocks > 1:
-                    self.write_training_data(current_blocks, timer, reward, cell_spec)
-
             # train the models built from exploration pareto front
             for model_index, cell_spec in enumerate(self.search_space.exploration_front):
                 if model_index == 0:
@@ -324,6 +320,7 @@ class Train:
 
                 reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
                 rewards.append(reward)
+                timers.append(timer)
                 self._logger.info("Finished %d out of %d exploration models!", (model_index + 1), len(self.search_space.exploration_front))
 
                 self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks, exploration=True)
