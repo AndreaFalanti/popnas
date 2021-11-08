@@ -97,7 +97,7 @@ class SearchSpace:
         self.operator_encoders['cat'] = Encoder('cat', values=self.operator_values)
 
         # print info about search space to the logger
-        self.print_state_space()
+        self.print_search_space()
 
         self.prepare_initial_children()
 
@@ -271,9 +271,9 @@ class SearchSpace:
 
         return eqv_cells, used_block_outputs
 
-    def print_state_space(self):
+    def print_search_space(self):
         ''' Pretty print the state space '''
-        self._logger.info('%s', '*' * 45 + 'STATE SPACE' + '*' * 45)
+        self._logger.info('%s', '*' * 43 + ' SEARCH SPACE ' + '*' * 43)
         self._logger.info('Block values: %s', rstr(list(range(1, self.B + 1))))
         self._logger.info('Inputs: %s', rstr(self.input_values))
         self._logger.info('Operators: %s', rstr(self.operator_values))

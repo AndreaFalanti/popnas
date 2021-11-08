@@ -246,14 +246,14 @@ def generate_acc_features(cell_spec: list, search_space: SearchSpace):
     return prefix_features + op_features + suffix_features
 
 
-def generate_all_feature_sets(cell_spec: list, state_space: SearchSpace):
+def generate_all_feature_sets(cell_spec: list, search_space: SearchSpace):
     ''' More efficient than calling them separately since shared part is computed only one time. '''
     # expand cell spec to maximum amount of blocks, if needed
-    cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
+    cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - len(cell_spec))
 
-    op_features_time = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
-    op_features_acc = state_space.encode_cell_spec(cell_spec)[1::2]
+    op_features_time = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
+    op_features_acc = search_space.encode_cell_spec(cell_spec)[1::2]
 
-    prefix_features, suffix_features = generate_shared_features(cell_spec, state_space)
+    prefix_features, suffix_features = generate_shared_features(cell_spec, search_space)
 
     return prefix_features + op_features_time + suffix_features, prefix_features + op_features_acc + suffix_features

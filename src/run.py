@@ -56,7 +56,7 @@ def main():
 
     # print info about the command line arguments provided. Optional ones will list their default value.
     logger = log_service.get_logger(__name__)
-    logger.info('%s', '*' * 31 + 'COMMAND LINE ARGUMENTS (WITH DEFAULTS)' + '*' * 31)
+    logger.info('%s', '*' * 31 + ' COMMAND LINE ARGUMENTS (WITH DEFAULTS) ' + '*' * 31)
     for arg in vars(args):
         logger.info('%s: %s', arg, getattr(args, arg))
     logger.info('%s', '*' * 101)
