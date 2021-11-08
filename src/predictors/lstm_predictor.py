@@ -5,13 +5,13 @@ import tensorflow as tf
 from tensorflow.keras import layers, regularizers, callbacks, optimizers, losses, metrics, Model
 from tensorflow.keras.utils import plot_model
 
-from encoder import StateSpace
+from encoder import SearchSpace
 from nn_predictor import NNPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 
 class LSTMPredictor(NNPredictor):
-    def __init__(self, state_space: StateSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
+    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
                  embedding_dim: int = 10, rnn_cells: int = 48, weight_reg: float = 1e-5, lr: float = 0.002, epochs: int = 15,
                  use_previous_data: bool = True):
         # generate a relevant name if not set
@@ -19,7 +19,7 @@ class LSTMPredictor(NNPredictor):
             name = f'LSTM_ed({embedding_dim})_c({rnn_cells})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
         super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
 
-        self.state_space = state_space
+        self.search_space = search_space
         self.embedding_dim = embedding_dim
         self.lstm_cells = rnn_cells
 
@@ -40,19 +40,19 @@ class LSTMPredictor(NNPredictor):
     def _build_model(self):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
         # since the length varies, None is given as dimension
-        inputs = layers.Input(shape=(self.state_space.B, 2))
-        ops = layers.Input(shape=(self.state_space.B, 2))
+        inputs = layers.Input(shape=(self.search_space.B, 2))
+        ops = layers.Input(shape=(self.search_space.B, 2))
 
         # input dim is the max integer value present in the embedding + 1.
-        inputs_embed = layers.Embedding(input_dim=self.state_space.inputs_embedding_max, output_dim=self.embedding_dim,
+        inputs_embed = layers.Embedding(input_dim=self.search_space.inputs_embedding_max, output_dim=self.embedding_dim,
                                         embeddings_regularizer=self.weight_reg, mask_zero=True)(inputs)
-        ops_embed = layers.Embedding(input_dim=self.state_space.operator_embedding_max, output_dim=self.embedding_dim,
+        ops_embed = layers.Embedding(input_dim=self.search_space.operator_embedding_max, output_dim=self.embedding_dim,
                                      embeddings_regularizer=self.weight_reg, mask_zero=True)(ops)
 
         embed = layers.Concatenate()([inputs_embed, ops_embed])
         # pass from (None, self.B, 2, 2*embedding_dim) to (None, self.B, 4*embedding_dim),
         # indicating [batch_size, serie_length, features(whole block embedding)]
-        embed = layers.Reshape((self.state_space.B, 4 * self.embedding_dim))(embed)
+        embed = layers.Reshape((self.search_space.B, 4 * self.embedding_dim))(embed)
 
         # attention = layers.Attention()([ops_embed, inputs_embed])
         # embed = layers.Reshape((self.B, 2 * self.embedding_dim))(attention)
@@ -77,4 +77,4 @@ class LSTMPredictor(NNPredictor):
         '''
         # data augmentation is used only in training (rewards are given), if the respective flag is set.
         # if data augment is performed, the cell_specs and rewards parameters are replaced with their augmented counterpart.
-        return build_temporal_series_dataset_2i(self.state_space, cell_specs, rewards, use_data_augmentation)
+        return build_temporal_series_dataset_2i(self.search_space, cell_specs, rewards, use_data_augmentation)

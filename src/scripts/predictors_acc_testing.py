@@ -2,7 +2,7 @@ import argparse
 import os
 
 import log_service
-from encoder import StateSpace
+from encoder import SearchSpace
 from predictors import *
 from utils.feature_analysis import generate_dataset_correlation_heatmap
 
@@ -58,7 +58,7 @@ def main():
     # TODO: get these info from file from keeping consistency with choices of run tested.
     #  Right now the operators set in runs executed is always this one, but could change in future.
     operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-    state_space = StateSpace(B=5, operators=operators, cell_stack_depth=8, input_lookback_depth=-2)
+    search_space = SearchSpace(B=5, operators=operators, cell_stack_depth=8, input_lookback_depth=-2)
 
     predictors_to_test = [
         # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
@@ -66,15 +66,15 @@ def main():
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        # LSTMPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
+        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
         #               lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        # Conv1DPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6),
-        # GRUPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path,
+        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6),
+        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
         #              lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
         # CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
-        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-5),
-        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.002, weight_reg=1e-6),
-        Conv1D1IPredictor(state_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6, kernel_size=3),
+        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-5),
+        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.002, weight_reg=1e-6),
+        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6, kernel_size=3),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:

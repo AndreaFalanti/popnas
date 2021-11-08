@@ -3,7 +3,7 @@ import csv
 import math
 import os.path
 
-from encoder import StateSpace
+from encoder import SearchSpace
 from utils.func_utils import list_flatten
 
 
@@ -213,7 +213,7 @@ def initialize_features_csv_files(time_headers: list, time_feature_types: list, 
         writer.writerow(acc_headers)
 
 
-def generate_shared_features(cell_spec: list, state_space: StateSpace):
+def generate_shared_features(cell_spec: list, state_space: SearchSpace):
     max_blocks = state_space.B
     max_lookback_depth = abs(state_space.input_lookback_depth)
 
@@ -226,27 +226,27 @@ def generate_shared_features(cell_spec: list, state_space: StateSpace):
     return [blocks, total_cells], lookback_usage_features + lookback_incidence_features + block_incidence_features
 
 
-def generate_time_features(cell_spec: list, state_space: StateSpace):
+def generate_time_features(cell_spec: list, search_space: SearchSpace):
     # expand cell spec to maximum amount of blocks, if needed
-    cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
+    cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - len(cell_spec))
 
-    op_features = state_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
-    prefix_features, suffix_features = generate_shared_features(cell_spec, state_space)
+    op_features = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
+    prefix_features, suffix_features = generate_shared_features(cell_spec, search_space)
 
     return prefix_features + op_features + suffix_features
 
 
-def generate_acc_features(cell_spec: list, state_space: StateSpace):
+def generate_acc_features(cell_spec: list, search_space: SearchSpace):
     # expand cell spec to maximum amount of blocks, if needed
-    cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))
+    cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - len(cell_spec))
 
-    op_features = state_space.encode_cell_spec(cell_spec)[1::2]
-    prefix_features, suffix_features = generate_shared_features(cell_spec, state_space)
+    op_features = search_space.encode_cell_spec(cell_spec)[1::2]
+    prefix_features, suffix_features = generate_shared_features(cell_spec, search_space)
 
     return prefix_features + op_features + suffix_features
 
 
-def generate_all_feature_sets(cell_spec: list, state_space: StateSpace):
+def generate_all_feature_sets(cell_spec: list, state_space: SearchSpace):
     ''' More efficient than calling them separately since shared part is computed only one time. '''
     # expand cell spec to maximum amount of blocks, if needed
     cell_spec = cell_spec + [(None, None, None, None)] * (state_space.B - len(cell_spec))

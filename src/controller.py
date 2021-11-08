@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import cell_pruning
 import log_service
-from encoder import StateSpace
+from encoder import SearchSpace
 from predictors import Predictor
 from utils.cell_counter import CellCounter
 from utils.feature_utils import generate_time_features
@@ -43,13 +43,13 @@ class ControllerManager:
     cull non-optimal children model configurations and resume training.
     '''
 
-    def __init__(self, state_space: StateSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
+    def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
                  B=5, K=256, ex=16, T=np.inf, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
 
         Args:
-            state_space: completely defined search space.
+            search_space: completely defined search space.
             B: depth of progression.
             K: maximum number of children model trained per level of depth.
             T: maximum training time.
@@ -57,7 +57,7 @@ class ControllerManager:
                 like original PNAS.
         '''
         self._logger = log_service.get_logger(__name__)
-        self.state_space = state_space
+        self.search_space = search_space
 
         self.B = B
         self.K = K
@@ -75,7 +75,7 @@ class ControllerManager:
         Train both accuracy and time predictors
         '''
 
-        train_cells = self.state_space.children + self.state_space.exploration_front
+        train_cells = self.search_space.children + self.search_space.exploration_front
         acc_predictor = self.get_acc_predictor(self.actual_b)
 
         # train accuracy predictor with new data
@@ -115,7 +115,7 @@ class ControllerManager:
 
         self.actual_b += 1
         # closure that returns a function that returns the model generator for current generation step
-        generate_models = self.state_space.prepare_intermediate_children(self.actual_b)
+        generate_models = self.search_space.prepare_intermediate_children(self.actual_b)
 
         # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
         #  necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
@@ -130,7 +130,7 @@ class ControllerManager:
         for cell_spec in pbar:
             # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
             #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
-            time_features = None if self.pnas_mode else generate_time_features(cell_spec, self.state_space)
+            time_features = None if self.pnas_mode else generate_time_features(cell_spec, self.search_space)
             estimated_time = None if self.pnas_mode else time_predictor.predict(time_features)
 
             estimated_score = acc_predictor.predict(cell_spec)
@@ -180,7 +180,7 @@ class ControllerManager:
 
             # exploration step, avoid it if expanding cells with last block or if there is no need for exploration at all
             pareto_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
-            op_exp, input_exp = self.compute_exploration_value_sets(pareto_front[:pareto_limit], self.state_space)
+            op_exp, input_exp = self.compute_exploration_value_sets(pareto_front[:pareto_limit], self.search_space)
 
             if self.actual_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
                 self._logger.info('Building exploration pareto front...')
@@ -219,10 +219,10 @@ class ControllerManager:
                     writer.writerow(ModelEstimate.get_csv_headers())
                     writer.writerows(map(lambda est: est.to_csv_array(), exploration_pareto_front))
 
-                self.state_space.exploration_front = [child.cell_spec for child in exploration_pareto_front]
+                self.search_space.exploration_front = [child.cell_spec for child in exploration_pareto_front]
                 self._logger.info('Exploration pareto front built successfully')
             else:
-                self.state_space.exploration_front = []
+                self.search_space.exploration_front = []
                 self._logger.info('No exploration necessary for this step')
         else:
             # just a rename to integrate with existent code below, it's not a pareto front in this case!
@@ -240,20 +240,20 @@ class ControllerManager:
             children, pruned_count = cell_pruning.prune_equivalent_cell_models(models, children_count)
             self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)
 
-        cells_to_train = children + self.state_space.exploration_front
+        cells_to_train = children + self.search_space.exploration_front
         with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(cells_to_train)
 
         # save these children for next round
         # exploration networks are saved in another separate variable (state_space.exploration_front)
-        self.state_space.update_children(children)
+        self.search_space.update_children(children)
 
     #   ///////////////////////////////////////////////////
     #  ///   EXPLORATION MECHANISM RELATED FUNCTIONS   ///
     # ///////////////////////////////////////////////////
 
-    def compute_exploration_value_sets(self, pareto_front_models: 'list[ModelEstimate]', state_space: StateSpace):
+    def compute_exploration_value_sets(self, pareto_front_models: 'list[ModelEstimate]', state_space: SearchSpace):
         valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, self.actual_b, self.B)
         valid_ops = state_space.operator_values
         cell_counter = CellCounter(valid_inputs, valid_ops)

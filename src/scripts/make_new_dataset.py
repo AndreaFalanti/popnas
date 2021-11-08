@@ -5,12 +5,12 @@ import os
 import pandas as pd
 
 import log_service
-from encoder import StateSpace
+from encoder import SearchSpace
 from utils.feature_utils import *
 from utils.func_utils import parse_cell_structures
 
 
-def write_new_dataset_csv(label_col: str, cells_info: 'list[tuple[list, float, int]]', state_space: StateSpace, max_cells: int):
+def write_new_dataset_csv(label_col: str, cells_info: 'list[tuple[list, float, int]]', state_space: SearchSpace, max_cells: int):
     max_blocks = state_space.B
     max_lookback = abs(state_space.input_lookback_depth)
 
@@ -69,7 +69,7 @@ def main():
     log_service.set_log_path(os.path.join(args.p))
 
     operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-    state_space = StateSpace(5, operators, 8, input_lookback_depth=-2)
+    search_space = SearchSpace(5, operators, 8, input_lookback_depth=-2)
 
     print('Processing old dataset...')
     old_dataset_file_path = os.path.join(args.p, 'csv', 'training_results.csv')
@@ -91,11 +91,11 @@ def main():
     def reindex_function(op_value: str):
         return reindex_dict[op_value]
 
-    state_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+    search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
 
     print('Generating new datasets...')
-    write_new_dataset_csv('time', list(zip(cells, time_list, blocks_list)), state_space, max_cells=5)
-    write_new_dataset_csv('acc', list(zip(cells, acc_list, blocks_list)), state_space, max_cells=5)
+    write_new_dataset_csv('time', list(zip(cells, time_list, blocks_list)), search_space, max_cells=5)
+    write_new_dataset_csv('acc', list(zip(cells, acc_list, blocks_list)), search_space, max_cells=5)
 
 
 if __name__ == '__main__':

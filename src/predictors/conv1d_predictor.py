@@ -5,13 +5,13 @@ import tensorflow as tf
 from tensorflow.keras import layers, regularizers, callbacks, optimizers, losses, metrics, Model
 from tensorflow.keras.utils import plot_model
 
-from encoder import StateSpace
+from encoder import SearchSpace
 from nn_predictor import NNPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 
 class Conv1DPredictor(NNPredictor):
-    def __init__(self, state_space: StateSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
+    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
                  epochs: int = 15, use_previous_data: bool = True, lr: float = 0.002, weight_reg: float = 1e-5,
                  filters: int = 12, kernel_size: int = 2):
         # generate a relevant name if not set
@@ -19,7 +19,7 @@ class Conv1DPredictor(NNPredictor):
             name = f'Conv1D_kernel({kernel_size})_f({filters})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
         super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
 
-        self.state_space = state_space
+        self.search_space = search_space
         self.kernel_size = kernel_size
         self.filters = filters
 
@@ -40,8 +40,8 @@ class Conv1DPredictor(NNPredictor):
     def _build_model(self):
         # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
         # since the length varies, None is given as dimension
-        inputs = layers.Input(shape=(self.state_space.B, 2))
-        ops = layers.Input(shape=(self.state_space.B, 2))
+        inputs = layers.Input(shape=(self.search_space.B, 2))
+        ops = layers.Input(shape=(self.search_space.B, 2))
 
         inputs_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(inputs)
         ops_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(ops)
@@ -70,4 +70,4 @@ class Conv1DPredictor(NNPredictor):
         '''
         # data augmentation is used only in training (rewards are given), if the respective flag is set.
         # if data augment is performed, the cell_specs and rewards parameters are replaced with their augmented counterpart.
-        return build_temporal_series_dataset_2i(self.state_space, cell_specs, rewards, use_data_augmentation)
+        return build_temporal_series_dataset_2i(self.search_space, cell_specs, rewards, use_data_augmentation)

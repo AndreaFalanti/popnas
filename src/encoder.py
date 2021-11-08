@@ -6,14 +6,14 @@ from utils.func_utils import list_flatten
 from utils.rstr import rstr
 
 
-class StateSpace:
+class SearchSpace:
     '''
-    State Space manager
+    Search space manager, targeted for progressive NAS methods.
 
-    Provides utility functions for holding "states" / "actions" that the controller
-    must use to train and predict.
-
-    Also provides a more convenient way to define the search space
+    Provides utility functions for holding cell specifications for each step, that the network manager then use
+    for building the actual CNNs.
+    It also contains functions for expanding these network progressively and the encoders to adapt the cell specifications representation
+    for various use cases.
     '''
 
     def __init__(self, B: int, operators: 'list[str]', cell_stack_depth: int,
@@ -67,10 +67,14 @@ class StateSpace:
         self.input_encoders = {}  # type: dict[str, Encoder]
         self.operator_encoders = {}  # type: dict[str, Encoder]
 
+        if input_lookback_depth >= 0:
+            raise ValueError('Invalid lookback_depth value')
+        if input_lookforward_depth is not None:
+            raise NotImplementedError('Lookforward inputs are actually not supported')
+
         self.B = B
         self.input_lookback_depth = input_lookback_depth
         self.input_lookforward_depth = input_lookforward_depth
-        assert self.input_lookback_depth < 0, "Invalid lookback_depth value"
 
         self.cell_stack_depth = cell_stack_depth
 

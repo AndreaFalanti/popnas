@@ -13,7 +13,7 @@ from tensorflow.python.keras.datasets import cifar100
 import log_service
 import plotter
 from controller import ControllerManager
-from encoder import StateSpace
+from encoder import SearchSpace
 from manager import NetworkManager
 from model import ModelGenerator
 from predictors import *
@@ -69,68 +69,12 @@ class Train:
 
         plotter.initialize_logger()
 
-    def load_dataset(self):
-        if self.dataset == "cifar10":
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar10.load_data()
-        elif self.dataset == "cifar100":
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = cifar100.load_data()
-        # TODO: untested legacy code, not sure this is still working
-        else:
-            spec = importlib.util.spec_from_file_location("dataset", self.dataset)
-            dataset = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(dataset)
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = dataset.load_data()
-
-        return (x_train_init, y_train_init), (x_test_init, y_test_init)
-
-    def prepare_dataset(self, x_train_init, y_train_init):
-        """Build a validation set from training set and do some preprocessing
-
-        Args:
-            x_train_init (ndarray): x training
-            y_train_init (ndarray): y training
-
-        Returns:
-            list:
-        """
-        # normalize image RGB values into [0, 1] domain
-        x_train_init = x_train_init.astype('float32') / 255.
-
-        datasets = []
-        # TODO: why using a dataset multiple times if sets > 1? Is this actually useful or it's possible to deprecate this feature?
-        # TODO: splits for other datasets are actually not defined
-        for i in range(0, self.folds):
-            if self.samples_limit is not None:
-                x_train_init = x_train_init[:self.samples_limit]
-                y_train_init = y_train_init[:self.samples_limit]
-
-            # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
-                                                                            random_state=0, stratify=y_train_init)
-
-            if self.dataset == "cifar10":
-                # cifar10
-                y_train = to_categorical(y_train, 10)
-                y_validation = to_categorical(y_validation, 10)
-
-            elif self.dataset == "cifar100":
-                # cifar100
-                y_train = to_categorical(y_train, 100)
-                y_validation = to_categorical(y_validation, 100)
-
-            # TODO: logic is missing for custom dataset usage
-
-            # pack the dataset for the NetworkManager
-            datasets.append([x_train, y_train, x_validation, y_validation])
-
-        return datasets
-
-    def generate_and_train_model_from_spec(self, state_space: StateSpace, manager: NetworkManager, cell_spec: list):
+    def generate_and_train_model_from_spec(self, state_space: SearchSpace, manager: NetworkManager, cell_spec: list):
         """
         Generate a model given the actions and train it to get reward and time
 
         Args:
-            state_space (StateSpace): ...
+            state_space (SearchSpace): ...
             manager (NetworkManager): ...
             cell_spec (list): plain cell specification
 
@@ -153,12 +97,12 @@ class Train:
 
         return reward, timer, total_params, flops
 
-    def perform_initial_thrust(self, state_space: StateSpace, manager: NetworkManager, time_features_len: int, acc_features_len: int):
+    def perform_initial_thrust(self, state_space: SearchSpace, manager: NetworkManager, time_features_len: int, acc_features_len: int):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
 
         Args:
-            state_space (StateSpace): [description]
+            state_space (SearchSpace): [description]
             manager (NetworkManager): [description]
         '''
 
@@ -200,7 +144,7 @@ class Train:
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
     def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list,
-                                    state_space: StateSpace, exploration: bool):
+                                    state_space: SearchSpace, exploration: bool):
         '''
         Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
         Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
@@ -231,7 +175,7 @@ class Train:
         #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
     def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list,
-                            state_space: StateSpace, exploration: bool = False):
+                            state_space: SearchSpace, exploration: bool = False):
         '''
         Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
         Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
@@ -241,7 +185,7 @@ class Train:
             timer (float): [description]
             accuracy (float):
             cell_spec (list): [description]
-            state_space (StateSpace): [description]
+            state_space (SearchSpace): [description]
             exploration:
         '''
 
@@ -330,7 +274,8 @@ class Train:
         self._logger.info('Total cells stacked in each CNN: %d', self.max_cells)
 
         # construct a state space
-        state_space = StateSpace(self.blocks, self.operators, self.max_cells, input_lookback_depth=self.input_lookback_depth, input_lookforward_depth=None)
+        state_space = SearchSpace(self.blocks, self.operators, self.max_cells, input_lookback_depth=self.input_lookback_depth,
+                                  input_lookforward_depth=None)
 
         max_lookback_depth = abs(self.input_lookback_depth)
         time_headers, time_feature_types = build_feature_names('time', self.blocks, max_lookback_depth)
