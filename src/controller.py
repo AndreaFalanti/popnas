@@ -247,7 +247,7 @@ class ControllerManager:
 
         # save these children for next round
         # exploration networks are saved in another separate variable (state_space.exploration_front)
-        self.search_space.update_children(children)
+        self.search_space.children = children
 
     #   ///////////////////////////////////////////////////
     #  ///   EXPLORATION MECHANISM RELATED FUNCTIONS   ///

@@ -1,7 +1,7 @@
 import csv
 import os
 import statistics
-from timeit import default_timer as _timer
+from timeit import default_timer as timer
 from typing import Any
 
 import log_service
@@ -22,7 +22,7 @@ class Train:
     def __init__(self, run_config: 'dict[str, Any]'):
 
         self._logger = log_service.get_logger(__name__)
-        self._start_time = _timer()
+        self._start_time = timer()
 
         # TODO: instantiate relevant classes here and avoid to store unnecessary config parameters
         # search space parameters
@@ -30,7 +30,7 @@ class Train:
         self.blocks = ss_config['blocks']
         self.children_max_size = ss_config['max_children']
         self.exploration_max_size = ss_config['max_exploration_children']
-        self.input_lookback_depth = -ss_config['lookback_depth']
+        self.input_lookback_depth = ss_config['lookback_depth']
         self.input_lookforward_depth = ss_config['lookforward_depth']
         self.operators = ss_config['operators']
 
@@ -76,15 +76,15 @@ class Train:
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, timer, total_params, flops = self.cnn_manager.get_rewards(cell_spec, save_best_model=last_block_train)
+        reward, time, total_params, flops = self.cnn_manager.get_rewards(cell_spec, save_best_model=last_block_train)
 
         self._logger.info("Best accuracy reached: %0.6f", reward)
-        self._logger.info("Training time: %0.6f", timer)
+        self._logger.info("Training time: %0.6f", time)
         # format is a workaround for thousands separator, since the python logger has no such feature 
         self._logger.info("Total parameters: %s", format(total_params, ','))
         self._logger.info("Total FLOPS: %s", format(flops, ','))
 
-        return reward, timer, total_params, flops
+        return reward, time, total_params, flops
 
     def perform_initial_thrust(self, time_features_len: int, acc_features_len: int):
         '''
@@ -94,9 +94,9 @@ class Train:
         self._logger.info('Performing initial thrust with empty cell')
         acc, time, params, flops = self.generate_and_train_model_from_spec([])
 
-        # last field is data augmentation, True for generated sample only
-        time_data = [time] + [0] * (time_features_len - 2) + [False]
-        acc_data = [acc] + [0] * (acc_features_len - 2) + [False]
+        # last fields are exploration and data augmentation
+        time_data = [time] + [0] * (time_features_len - 3) + [False, False]
+        acc_data = [acc] + [0] * (acc_features_len - 3) + [False, False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -110,7 +110,7 @@ class Train:
 
         return time
 
-    def write_overall_cnn_training_results(self, blocks, timers, rewards):
+    def write_overall_cnn_training_results(self, blocks, times, rewards):
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
 
@@ -118,9 +118,9 @@ class Train:
             if f.tell() == 0:
                 writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val acc', 'max acc', 'min acc'])
 
-            avg_time = statistics.mean(timers)
-            max_time = max(timers)
-            min_time = min(timers)
+            avg_time = statistics.mean(times)
+            max_time = max(times)
+            min_time = min(times)
 
             avg_acc = statistics.mean(rewards)
             max_acc = max(rewards)
@@ -154,24 +154,24 @@ class Train:
         return time_features_list, acc_features_list
 
         # TODO: legacy features
-        # return [[timer, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
+        # return [[time, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
         #         for cell in eqv_cells],\
         #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
 
-    def write_training_data(self, current_blocks: int, timer: float, accuracy: float, cell_spec: list, exploration: bool = False):
+    def write_training_data(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool = False):
         '''
         Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
         Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
 
         Args:
             current_blocks (int): [description]
-            timer (float): [description]
+            time (float): [description]
             accuracy (float):
             cell_spec (list): [description]
             exploration:
         '''
 
-        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, timer, accuracy, cell_spec, exploration)
+        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, time, accuracy, cell_spec, exploration)
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -232,8 +232,28 @@ class Train:
 
         return get_acc_predictor_for_b, get_time_predictor_for_b
 
+    def write_smb_results(self, monoblocks_train_info: 'list[tuple[float, float, list[tuple]]]'):
+        # dictionary to store specular monoblock (-1 input) times for dynamic reindex
+        op_times = {}
+
+        for time, _, cell_spec in monoblocks_train_info:
+            # unpack the block (only tuple present in the list) into its components
+            in1, op1, in2, op2 = cell_spec[0]
+
+            # get required data for dynamic reindex
+            # op_times will contain training times for blocks with both same operation and input -1, for each operation, in order
+            same_inputs = in1 == in2
+            same_op = op1 == op2
+            if same_inputs and same_op and in1 == -1:
+                with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([time, op1])
+                    op_times[op1] = time
+
+        return op_times
+
     def log_run_final_results(self):
-        total_time = _timer() - self._start_time
+        total_time = timer() - self._start_time
 
         training_results_path = log_service.build_path('csv', 'training_results.csv')
         with open(training_results_path) as f:
@@ -249,8 +269,6 @@ class Train:
         '''
         Main function, executed by run.py to start POPNAS algorithm.
         '''
-        # dictionary to store specular monoblock (-1 input) times for dynamic reindex
-        op_timers = {}
         starting_b = 0
 
         time_headers, time_feature_types = build_feature_names('time', self.blocks, self.input_lookback_depth)
@@ -272,43 +290,23 @@ class Train:
             initial_thrust_time = self.perform_initial_thrust(len(time_headers), len(acc_headers))
             starting_b = 1
 
-        monoblocks_info = []
-
         # train the child CNN networks for each number of blocks
         for current_blocks in range(starting_b, self.blocks + 1):
-            rewards = []
-            timers = []
+            cnns_train_info = []  # type: list[tuple[float, float, list[tuple]]]
 
-            cell_specs = self.search_space.get_cells_to_train()
-
-            for model_index, cell_spec in enumerate(cell_specs):
-                self._logger.info("Model #%d / #%d", model_index + 1, len(cell_specs))
+            for model_index, cell_spec in enumerate(self.search_space.children):
+                self._logger.info("Model #%d / #%d", model_index + 1, len(self.search_space.children))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
-                rewards.append(reward)
-                timers.append(timer)
-                self._logger.info("Finished %d out of %d models!", (model_index + 1), len(cell_specs))
+                reward, time, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
+                cnns_train_info.append((time, reward, cell_spec))
+                self._logger.info("Finished %d out of %d models!", model_index + 1, len(self.search_space.children))
 
-                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks)
+                self.write_training_results_into_csv(cell_spec, reward, time, total_params, flops, current_blocks)
 
                 # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
                 if current_blocks > 1:
-                    self.write_training_data(current_blocks, timer, reward, cell_spec)
-                else:
-                    monoblocks_info.append([timer, reward, cell_spec])
-                    # unpack the block (only tuple present in the list) into its components
-                    in1, op1, in2, op2 = cell_spec[0]
-
-                    # get required data for dynamic reindex
-                    # op_timers will contain timers for blocks with both same operation and input -1, for each operation, in order
-                    same_inputs = in1 == in2
-                    same_op = op1 == op2
-                    if same_inputs and same_op and in1 == -1:
-                        with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow([timer, op1])
-                            op_timers[op1] = timer
+                    self.write_training_data(current_blocks, time, reward, cell_spec)
 
             # train the models built from exploration pareto front
             for model_index, cell_spec in enumerate(self.search_space.exploration_front):
@@ -318,24 +316,25 @@ class Train:
                 self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(self.search_space.exploration_front))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, timer, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
-                rewards.append(reward)
-                timers.append(timer)
-                self._logger.info("Finished %d out of %d exploration models!", (model_index + 1), len(self.search_space.exploration_front))
+                reward, time, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
+                cnns_train_info.append((time, reward, cell_spec))
+                self._logger.info("Finished %d out of %d exploration models!", model_index + 1, len(self.search_space.exploration_front))
 
-                self.write_training_results_into_csv(cell_spec, reward, timer, total_params, flops, current_blocks, exploration=True)
-                self.write_training_data(current_blocks, timer, reward, cell_spec, exploration=True)
+                self.write_training_results_into_csv(cell_spec, reward, time, total_params, flops, current_blocks, exploration=True)
+                self.write_training_data(current_blocks, time, reward, cell_spec, exploration=True)
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
-                reindex_function = generate_dynamic_reindex_function(op_timers, initial_thrust_time)
+                op_times = self.write_smb_results(cnns_train_info)
+                reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
-                for time, acc, cell_spec in monoblocks_info:
+                for time, acc, cell_spec in cnns_train_info:
                     self.write_training_data(current_blocks, time, acc, cell_spec)
 
-            self.write_overall_cnn_training_results(current_blocks, timers, rewards)
+            times, rewards, _ = zip(*cnns_train_info)
+            self.write_overall_cnn_training_results(current_blocks, times, rewards)
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:

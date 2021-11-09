@@ -288,12 +288,6 @@ class SearchSpace:
         for i, block in enumerate(cell_spec):
             self._logger.info("Block %d: %s", i + 1, rstr(block))
 
-    def update_children(self, children):
-        self.children = children
-
-    def get_cells_to_train(self):
-        return self.children
-
 
 class Encoder:
     def __init__(self, name, values: list, fn: Callable = None, none_val=0) -> None:
