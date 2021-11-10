@@ -11,7 +11,7 @@ from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coe
 
 
 class Predictor(ABC):
-    def __init__(self, logger: Logger, log_folder: str, name: str = None):
+    def __init__(self, logger: Logger, log_folder: str, name: str = None, override_logs: bool = True):
         '''
         Abstract class that provides a common interface to all ML and NN predictors tested in POPNAS work.
 
@@ -23,7 +23,11 @@ class Predictor(ABC):
         self._logger = logger
         self.name = name
         self.log_folder = os.path.join(log_folder, name)
-        create_empty_folder(self.log_folder)
+
+        if override_logs:
+            create_empty_folder(self.log_folder)
+        else:
+            os.makedirs(self.log_folder, exist_ok=True)
 
         self.model = None
 

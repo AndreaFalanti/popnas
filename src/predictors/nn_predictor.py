@@ -1,8 +1,11 @@
+import os
 from abc import abstractmethod
 from logging import Logger
 from typing import Union
 
+import keras
 import pandas as pd
+import tensorflow as tf
 
 from predictors import Predictor
 from utils.func_utils import parse_cell_structures
@@ -10,13 +13,14 @@ from utils.rstr import rstr
 
 
 class NNPredictor(Predictor):
-    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None, epochs: int = 15,
-                 use_previous_data: bool = True):
-        super().__init__(logger, log_folder, name)
+    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
+                 epochs: int = 15, use_previous_data: bool = True, save_weights: bool = False):
+        super().__init__(logger, log_folder, name, override_logs)
 
         self.y_col = y_col
         self.epochs = epochs
         self.use_previous_data = use_previous_data
+        self.save_weights = save_weights
         self.callbacks = []
 
         # used to accumulate samples in a common dataset (a list for each B), if use_previous_data is True
@@ -39,11 +43,11 @@ class NNPredictor(Predictor):
         self._logger.debug('Using %s as final activation, based on y domain provided', self.output_activation)
 
     @abstractmethod
-    def _build_model(self):
+    def _build_model(self) -> keras.Model:
         pass
 
     @abstractmethod
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, use_data_augmentation: bool = True):
+    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, use_data_augmentation: bool = True) -> tf.data.Dataset:
         pass
 
     def _get_max_b(self, df: pd.DataFrame):
@@ -56,6 +60,11 @@ class NNPredictor(Predictor):
 
         # just return two lists: one with the target, one with the cell structures
         return b_df[self.y_col].tolist(), cells
+
+    def restore_weights(self):
+        if os.path.exists(os.path.join(self.log_folder, 'weights.index')):
+            self.model.load_weights(os.path.join(self.log_folder, 'weights'))
+            self._logger.info('Weights restored successfully')
 
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # TODO
@@ -83,6 +92,9 @@ class NNPredictor(Predictor):
                               epochs=self.epochs,
                               callbacks=self.callbacks)
         self._logger.info("losses: %s", rstr(hist.history['loss']))
+
+        if self.save_weights:
+            self.model.save_weights(os.path.join(self.log_folder, 'weights'))
 
     def predict(self, sample: list) -> float:
         pred_dataset = self._build_tf_dataset([sample])

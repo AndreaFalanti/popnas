@@ -12,12 +12,13 @@ from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 class LSTMPredictor(NNPredictor):
     def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
-                 embedding_dim: int = 10, rnn_cells: int = 48, weight_reg: float = 1e-5, lr: float = 0.002, epochs: int = 15,
-                 use_previous_data: bool = True):
+                 override_logs: bool = True, embedding_dim: int = 10, rnn_cells: int = 48, weight_reg: float = 1e-5, lr: float = 0.002,
+                 epochs: int = 15, use_previous_data: bool = True, save_weights: bool = False):
         # generate a relevant name if not set
         if name is None:
             name = f'LSTM_ed({embedding_dim})_c({rnn_cells})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
-        super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
+        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs,
+                         epochs=epochs, use_previous_data=use_previous_data, save_weights=save_weights)
 
         self.search_space = search_space
         self.embedding_dim = embedding_dim

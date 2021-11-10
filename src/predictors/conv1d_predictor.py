@@ -12,12 +12,13 @@ from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 class Conv1DPredictor(NNPredictor):
     def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
-                 epochs: int = 15, use_previous_data: bool = True, lr: float = 0.002, weight_reg: float = 1e-5,
-                 filters: int = 12, kernel_size: int = 2):
+                 override_logs: bool = True, epochs: int = 15, lr: float = 0.002, weight_reg: float = 1e-5, filters: int = 12, kernel_size: int = 2,
+                 use_previous_data: bool = True, save_weights: bool = False):
         # generate a relevant name if not set
         if name is None:
             name = f'Conv1D_kernel({kernel_size})_f({filters})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
-        super().__init__(y_col, y_domain, logger, log_folder, name, epochs=epochs, use_previous_data=use_previous_data)
+        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs,
+                         epochs=epochs, use_previous_data=use_previous_data, save_weights=save_weights)
 
         self.search_space = search_space
         self.kernel_size = kernel_size

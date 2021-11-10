@@ -15,13 +15,13 @@ from utils.stream_to_logger import StreamToLogger
 
 
 class AMLLibraryPredictor(Predictor):
-    def __init__(self, config_path: str, techniques: 'list[str]', logger: Logger, log_folder: str, name: str = None,
+    def __init__(self, config_path: str, techniques: 'list[str]', logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
                  threads: int = -1, perform_feature_analysis: int = True):
         # generate a relevant name if not set
         if name is None:
             name = f'aMLLibrary_{"_".join(techniques)}'
 
-        super().__init__(logger, log_folder, name)
+        super().__init__(logger, log_folder, name, override_logs)
 
         self.config_path = config_path
         self.techniques = techniques

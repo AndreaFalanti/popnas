@@ -12,13 +12,13 @@ from utils.func_utils import create_empty_folder
 
 
 class CatBoostPredictor(Predictor):
-    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, use_random_search: bool = False,
-                 task_type: str = 'CPU', perform_feature_analysis: bool = True):
+    def __init__(self, column_desc_path: str, logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
+                 use_random_search: bool = False, task_type: str = 'CPU', perform_feature_analysis: bool = True):
         # generate a relevant name if not set
         if name is None:
             name = f'CatBoost_{task_type}_{"rs" if use_random_search else "default"}'
 
-        super().__init__(logger, log_folder, name)
+        super().__init__(logger, log_folder, name, override_logs)
 
         self.column_desc_path = column_desc_path
 
