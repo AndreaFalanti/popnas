@@ -64,32 +64,72 @@ POPNASv2 can then be launched with command (set arguments as you like):
 docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 20 -e 10 --cpu
 ```
 
-## Command line arguments
-**Required arguments:**
-- **-b**: defines the maximum amount of blocks B a cell can contain.
-- **-k**: defines the amount of top-K cells the algorithm picks up to expand at the next iteration.
-
-**Optional arguments:**
-- **-d**: defines the Python file the program should use as dataset, the default dataset is CIFAR-10.
-- **-e**: defines for how many epochs E each child network has to be trained, the default value is 20.
-- **-s**: defines the batch size dimension of the dataset, the default value is 128.
-- **-l**: defines the learning rate of the child CNN networks, the default value is 0.01 (PNAS).
-- **-h**: defines how many times a child network has to be trained from scratch, each time with a different dataset train-validation split,
-  in order to minimize the accuracy dependence of the child networks on the splitting.
-  The default value is 1, if it is set as higher the resulting accuracy is the arithmetic mean of all the accuracies.
-- **-r**: defines the log folder to restore, if user want to resume a previous interrupted run. The string is encoded as *yyyy-MM-dd-hh-mm-ss*.
-- **-f**: defines the initial number of filters to use. Defaults to 24.
-- **-wr**: defines the L2 regularization factor to use in CNNs. Defaults to None (not applied if not provided).
-- **-m**: defines the number of "cell stacks" to use in each CNN built. Defaults to 3. A cell stack is intended as N normal cells (1-stride)
-  followed by a reduction cell (2-stride). M cell stacks are stacked together to build the final CNN. The last stack has no reduction cell
-  and is directly connected to the GAP. The total number of cells stacked into the CNN is therefore (N + 1) * M - 1.
-- **-n**: defines the number of normal cells to use into a "cell stack". It is the parameter called N in the PNAS paper. Defaults to 2.
-- **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available. Must be specified if the host machine has no gpu.
-- **--abc**: short for "all blocks concatenation".
-  If specified, all blocks' output of a cell will be used in concatenation at the end of a cell to build the cell output,
-  instead of concatenating only block outputs not used by other blocks (that is the PNAS implementation behavior, enabled by default).
+## Run configuration
+### Command line arguments
+All command line arguments are optional.
+- **-j**: specifies the path of the json configuration to use. If non provided, _configs/run.json_ will be used.
+- **-r**: used to restore a previous interrupted run. Specifies the path of the log folder of the run to resume.
+- **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available.
+- Must be specified if the host machine has no gpu.
 - **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation.
   This will make the computation extremely similar to PNAS algorithm.
+
+### Json configuration file
+The run behaviour can be customized through the usage of custom json files. By default, the _run.json_ file inside the _configs_ folder
+will be used. This file can be used as a template and customized to generate new configurations. A properly structured json config file can be
+used by the algorithm by specifying its path in -j command line arguments.
+
+Here it's presented a list of the configuration sections and fields, with a brief description.
+
+**Search Space**:
+- **blocks**: defines the maximum amount of blocks a cell can contain.
+- **max_children**: defines the amount of top-K cells the algorithm picks up to expand at the next iteration.
+- **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
+- **lookback_depth**: maximum lookback depth to use.
+- **lookforward_depth**: maximum lookforward depth to use. TODO: actually not supported, should always be null.
+- **operators**: list of operators that can be used inside each cell. Note that the string format is important, since they are recognized by regexes.
+  Actually supported operators, with customizable kernel size(@):
+  - identity
+  - @x@ dconv
+  - @x@-@x@ conv
+  - @x@ conv
+  - @x@ maxpool
+  - @x@ avgpool
+
+**CNN hyperparameters**:
+- **epochs**: defines for how many epochs E each child network has to be trained.
+- **batch_size**: defines the batch size dimension of the dataset.
+- **learning_rate**: defines the learning rate of the child CNN networks.
+- **filters**: defines the initial number of filters to use.
+- **weight_reg**: defines the L2 regularization factor to use in CNNs. If _null_, regularization is not applied.
+
+**CNN architecture parameters**:
+- **motifs**: motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell, here instead it is used to indicate
+  a stack of N normal cells followed by a single reduction cell.
+- **normal_cells_per_motif**: normal cells to stack in each motif.
+- **concat_only_unused_blocks**: when _true_, only blocks' output not used internally by the cell will be used in final concatenation cell output,
+  following PNAS and NASNet. If set to _false_, all blocks' output will be concatenated in final cell output.
+
+**LSTM hyperparameters**:
+- **epochs**: how many epochs the LSTM is trained on, at each expansion step.
+- **learning_rate**: LSTM learning rate.
+- **weight_reg**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
+- **embedding_dim**: LSTM embedding dimension, used for both inputs and operator embeddings.
+- **cells**: total LSTM cells of the model.
+
+**Dataset**:
+- **name**: used to identify and load a Keras dataset. Can be _null_ if the path of a custom dataset is provided.
+- **path**: path to a folder containing a custom dataset. Can be _null_ if you want to use a dataset already present in Keras.
+- **classes_count**: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
+- **folds**: number of dataset folds to use. When using multiple folds, the metrics extrapolated from CNN training will be the average of
+  the ones obtained on each fold.
+- **samples**: if provided, limits the total dataset samples to the number provided (integer). This means that the total training and validation
+  samples will amount to this value (or less if the dataset has actually fewer samples than the value indicated). Useful for fast testing.
+
+**Others**:
+- **pnas_mode**: if _true_, the algorithm will not use the temporal regressor and pareto front search, making the run very similar to PNAS.
+- **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs.
+
 
 ## Additional scripts and utils
 ### Time prediction testing script
@@ -173,6 +213,10 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 ### Software improvements and refactors
 - Migrate code to Tensorflow 2.
+- Now use json configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
+  all the various components of the algorithm run. Many parameters and hyperparameters that were hardcoded in POPNAS initial version are now
+  tunable from the json config.
+- Implement an actually working run restoring functionality. This allows to resume a previously interrupted run.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
   New training method supports ImageGenerators and allows using weight regularization if --wr parameter is provided.
 - LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
@@ -211,12 +255,12 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 ## TODO
 - Improve and tweak best model training script.
+- Improve the restoring function and investigate potential bugs (especially in prediction and expansion phase it could not work properly, since
+  I only wrote the logic to stop it during CNN training, which should be the 90% of the cases).
 - Improve quality of plots generated, adding new relevant metrics if useful.
 - Investigate the "Model failed to serialize as JSON. Ignoring... " warning triggered by tensorboard call.
   It seems to not alter the program flow, but it's worth a check.
 - Logic for handling -h parameter was faulty from the start. Since this functionality has never been used, it's possible to deprecate it or otherwise
   it should be completed.
-- Restore procedure logic must be revisited and fixed, it was probably not working properly from the start. This functionality has never been
-  used, but it can be nice to have in case the algorithm would take a lot of time on larger dataset.
 - Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't require much work
   to support other datasets.
