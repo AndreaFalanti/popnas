@@ -44,7 +44,7 @@ class ControllerManager:
     '''
 
     def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 B=5, K=256, ex=16, T=np.inf, pnas_mode: bool = False):
+                 B=5, K=256, ex=16, T=np.inf, current_b: int = 1, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -63,7 +63,7 @@ class ControllerManager:
         self.K = K
         self.ex = ex
         self.T = T
-        self.actual_b = 1
+        self.current_b = current_b
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
@@ -76,7 +76,7 @@ class ControllerManager:
         '''
 
         train_cells = self.search_space.children + self.search_space.exploration_front
-        acc_predictor = self.get_acc_predictor(self.actual_b)
+        acc_predictor = self.get_acc_predictor(self.current_b)
 
         # train accuracy predictor with new data
         dataset = list(zip(train_cells, rewards))
@@ -85,7 +85,7 @@ class ControllerManager:
         # train time predictor with new data
         if not self.pnas_mode:
             csv_path = log_service.build_path('csv', 'training_time.csv')
-            time_predictor = self.get_time_predictor(self.actual_b)
+            time_predictor = self.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
 
     def __write_predictions_on_csv(self, model_estimates):
@@ -95,7 +95,7 @@ class ControllerManager:
         Args:
             model_estimates (list[ModelEstimate]): [description]
         '''
-        with open(log_service.build_path('csv', f'predictions_B{self.actual_b}.csv'), mode='w', newline='') as f:
+        with open(log_service.build_path('csv', f'predictions_B{self.current_b}.csv'), mode='w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['time', 'val accuracy', 'cell structure'])
             writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
@@ -105,17 +105,17 @@ class ControllerManager:
         Updates the children from the intermediate products for the next generation
         of larger number of blocks in each cell
         '''
-        if self.actual_b >= self.B:
+        if self.current_b >= self.B:
             self._logger.info('No more updates necessary as max B has been reached!')
             return
 
         model_estimations = []  # type: list[ModelEstimate]
-        time_predictor = self.get_time_predictor(self.actual_b)
-        acc_predictor = self.get_acc_predictor(self.actual_b)
+        time_predictor = self.get_time_predictor(self.current_b)
+        acc_predictor = self.get_acc_predictor(self.current_b)
 
-        self.actual_b += 1
+        self.current_b += 1
         # closure that returns a function that returns the model generator for current generation step
-        generate_models = self.search_space.prepare_intermediate_children(self.actual_b)
+        generate_models = self.search_space.prepare_intermediate_children(self.current_b)
 
         # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
         #  necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
@@ -171,7 +171,7 @@ class ControllerManager:
 
             self._logger.info('Pruned %d equivalent models while building pareto front', pruned_count)
 
-            with open(log_service.build_path('csv', f'pareto_front_B{self.actual_b}.csv'), mode='w', newline='') as f:
+            with open(log_service.build_path('csv', f'pareto_front_B{self.current_b}.csv'), mode='w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(ModelEstimate.get_csv_headers())
                 writer.writerows(map(lambda est: est.to_csv_array(), pareto_front))
@@ -182,7 +182,7 @@ class ControllerManager:
             pareto_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
             op_exp, input_exp = self.compute_exploration_value_sets(pareto_front[:pareto_limit], self.search_space)
 
-            if self.actual_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
+            if self.current_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
                 self._logger.info('Building exploration pareto front...')
                 self._logger.info('Operators to explore: %s', rstr(op_exp))
                 self._logger.info('Inputs to explore: %s', rstr(input_exp))
@@ -214,7 +214,7 @@ class ControllerManager:
 
                 self._logger.info('Pruned %d equivalent models while building exploration pareto front', pruned_count)
 
-                with open(log_service.build_path('csv', f'exploration_pareto_front_B{self.actual_b}.csv'), mode='w', newline='') as f:
+                with open(log_service.build_path('csv', f'exploration_pareto_front_B{self.current_b}.csv'), mode='w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(ModelEstimate.get_csv_headers())
                     writer.writerows(map(lambda est: est.to_csv_array(), exploration_pareto_front))
@@ -254,7 +254,7 @@ class ControllerManager:
     # ///////////////////////////////////////////////////
 
     def compute_exploration_value_sets(self, pareto_front_models: 'list[ModelEstimate]', state_space: SearchSpace):
-        valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, self.actual_b, self.B)
+        valid_inputs = get_valid_inputs_for_block_size(state_space.input_values, self.current_b, self.B)
         valid_ops = state_space.operator_values
         cell_counter = CellCounter(valid_inputs, valid_ops)
 

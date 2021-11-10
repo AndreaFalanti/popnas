@@ -36,6 +36,7 @@ def initialize_log_folders():
     os.mkdir(os.path.join(log_path, 'tensorboard_cnn'))  # create folder for saving tensorboard logs
     os.mkdir(os.path.join(log_path, 'plots'))  # create folder for saving data plots
     os.mkdir(os.path.join(log_path, 'predictors'))  # create folder for saving predictors' outputs
+    os.mkdir(os.path.join(log_path, 'restore'))  # create folder for additional files used in restore mode
 
 
 def initialize_log_folders_best_model_script():
@@ -55,12 +56,12 @@ def initialize_log_folders_best_model_script():
     os.mkdir(os.path.join(log_path, 'tensorboard'))  # create tensorboard folder
 
 
-def check_log_folder(timestamp):
-    if not os.path.exists(os.path.join('logs', timestamp)):
-        raise Exception('Log directory not found')
+def check_log_folder(folder_path: str):
+    if not os.path.exists(folder_path):
+        raise NotADirectoryError('Log directory not found')
 
     global log_path
-    log_path = os.path.join('logs', timestamp)
+    log_path = folder_path
 
 
 def get_logger(name):

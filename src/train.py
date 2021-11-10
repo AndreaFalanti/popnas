@@ -1,5 +1,6 @@
 import csv
 import os
+import pickle
 import statistics
 from timeit import default_timer as timer
 from typing import Any
@@ -13,6 +14,7 @@ from model import ModelGenerator
 from predictors import *
 from utils.feature_utils import generate_all_feature_sets, build_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function
 from utils.func_utils import get_valid_inputs_for_block_size
+from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, restore_search_space_children
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -20,7 +22,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 class Train:
 
     def __init__(self, run_config: 'dict[str, Any]'):
-
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
@@ -59,6 +60,31 @@ class Train:
         self.lstm_config = run_config['lstm_hp']
 
         plotter.initialize_logger()
+
+        restore_info_save_path = log_service.build_path('restore', 'info.pickle')
+        if os.path.exists(restore_info_save_path):
+            with open(restore_info_save_path, 'rb') as f:
+                self.restore_info = pickle.load(f)
+        else:
+            self.restore_info = RestoreInfo(restore_info_save_path)
+
+        # if not restoring from save, will be initialized to correct values for starting the entire procedure
+        restore_data = self.restore_info.get_info()
+        self.starting_b = restore_data['current_b']
+        self.restore_pareto_train_index = restore_data['pareto_training_index']
+        self.restore_exploration_train_index = restore_data['exploration_training_index']
+        self.time_delta = restore_data['total_time']
+
+        if self.restore_info.must_restore_dynamic_reindex_function():
+            op_times, initial_thrust_time = restore_dynamic_reindex_function()
+            reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
+            self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+
+        if self.restore_info.must_restore_search_space_children():
+            restore_search_space_children(self.search_space, self.starting_b, self.children_max_size)
+
+    def _compute_total_time(self):
+        return self.time_delta + (timer() - self._start_time)
 
     def generate_and_train_model_from_spec(self, cell_spec: list):
         """
@@ -208,19 +234,25 @@ class Train:
         self._logger.info('Initializing predictors...')
 
         # accuracy predictors to be used
-        acc_lstm = LSTMPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path,
+        acc_lstm = LSTMPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
                                  lr=self.lstm_config['learning_rate'], weight_reg=self.lstm_config['weight_reg'],
                                  embedding_dim=self.lstm_config['embedding_dim'], rnn_cells=self.lstm_config['cells'],
-                                 epochs=self.lstm_config['epochs'])
+                                 epochs=self.lstm_config['epochs'], save_weights=True)
+
+        # restore NN weights when restoring a previous run
+        # TODO: it will be a NOP if checkpoint is not present, but is not very intuitive...
+        acc_lstm.restore_weights()
 
         # time predictors to be used
         if not self.pnas_mode:
             # TODO: shap (0.40.0) is bugged, avoid feature analysis for now since the local fixes can't be easily replicated on all servers on which
             #  the algorithm is ran. Hopefully pull requests will be merged in near future.
             time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True,
-                                              perform_feature_analysis=False)
-            time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path, perform_feature_analysis=False)
-            time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, perform_feature_analysis=False)
+                                              override_logs=False, perform_feature_analysis=False)
+            time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path,
+                                               override_logs=False, perform_feature_analysis=False)
+            time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path,
+                                               override_logs=False, perform_feature_analysis=False)
 
         def get_acc_predictor_for_b(b: int):
             return acc_lstm
@@ -253,7 +285,7 @@ class Train:
         return op_times
 
     def log_run_final_results(self):
-        total_time = timer() - self._start_time
+        total_time = self._compute_total_time()
 
         training_results_path = log_service.build_path('csv', 'training_results.csv')
         with open(training_results_path) as f:
@@ -269,32 +301,38 @@ class Train:
         '''
         Main function, executed by run.py to start POPNAS algorithm.
         '''
-        starting_b = 0
-
         time_headers, time_feature_types = build_feature_names('time', self.blocks, self.input_lookback_depth)
         acc_headers, acc_feature_types = build_feature_names('acc', self.blocks, self.input_lookback_depth)
-
-        # add headers to csv and create CatBoost feature files
-        initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
 
         # create the predictors
         acc_pred_func, time_pred_func = self.initialize_predictors()
 
         # create the ControllerManager and build the internal policy network
-        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func,
+        # for restoring purposes
+        controller_b = self.starting_b if self.starting_b > 1 else 1
+        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, current_b=controller_b,
                                        B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size, pnas_mode=self.pnas_mode)
 
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
-        if starting_b == 0:
+        if self.starting_b == 0:
+            # add headers to csv and create CatBoost feature files
+            initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
+
             initial_thrust_time = self.perform_initial_thrust(len(time_headers), len(acc_headers))
-            starting_b = 1
+            self.starting_b = 1
+            self.restore_info.update(current_b=1, total_time=self._compute_total_time())
 
         # train the child CNN networks for each number of blocks
-        for current_blocks in range(starting_b, self.blocks + 1):
-            cnns_train_info = []  # type: list[tuple[float, float, list[tuple]]]
+        for current_blocks in range(self.starting_b, self.blocks + 1):
+            cnns_train_info = [] if self.restore_pareto_train_index == 0 \
+                else restore_train_info(current_blocks)  # type: list[tuple[float, float, list[tuple]]]
 
             for model_index, cell_spec in enumerate(self.search_space.children):
+                # skip networks already trained when restoring a run
+                if model_index < self.restore_pareto_train_index:
+                    continue
+
                 self._logger.info("Model #%d / #%d", model_index + 1, len(self.search_space.children))
                 self._logger.debug("\t%s", cell_spec)
 
@@ -308,10 +346,13 @@ class Train:
                 if current_blocks > 1:
                     self.write_training_data(current_blocks, time, reward, cell_spec)
 
+                self.restore_info.update(pareto_training_index=model_index + 1, total_time=self._compute_total_time())
+
             # train the models built from exploration pareto front
             for model_index, cell_spec in enumerate(self.search_space.exploration_front):
-                if model_index == 0:
-                    self._logger.info('Starting exploration step...')
+                # skip networks already trained when restoring a run
+                if model_index < self.restore_exploration_train_index:
+                    continue
 
                 self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(self.search_space.exploration_front))
                 self._logger.debug("\t%s", cell_spec)
@@ -322,6 +363,8 @@ class Train:
 
                 self.write_training_results_into_csv(cell_spec, reward, time, total_params, flops, current_blocks, exploration=True)
                 self.write_training_data(current_blocks, time, reward, cell_spec, exploration=True)
+
+                self.restore_info.update(exploration_training_index=model_index + 1, total_time=self._compute_total_time())
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
@@ -354,6 +397,11 @@ class Train:
                 # state_space.children are updated in controller.update_step, CNN to train in next step. Add also exploration networks.
                 trained_cells = self.search_space.children + self.search_space.exploration_front
                 plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, trained_cells)
+
+                self.restore_info.update(current_b=expansion_step_blocks, pareto_training_index=0, exploration_training_index=0,
+                                         total_time=self._compute_total_time())
+                self.restore_pareto_train_index = 0
+                self.restore_exploration_train_index = 0
 
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
