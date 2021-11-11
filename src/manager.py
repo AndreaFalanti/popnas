@@ -88,19 +88,19 @@ class NetworkManager:
             y_train_init (ndarray): y training
 
         Returns:
-            list:
+            list[tuple(tf.data.Dataset, tf.data.Dataset)]: list with pairs of training and validation datasets, for each fold
         """
+        if self.samples_limit is not None:
+            x_train_init = x_train_init[:self.samples_limit]
+            y_train_init = y_train_init[:self.samples_limit]
+
         # normalize image RGB values into [0, 1] domain
         x_train_init = x_train_init.astype('float32') / 255.
+        y_train_init = to_categorical(y_train_init, self.dataset_classes_count)
 
         # TODO: is it ok to generate the splits by shuffling randomly?
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
-            if self.samples_limit is not None:
-                x_train_init = x_train_init[:self.samples_limit]
-                y_train_init = y_train_init[:self.samples_limit]
-
-            y_train_init = to_categorical(y_train_init, self.dataset_classes_count)
 
             # create a validation set for evaluation of the child models
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
@@ -239,14 +239,16 @@ class NetworkManager:
         tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.num_child))
         os.makedirs(tb_logdir, exist_ok=True)
 
-        # generate a CNN model given the cell specification
-        # TODO: tests are now always done with data_num = 1, if > 1 it should do the mean of the metrics computed.
-        #  Also, instead of rebuilding the model it should be better to just reset the weights.
+        # store training results for each fold
+        times = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
+        accuracies = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
+
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
             if self.dataset_folds_count > 1:
-                self._logger.info("Training dataset #%d / #%d", i + 1, self.dataset_folds_count)
+                self._logger.info("Training on dataset #%d / #%d", i + 1, self.dataset_folds_count)
 
-            # build the model, given the actions
+            # generate a CNN model given the cell specification
+            # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
             model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
             # add callback to register as accurate as possible the training time
             time_cb = TimingCallback()
@@ -260,10 +262,12 @@ class NetworkManager:
                              validation_steps=self.validation_batches,
                              callbacks=callbacks)
 
-            training_time = sum(time_cb.logs)
+            times[i] = sum(time_cb.logs)
+            # compute the reward (best validation accuracy)
+            accuracies[i] = max(hist.history['val_accuracy'])
 
-        # compute the reward (best validation accuracy)
-        reward = max(hist.history.get('val_accuracy'))
+        training_time = times.mean()
+        reward = accuracies.mean()
         total_params = model.count_params()
         flops = self.get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
 
