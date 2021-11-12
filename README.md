@@ -258,9 +258,5 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 - Improve the restoring function and investigate potential bugs (especially in prediction and expansion phase it could not work properly, since
   I only wrote the logic to stop it during CNN training, which should be the 90% of the cases).
 - Improve quality of plots generated, adding new relevant metrics if useful.
-- Investigate the "Model failed to serialize as JSON. Ignoring... " warning triggered by tensorboard call.
-  It seems to not alter the program flow, but it's worth a check.
-- Logic for handling -h parameter was faulty from the start. Since this functionality has never been used, it's possible to deprecate it or otherwise
-  it should be completed.
 - Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't require much work
   to support other datasets.

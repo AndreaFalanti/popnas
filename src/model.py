@@ -314,7 +314,7 @@ class ModelGenerator:
             else:
                 # else just submits a linear layer if shapes match
                 model_name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Identity(filters, strides, name=model_name)
+                x = ops.Identity(filters, name=model_name)
                 return x
 
         # check for separable conv
