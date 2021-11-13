@@ -373,11 +373,14 @@ class ModelGenerator:
 
         return [tb_callback]
 
-    def define_training_hyperparams_and_metrics(self):
+    def define_training_hyperparams_and_metrics(self, training_step_per_epoch: int):
         loss = losses.CategoricalCrossentropy()
-        optimizer = optimizers.Adam(learning_rate=self.lr)
         metrics = ['accuracy']
 
-        # TODO: pnas used cosine decay with SGD, instead of Adam. Investigate which alternative is better
+        # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
+        schedule = optimizers.schedules.CosineDecayRestarts(self.lr, training_step_per_epoch * 3)
+        # schedule_2 = optimizers.schedules.CosineDecay(self.lr, training_step_per_epoch * 20)
+        # sgdr_optimizer = optimizers.SGD(learning_rate=schedule_2, momentum=0.9)
+        adam_optimizer = optimizers.Adam(learning_rate=schedule)
 
-        return loss, optimizer, metrics
+        return loss, adam_optimizer, metrics

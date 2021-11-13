@@ -212,7 +212,7 @@ class NetworkManager:
 
         model, partition_dict = self.model_gen.build_model(cell_spec)
 
-        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
+        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics(self.train_batches)
         model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
