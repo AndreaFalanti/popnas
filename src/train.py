@@ -83,7 +83,7 @@ class Train:
             self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
 
         if self.restore_info.must_restore_search_space_children():
-            restore_search_space_children(self.search_space, self.starting_b, self.children_max_size)
+            restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)

@@ -69,9 +69,10 @@ def restore_train_info(b: int):
     return list(zip(times, accuracies, cell_specs))
 
 
-def restore_search_space_children(search_space: SearchSpace, b: int, max_children: int):
-    pareto_df = pd.read_csv(log_service.build_path('csv', f'pareto_front_B{b}.csv')).head(max_children)
-    search_space.children = parse_cell_structures(pareto_df['cell structure'].to_list())
+def restore_search_space_children(search_space: SearchSpace, b: int, max_children: int, pnas_mode: bool):
+    children_csv_filename = f'predictions_B{b}.csv' if pnas_mode else f'pareto_front_B{b}.csv'
+    children_df = pd.read_csv(log_service.build_path('csv', children_csv_filename)).head(max_children)
+    search_space.children = parse_cell_structures(children_df['cell structure'].to_list())
 
     exploration_csv_path = log_service.build_path('csv', f'exploration_pareto_front_B{b}.csv')
     if os.path.exists(exploration_csv_path):
