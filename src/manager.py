@@ -218,6 +218,9 @@ class NetworkManager:
         loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
         model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
+        # for debugging keras layers, otherwise leave this commented since it will destroy performance
+        # model.run_eagerly = True
+
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 
     def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool = False):

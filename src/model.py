@@ -216,7 +216,15 @@ class ModelGenerator:
         # concatenate and reduce depth to filters value, otherwise cell output would be a (b * filters) tensor depth
         if len(block_outputs) > 1:
             # concatenate all 'Add' layers, outputs of each single block
-            concat_layer = layers.Concatenate(axis=-1)(block_outputs)
+            if self.drop_path_keep_prob < 1.0:
+                cell_ratio = (self.cell_index + 1) / self.total_cells
+                total_train_steps = self.training_steps_per_epoch * self.epochs
+
+                sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
+                                            name=f'scheduled_drop_path_c{self.cell_index}_concat')(block_outputs)
+                concat_layer = layers.Concatenate(axis=-1)(sdp)
+            else:
+                concat_layer = layers.Concatenate(axis=-1)(block_outputs)
             x = ops.Convolution(filters, (1, 1), (1, 1))
             x._name = f'concat_pointwise_conv_c{self.cell_index}'
             return x(concat_layer)
@@ -296,12 +304,11 @@ class ModelGenerator:
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
             total_train_steps = self.training_steps_per_epoch * self.epochs
-            left_layer = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
-                                               name=f'scheduled_drop_path__c{self.cell_index}b{self.block_index}L')(left_layer)
-            right_layer = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
-                                                name=f'scheduled_drop_path__c{self.cell_index}b{self.block_index}R')(right_layer)
-
-        return layers.Add()([left_layer, right_layer])
+            sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
+                                        name=f'scheduled_drop_path_c{self.cell_index}b{self.block_index}L')([left_layer, right_layer])
+            return layers.Add()(sdp)
+        else:
+            return layers.Add()([left_layer, right_layer])
 
     def __build_layer(self, filters, operator, adapt_depth: bool, strides=(1, 1), tag='L'):
         '''
