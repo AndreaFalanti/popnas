@@ -31,8 +31,8 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, lr: float = 0.01, filters: int = 24, weight_norm: float = None,
-                 normal_cells_per_motif: int = 2, motifs: int = 3, concat_only_unused: bool = True):
+    def __init__(self, lr: float, filters: int, weight_norm: float, normal_cells_per_motif: int, motifs: int,
+                 drop_path_prob: int, epochs: int, training_steps_per_epoch: int, concat_only_unused: bool = True):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
@@ -41,8 +41,14 @@ class ModelGenerator:
         self.filters = filters
         self.motifs = motifs
         self.normal_cells_per_motif = normal_cells_per_motif
+        self.total_cells = motifs * (normal_cells_per_motif + 1) - 1
 
         self.weight_norm = regularizers.l2(weight_norm) if weight_norm is not None else None
+        self.drop_path_keep_prob = 1.0 - drop_path_prob
+
+        # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
+        self.epochs = epochs
+        self.training_steps_per_epoch = training_steps_per_epoch
 
         # attributes defined below are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
@@ -286,6 +292,15 @@ class ModelGenerator:
         # parse_action returns a custom layer model, that is then called with chosen input
         left_layer = self.__build_layer(filters, op_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_L])
         right_layer = self.__build_layer(filters, op_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_R])
+
+        if self.drop_path_keep_prob < 1.0:
+            cell_ratio = (self.cell_index + 1) / self.total_cells
+            total_train_steps = self.training_steps_per_epoch * self.epochs
+            left_layer = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
+                                               name=f'scheduled_drop_path__c{self.cell_index}b{self.block_index}L')(left_layer)
+            right_layer = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
+                                                name=f'scheduled_drop_path__c{self.cell_index}b{self.block_index}R')(right_layer)
+
         return layers.Add()([left_layer, right_layer])
 
     def __build_layer(self, filters, operator, adapt_depth: bool, strides=(1, 1), tag='L'):
@@ -373,13 +388,13 @@ class ModelGenerator:
 
         return [tb_callback]
 
-    def define_training_hyperparams_and_metrics(self, training_step_per_epoch: int):
+    def define_training_hyperparams_and_metrics(self):
         loss = losses.CategoricalCrossentropy()
         metrics = ['accuracy']
 
         # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
-        schedule = optimizers.schedules.CosineDecayRestarts(self.lr, training_step_per_epoch * 3)
-        # schedule_2 = optimizers.schedules.CosineDecay(self.lr, training_step_per_epoch * 20)
+        schedule = optimizers.schedules.CosineDecayRestarts(self.lr, self.training_steps_per_epoch * 3)
+        # schedule_2 = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
         # sgdr_optimizer = optimizers.SGD(learning_rate=schedule_2, momentum=0.9)
         adam_optimizer = optimizers.Adam(learning_rate=schedule)
 

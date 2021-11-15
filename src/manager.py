@@ -30,7 +30,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, model_gen: ModelGenerator, dataset_config: dict, epochs=20, batch_size=64):
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -46,9 +46,8 @@ class NetworkManager:
 
         self.dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
-        self.model_gen = model_gen
-        self.epochs = epochs
-        self.batch_size = batch_size
+        self.epochs = cnn_config['epochs']
+        self.batch_size = cnn_config['batch_size']
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
@@ -60,6 +59,10 @@ class NetworkManager:
         (x_train_init, y_train_init), _ = self.__load_dataset()
         self.__prepare_datasets(x_train_init, y_train_init)
         self._logger.info('Dataset folds built successfully')
+
+        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], cnn_config['weight_reg'],
+                                        arc_config['normal_cells_per_motif'], arc_config['motifs'], cnn_config['drop_path_prob'],
+                                        self.epochs, self.train_batches, arc_config['concat_only_unused_blocks'])
 
     def __load_dataset(self):
         self._logger.info('Loading dataset...')
@@ -212,7 +215,7 @@ class NetworkManager:
 
         model, partition_dict = self.model_gen.build_model(cell_spec)
 
-        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics(self.train_batches)
+        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
         model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict

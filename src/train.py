@@ -10,7 +10,6 @@ import plotter
 from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
-from model import ModelGenerator
 from predictors import *
 from utils.feature_utils import generate_all_feature_sets, build_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function
 from utils.func_utils import get_valid_inputs_for_block_size
@@ -51,11 +50,8 @@ class Train:
         self.search_space = SearchSpace(ss_config['blocks'], ss_config['operators'], max_cells,
                                         input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
 
-        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], cnn_config['weight_reg'],
-                                        arc_config['normal_cells_per_motif'], arc_config['motifs'], arc_config['concat_only_unused_blocks'])
-
         # create the Network Manager
-        self.cnn_manager = NetworkManager(self.model_gen, ds_config, epochs=cnn_config['epochs'], batch_size=cnn_config['batch_size'])
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config)
 
         self.pnas_mode = run_config['pnas_mode']
 
