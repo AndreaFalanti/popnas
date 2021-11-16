@@ -221,7 +221,7 @@ class ModelGenerator:
                 total_train_steps = self.training_steps_per_epoch * self.epochs
 
                 sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
-                                            name=f'scheduled_drop_path_c{self.cell_index}_concat')(block_outputs)
+                                            name=f'sdp_c{self.cell_index}_concat')(block_outputs)
                 concat_layer = layers.Concatenate(axis=-1)(sdp)
             else:
                 concat_layer = layers.Concatenate(axis=-1)(block_outputs)
@@ -305,7 +305,7 @@ class ModelGenerator:
             cell_ratio = (self.cell_index + 1) / self.total_cells
             total_train_steps = self.training_steps_per_epoch * self.epochs
             sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
-                                        name=f'scheduled_drop_path_c{self.cell_index}b{self.block_index}L')([left_layer, right_layer])
+                                        name=f'sdp_c{self.cell_index}b{self.block_index}')([left_layer, right_layer])
             return layers.Add()(sdp)
         else:
             return layers.Add()([left_layer, right_layer])
