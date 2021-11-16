@@ -11,9 +11,20 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
 import log_service
+from utils.func_utils import create_empty_folder
 from utils.timing_callback import TimingCallback
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
+
+
+def create_log_folder(log_path: str):
+    model_training_folder_path = os.path.join(log_path, 'best_model_training')
+    create_empty_folder(model_training_folder_path)
+    os.mkdir(os.path.join(model_training_folder_path, 'weights'))  # create weights folder
+    os.mkdir(os.path.join(model_training_folder_path, 'tensorboard'))  # create tensorboard folder
+
+    log_service.set_log_path(model_training_folder_path)
+    return model_training_folder_path
 
 
 def load_dataset(dataset):
@@ -99,14 +110,14 @@ def define_callbacks() -> 'list[callbacks.Callback]':
 
 def main():
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar='PATH', type=str, help="path to best model folder", required=True)
+    parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     args = parser.parse_args()
 
-    log_service.initialize_log_folders_best_model_script()
+    save_path = create_log_folder(args.p)
     logger = log_service.get_logger(__name__)
 
     logger.info('Loading best model from provided folder...')
-    model = models.load_model(args.p)  # type: models.Model
+    model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
     model.summary(line_length=140, print_fn=logger.info)
 
     # Load and prepare the dataset

@@ -39,23 +39,6 @@ def initialize_log_folders():
     os.mkdir(os.path.join(log_path, 'restore'))  # create folder for additional files used in restore mode
 
 
-def initialize_log_folders_best_model_script():
-    '''
-    Used in best model training script, initialize logs folder and subfolders.
-    '''
-    if not os.path.exists('logs/'):
-        os.mkdir('logs/')
-
-    global log_path
-    # create timestamp subfolder and set the global log path variable
-    timestr = time.strftime('%Y-%m-%d-%H-%M-%S')  # get time for logs folder
-    log_path = os.path.join('logs', timestr + '-model-run')
-    os.mkdir(log_path)
-
-    os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
-    os.mkdir(os.path.join(log_path, 'tensorboard'))  # create tensorboard folder
-
-
 def check_log_folder(folder_path: str):
     if not os.path.exists(folder_path):
         raise NotADirectoryError('Log directory not found')
