@@ -53,15 +53,16 @@ Follow https://www.tensorflow.org/install/gpu instructions to setup your device,
 to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https://www.tensorflow.org/install/source#linux).
 
 ## Build Docker container
-In *docker* folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages and mount POPNAS source code.
+In *docker* folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
+and mount POPNAS source code.
 To build the image, open the terminal into the *src* folder and execute this command:
 ```
-docker build -f ../docker/Dockerfile -t falanti/popnas:py3.6.9-tf2.6.0gpu .
+docker build -f ../docker/Dockerfile -t falanti/popnas:py3.8.10-tf2.7.0gpu .
 ```
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run falanti/popnas:py3.6.9-tf2.6.0gpu python run.py -b 5 -k 20 -e 10 --cpu
+docker run -it --rm -v %cd%:/exp --name popnas-tf2.7 falanti/popnas:py3.8.10-tf2.7.0gpu python run.py -j configs/run_debug.json --cpu
 ```
 
 ## Run configuration
