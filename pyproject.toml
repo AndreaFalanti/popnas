@@ -6,11 +6,10 @@ authors = ["AndreaFalanti <a.falanti@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-# 3.6.9 is standard for tensorflow docker images and linux,
-# 3.7.4 is good for windows (3.7 is retrocompatible with 3.6)
-python = ">=3.6.9, 3.7.4"
-sklearn = "0.0"
-tensorflow = "2.6.0rc0"
+# tested on 3.7.4 on windows, docker use 3.8.10
+python = ">=3.7.0, <3.9.0"
+tensorflow = "2.7.0"
+scikit-learn = "1.0.1"
 pandas = "1.1.5"
 tqdm = "4.62.0"
 matplotlib = "3.3.4"
