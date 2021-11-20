@@ -12,8 +12,8 @@
             "7x7 dconv",
             "1x7-7x1 conv",
             "3x3 conv",
-            "3x3 maxpool",
-            "3x3 avgpool"
+            "2x2 maxpool",
+            "2x2 avgpool"
         ]
     },
     "cnn_hp": {
