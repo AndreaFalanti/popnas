@@ -1,9 +1,11 @@
 import importlib.util
+import logging
 import os
 from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
+import tf2onnx
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import Model, datasets
 from tensorflow.keras.applications.imagenet_utils import preprocess_input
@@ -14,6 +16,9 @@ from tensorflow.python.framework.convert_to_constants import convert_variables_t
 import log_service
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
+
+# disable tf2onnx conversion messages
+tf2onnx.logging.set_level(logging.WARN)
 
 
 # tentative way of reproducing PNAS transformation
@@ -220,6 +225,11 @@ class NetworkManager:
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
+
+        onnx_model = tf2onnx.convert.from_keras(model)
+        with open(os.path.join(tb_logdir, 'model.onnx'), 'wb') as f:
+            f.write(onnx_model[0].SerializeToString())
+        self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 

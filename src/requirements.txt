@@ -18,3 +18,4 @@ hyperopt==0.2.5
 psutil==5.8.0
 shap==0.40.0
 seaborn==0.11.2
+tf2onnx==1.9.3
