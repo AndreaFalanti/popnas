@@ -306,7 +306,7 @@ class NetworkManager:
             self.best_reward = reward
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
-            model.save(log_service.build_path('best_model'))
+            model.save(log_service.build_path('best_model', 'saved_model.h5'), save_format='h5')
             self._logger.info('Model saved successfully')
 
         # clean up resources and GPU memory
