@@ -41,7 +41,11 @@
         "path": null,
         "classes_count": 10,
         "folds": 1,
-        "samples": null
+        "samples": null,
+        "data_augmentation": {
+            "enabled": true,
+            "perform_on_gpu": false
+        }
     },
     "pnas_mode": false,
     "use_cpu": false

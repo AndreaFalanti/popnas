@@ -6,8 +6,9 @@ from typing import Tuple
 import numpy as np
 import tensorflow as tf
 import tf2onnx
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
-from tensorflow.keras import Model, datasets
+from tensorflow.keras import Model, datasets, layers, Sequential
 from tensorflow.keras.applications.imagenet_utils import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import plot_model, to_categorical
@@ -17,8 +18,18 @@ import log_service
 from model import ModelGenerator
 from utils.timing_callback import TimingCallback
 
+import absl.logging
+absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
+
+# TODO: not working properly, thx tensorflow for the "Callback method `on_train_batch_end` is slow compared to the batch time" at each training...
+# disable Tensorflow info and warning messages (Warning are not on important things, they were investigated. Still, enable them
+# when performing changes to see if there are new potential warnings that can affect negatively the algorithm.
+tf.get_logger().setLevel(logging.ERROR)
+
 # disable tf2onnx conversion messages
 tf2onnx.logging.set_level(logging.WARN)
+
+AUTOTUNE = tf.data.AUTOTUNE
 
 
 # tentative way of reproducing PNAS transformation
@@ -49,6 +60,10 @@ class NetworkManager:
         self.samples_limit = dataset_config['samples']
         self.dataset_classes_count = dataset_config['classes_count']
 
+        data_augmentation_config = dataset_config['data_augmentation']
+        self.use_data_augmentation = data_augmentation_config['enabled']
+        self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
+
         self.dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
         self.epochs = cnn_config['epochs']
@@ -56,6 +71,17 @@ class NetworkManager:
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
+
+        # Keras model that can be used in both CPU or GPU for data augmentation
+        if self.use_data_augmentation:
+            self.data_augmentation = Sequential([
+                layers.experimental.preprocessing.RandomFlip('horizontal'),
+                # layers.experimental.preprocessing.RandomRotation(20/360),
+                # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
+                # layers.experimental.preprocessing.RandomTranslation(0.125, 0.125, fill_mode='reflect', interpolation='bilinear')
+            ], name='data_augmentation')
+        else:
+            self.data_augmentation = None
 
         # set in dataset initialization, used for displaying progress during training
         self.train_batches = 0
@@ -67,7 +93,39 @@ class NetworkManager:
 
         self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], cnn_config['weight_reg'],
                                         arc_config['normal_cells_per_motif'], arc_config['motifs'], cnn_config['drop_path_prob'],
-                                        self.epochs, self.train_batches, arc_config['concat_only_unused_blocks'])
+                                        self.epochs, self.train_batches, arc_config['concat_only_unused_blocks'],
+                                        data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
+
+        # DEBUG ONLY
+        # self.__test_data_augmentation(self.dataset_folds[0][0])
+
+    def __test_data_augmentation(self, ds: tf.data.Dataset):
+        '''
+        Function helpful for debugging data augmentation and making sure it's working properly.
+        DON'T USE IT IN ACTUAL RUNS.
+        Args:
+            ds: any TF dataset where data augmentation is applied
+        '''
+        # switch to an interactive matplotlib backend
+        plt.switch_backend('TkAgg')
+
+        # get a batch
+        images, labels = next(iter(ds))
+
+        # display 9 transformation of the first 3 images of the first training batch
+        for j in range(3):
+            image = images[j]
+            plt.imshow(image)
+            plt.show()
+
+            for i in range(9):
+                augmented_image = self.data_augmentation(image)
+                _ = plt.subplot(3, 3, i + 1)
+                plt.imshow(augmented_image)
+                plt.axis('off')
+
+            plt.show()
+        self._logger.debug('Data augmentation debug shown')
 
     def __load_dataset(self):
         self._logger.info('Loading dataset...')
@@ -114,14 +172,13 @@ class NetworkManager:
             x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
                                                                             random_state=0, stratify=y_train_init)
 
-            train_ds, val_ds, train_batches, val_batches = self.__build_tf_datasets((x_train, y_train, x_validation, y_validation),
-                                                                                    use_data_augmentation=True)
+            train_ds, val_ds, train_batches, val_batches = self.__build_tf_datasets((x_train, y_train, x_validation, y_validation))
             self.train_batches = train_batches
             self.validation_batches = val_batches
 
             self.dataset_folds.append((train_ds, val_ds))
 
-    def __build_tf_datasets(self, samples_fold: 'tuple(list, list, list, list)', use_data_augmentation: bool):
+    def __build_tf_datasets(self, samples_fold: 'tuple(list, list, list, list)'):
         '''
         Build the training and validation datasets to be used in model.fit().
 
@@ -135,26 +192,36 @@ class NetworkManager:
 
         x_train, y_train, x_val, y_val = samples_fold
 
-        if use_data_augmentation:
-            train_datagen = ImageDataGenerator(horizontal_flip=True)
-            validation_datagen = ImageDataGenerator(horizontal_flip=True)
-        else:
-            train_datagen = ImageDataGenerator()
-            validation_datagen = ImageDataGenerator()
+        # TODO: legacy, ImageDataGenerator is very slow when multiple transformations are performed, instead are handled nicely in both CPU
+        #  and GPU with the Keras model. On horizontal flip only it is faster, but terribly slower on the rest.
+        #  Left here for eventual further testing.
+        # if self.use_data_augmentation:
+        #     train_datagen = ImageDataGenerator(
+        #         horizontal_flip=True,
+        #         width_shift_range=4,
+        #         height_shift_range=4
+        #     )
+        # else:
+        #     train_datagen = ImageDataGenerator()
+        #
+        # train_datagen.fit(x_train)
+        # validation_datagen = ImageDataGenerator()
+        #
+        # # TODO: generalize for other datasets
+        # cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
+        #                      tf.TensorSpec(shape=(None, self.dataset_classes_count), dtype=tf.float32))
+        # train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
+        #                                                output_signature=cifar10_signature).prefetch(AUTOTUNE)
+        # validation_dataset = tf.data.Dataset.from_generator(validation_datagen.flow, args=(x_val, y_val, self.batch_size),
+        #                                                     output_signature=cifar10_signature).prefetch(AUTOTUNE)
 
-        train_datagen.fit(x_train)
-        validation_datagen.fit(x_val)
+        # create a batched dataset, cached in memory for better performance
+        train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(self.batch_size).cache()
+        validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(self.batch_size).cache().prefetch(AUTOTUNE)
 
-        # TODO: generalize for other datasets
-        cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
-                             tf.TensorSpec(shape=(None, self.dataset_classes_count), dtype=tf.float32))
-        train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
-                                                       output_signature=cifar10_signature)
-        validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, self.batch_size),
-                                                            output_signature=cifar10_signature)
-
-        train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-        validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
+        # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
+        train_dataset = train_dataset.prefetch(AUTOTUNE) if self.augment_on_gpu\
+            else train_dataset.map(lambda x, y: (self.data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
 
         train_batches = np.ceil(len(x_train) / self.batch_size)
         val_batches = np.ceil(len(x_val) / self.batch_size)

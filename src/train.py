@@ -15,10 +15,6 @@ from utils.feature_utils import generate_all_feature_sets, build_feature_names, 
 from utils.func_utils import get_valid_inputs_for_block_size
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, restore_search_space_children
 
-import absl.logging
-absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
-
 
 class Train:
 

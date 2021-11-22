@@ -1,7 +1,7 @@
 import re
 
 import tensorflow as tf
-from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model
+from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model, Sequential
 
 import log_service
 import ops
@@ -31,8 +31,8 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, lr: float, filters: int, weight_norm: float, normal_cells_per_motif: int, motifs: int,
-                 drop_path_prob: int, epochs: int, training_steps_per_epoch: int, concat_only_unused: bool = True):
+    def __init__(self, lr: float, filters: int, weight_norm: float, normal_cells_per_motif: int, motifs: int, drop_path_prob: int,
+                 epochs: int, training_steps_per_epoch: int, concat_only_unused: bool = True, data_augmentation_model: Sequential = None):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
@@ -49,6 +49,9 @@ class ModelGenerator:
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
         self.epochs = epochs
         self.training_steps_per_epoch = training_steps_per_epoch
+
+        # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
+        self.data_augmentation_model = data_augmentation_model
 
         # attributes defined below are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
@@ -156,7 +159,12 @@ class ModelGenerator:
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is set to None to trigger
         # a special case in build_cell (avoids input normalization)
-        cell_inputs = [None, model_input]  # [skip, last]
+        if self.data_augmentation_model is None:
+            cell_inputs = [None, model_input]  # [skip, last]
+        # data augmentation integrated in the model to perform it in GPU, input is therefore the output of the data augmentation model
+        else:
+            data_augmentation = self.data_augmentation_model(model_input)
+            cell_inputs = [None, data_augmentation]  # [skip, last]
 
         # add (M - 1) times N normal cells and a reduction cell
         for motif_index in range(M):
