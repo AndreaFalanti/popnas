@@ -6,7 +6,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics
+from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics, layers, Sequential
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
@@ -15,6 +15,8 @@ from utils.func_utils import create_empty_folder
 from utils.timing_callback import TimingCallback
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
+
+AUTOTUNE = tf.data.AUTOTUNE
 
 
 def create_log_folder(log_path: str):
@@ -29,21 +31,26 @@ def create_log_folder(log_path: str):
 
 def load_dataset(dataset):
     if dataset == "cifar10":
-        (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar10.load_data()
-        y_train_init = to_categorical(y_train_init, 10)
-        y_test_init = to_categorical(y_test_init, 10)
+        (x_train, y_train), (x_test, y_test) = datasets.cifar10.load_data()
+        classes_count = 10
     elif dataset == "cifar100":
-        (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar100.load_data()
-        y_train_init = to_categorical(y_train_init, 100)
-        y_test_init = to_categorical(y_test_init, 100)
+        (x_train, y_train), (x_test, y_test) = datasets.cifar100.load_data()
+        classes_count = 100
     # TODO: untested legacy code, not sure this is still working
     else:
         spec = importlib.util.spec_from_file_location("dataset", dataset)
         dataset = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(dataset)
-        (x_train_init, y_train_init), (x_test_init, y_test_init) = dataset.load_data()
+        (x_train, y_train), (x_test, y_test) = dataset.load_data()
+        classes_count = None
 
-    return (x_train_init, y_train_init), (x_test_init, y_test_init)
+    # preprocessing step
+    x_train = x_train.astype('float32') / 255.
+    x_test = x_test.astype('float32') / 255.
+    y_train = to_categorical(y_train, classes_count)
+    y_test = to_categorical(y_test, classes_count)
+
+    return (x_train, y_train), (x_test, y_test)
 
 
 def apply_data_augmentation():
@@ -70,17 +77,19 @@ def generate_dataset(batch_size: int):
     (x_train_init, y_train_init), _ = load_dataset('cifar10')
     x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, train_size=0.9, shuffle=True, stratify=y_train_init)
 
-    train_datagen, validation_datagen = apply_data_augmentation()
-    train_datagen.fit(x_train)
-    validation_datagen.fit(x_val)
+    data_augmentation = Sequential([
+        layers.experimental.preprocessing.RandomFlip('horizontal'),
+        layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
+        layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
+        layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
+    ], name='data_augmentation')
 
-    cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
-                         tf.TensorSpec(shape=(None, 10), dtype=tf.float32))
-    train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, batch_size), output_signature=cifar10_signature)
-    validation_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_val, y_val, batch_size), output_signature=cifar10_signature)
+    # create a batched dataset, cached in memory for better performance
+    train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(batch_size).cache()
+    validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size).cache().prefetch(AUTOTUNE)
 
-    train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-    validation_dataset = validation_dataset.prefetch(tf.data.AUTOTUNE)
+    # perform data augmentation
+    train_dataset = train_dataset.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
 
     train_batches = np.ceil(len(x_train) / batch_size)
     val_batches = np.ceil(len(x_val) / batch_size)
@@ -98,7 +107,7 @@ def define_callbacks() -> 'list[callbacks.Callback]':
     # Save best weights
     ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_vacc{val_accuracy:.4f}.ckpt'
     ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
-                                              save_weights_only=True, save_best_only=False, monitor='val_accuracy', mode='max')
+                                              save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max')
     # By default shows losses and metrics for both training and validation
     tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=1)
 
