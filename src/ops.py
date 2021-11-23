@@ -293,12 +293,12 @@ class ScheduledDropPath(Layer):
 
             binary_tensors[mask_random_index] = tf.add(binary_tensors[mask_random_index], ensure_path_tensor)
 
-            # keep_prob_inv = tf.cast(1.0 / keep_prob, dtype=input_dtype)
+            keep_prob_inv = tf.cast(1.0 / keep_prob, dtype=input_dtype)
             self.current_step.assign_add(delta=1)
 
             output_tensors = []
             for i in range(len(inputs)):
-                output_tensors.append(tf.multiply(inputs[i], binary_tensors[i]))
+                output_tensors.append(tf.multiply(tf.multiply(inputs[i], keep_prob_inv), binary_tensors[i]))
 
             # return inputs * keep_prob_inv * binary_tensor
             return output_tensors
