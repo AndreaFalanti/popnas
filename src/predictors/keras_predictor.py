@@ -20,8 +20,11 @@ class KerasPredictor(Predictor):
                  use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         super().__init__(logger, log_folder, name, override_logs)
 
+        self.hp_config = self._get_default_hp_config()
+        if hp_config is not None:
+            self.hp_config.update(hp_config)
+
         self.y_col = y_col
-        self.hp_config = self._get_default_hp_config() if hp_config is None else self._get_default_hp_config().update(hp_config)
         self.use_previous_data = use_previous_data
         self.save_weights = save_weights
 

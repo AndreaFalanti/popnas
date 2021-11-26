@@ -6,6 +6,7 @@ from tensorflow.keras import layers, regularizers, Model
 from encoder import SearchSpace
 from keras_predictor import KerasPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
+from utils.func_utils import alternative_dict_to_string
 
 
 class GRUPredictor(KerasPredictor):
@@ -14,7 +15,7 @@ class GRUPredictor(KerasPredictor):
                  use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         # generate a relevant name if not set
         if name is None:
-            name = f'GRU_{"default" if hp_config is None else hp_config}_{"tune" if hp_tuning else "manual"}'
+            name = f'GRU_{"default" if hp_config is None else alternative_dict_to_string(hp_config)}_{"tune" if hp_tuning else "manual"}'
 
         super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, use_previous_data, save_weights, hp_config, hp_tuning)
 
