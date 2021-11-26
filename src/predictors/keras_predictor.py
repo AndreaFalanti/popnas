@@ -4,12 +4,11 @@ from logging import Logger
 from typing import Union, Any
 
 import keras
+import keras_tuner as kt
 import pandas as pd
 import tensorflow as tf
 
 from predictors import Predictor
-from ray import tune
-from ray.tune.integration.keras import TuneReportCallback
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 from utils.func_utils import parse_cell_structures
@@ -22,8 +21,7 @@ class KerasPredictor(Predictor):
         super().__init__(logger, log_folder, name, override_logs)
 
         self.y_col = y_col
-        default_config = self._get_default_hp_search_space() if hp_auto_tuning else self._get_default_hp_config()
-        self.hp_config = default_config if hp_config is None else default_config.update(hp_config)
+        self.hp_config = self._get_default_hp_config() if hp_config is None else self._get_default_hp_config().update(hp_config)
         self.use_previous_data = use_previous_data
         self.save_weights = save_weights
 
@@ -56,11 +54,16 @@ class KerasPredictor(Predictor):
         }
 
     @abstractmethod
-    def _get_default_hp_search_space(self) -> 'dict[str, Any]':
-        return {
-            'epochs': 20,
-            'lr': tune.uniform(0.01, 0.15)
-        }
+    def _get_hp_search_space(self) -> kt.HyperParameters:
+        '''
+        Returns a dictionary for sampling each hyperparameter search space.
+        Note that keras-tuner HyperParameters class can be treated as a dictionary.
+        '''
+        hp = kt.HyperParameters()
+        hp.Fixed('epochs', 20)
+        hp.Float('lr', 0.01, 0.15, sampling='linear')
+
+        return hp
 
     @abstractmethod
     def _build_model(self, config: dict) -> keras.Model:
@@ -95,37 +98,16 @@ class KerasPredictor(Predictor):
     def _get_callbacks(self) -> 'list[callbacks.Callback]':
         return [
             callbacks.TensorBoard(log_dir=self.log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
-            callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
+            callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)
         ]
 
-    def _run_training_session(self, cells: list, rewards: list, use_data_augmentation: bool, validation_split: bool):
-        # create the dataset using also previous data, if flag is set
-        if self.use_previous_data:
-            self.children_history.extend(cells)
-            self.score_history.extend(rewards)
+    # kt.HyperParameters is basically a dictionary and can be treated as such
+    def _compile_model(self, config: Union[kt.HyperParameters, dict]):
+        loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
 
-            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history, use_data_augmentation, validation_split)
-        # use only current data
-        else:
-            train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation, validation_split)
-
-        def run_experiment(config: dict):
-            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
-            train_callbacks = self._get_callbacks()
-            # if a validation set is present, it means Tune is performing the hp search. Add the callback.
-            if validation_split:
-                train_callbacks.append(TuneReportCallback())
-
-            self.model = self._build_model(config)
-            self.model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
-
-            hist = self.model.fit(x=train_ds,
-                                  epochs=self.hp_config['epochs'],
-                                  validation_data=val_ds,
-                                  callbacks=train_callbacks)
-            self._logger.info("losses: %s", rstr(hist.history['loss']))
-
-        return run_experiment
+        model = self._build_model(config)
+        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+        return model
 
     def _get_max_b(self, df: pd.DataFrame):
         return df['# blocks'].max()
@@ -149,22 +131,45 @@ class KerasPredictor(Predictor):
             raise TypeError('NN supports only samples, conversion from file is a TODO...')
 
         cells, rewards = zip(*dataset)
+        actual_b = len(cells[0])
+        # create the dataset using also previous data, if flag is set
+        if self.use_previous_data:
+            self.children_history.extend(cells)
+            self.score_history.extend(rewards)
+
+            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history,
+                                                      use_data_augmentation, validation_split=self.hp_auto_tuning)
+        # use only current data
+        else:
+            train_ds, val_ds = self._build_tf_dataset(cells, rewards,
+                                                      use_data_augmentation, validation_split=self.hp_auto_tuning)
+
+        train_callbacks = self._get_callbacks()
 
         if self.hp_auto_tuning:
-            tune_schedule = tune.schedulers.AsyncHyperBandScheduler()
-            # resources_dict = {
-            #     'cpu': 0,
-            #     'gpu': 1
-            # }
-            analysis = tune.run(self._run_training_session(cells, rewards, use_data_augmentation, validation_split=True),
-                                metric='val_loss', mode='min', num_samples=10, scheduler=tune_schedule, config=self.hp_config,
-                                local_dir=os.path.join(self.log_folder, 'ray'))
-            self._logger.info('Best hyperparameters found: %s', rstr(analysis.best_config))
+            tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)]
+            tuner = kt.Hyperband(self._compile_model, objective='val_loss', hyperparameters=self._get_hp_search_space(),
+                                 max_epochs=20,
+                                 directory=os.path.join(self.log_folder, 'keras-tuner'), project_name=f'B{actual_b}')
+            tuner.search(x=train_ds,
+                         epochs=self.hp_config['epochs'],
+                         validation_data=val_ds,
+                         callbacks=tuner_callbacks)
+            best_hp = tuner.get_best_hyperparameters()[0].values
+            self._logger.info('Best hyperparameters found: %s', rstr(best_hp))
 
-            # TODO: train with all samples the best model
-            self._run_training_session(cells, rewards, use_data_augmentation, validation_split=False)(analysis.best_config)
+            # train the best model with all samples
+            whole_ds = train_ds.concatenate(val_ds)
+
+            self.model = self._compile_model(best_hp)
+            self.model.fit(x=whole_ds,
+                           epochs=self.hp_config['epochs'],
+                           callbacks=train_callbacks)
         else:
-            self._run_training_session(cells, rewards, use_data_augmentation, validation_split=False)(self.hp_config)
+            self.model = self._compile_model(self.hp_config)
+            self.model.fit(x=train_ds,
+                           epochs=self.hp_config['epochs'],
+                           callbacks=train_callbacks)
 
         plot_model(self.model, to_file=os.path.join(self.log_folder, 'model.png'), show_shapes=True, show_layer_names=True)
 

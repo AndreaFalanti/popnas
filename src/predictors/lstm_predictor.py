@@ -1,6 +1,6 @@
 from logging import Logger
 
-from ray import tune
+import keras_tuner as kt
 from tensorflow.keras import layers, regularizers, Model
 
 from encoder import SearchSpace
@@ -25,21 +25,25 @@ class LSTMPredictor(KerasPredictor):
             'epochs': 20,
             'lr': 0.01,
             'wr': 1e-5,
+            'er': 1e-5,
             'cells': 48,
             'embedding_dim': 10
         }
 
-    def _get_default_hp_search_space(self):
-        return {
-            'epochs': 20,
-            'lr': tune.loguniform(0.01, 0.15),
-            'wr': tune.uniform(1e-6, 1e-4),
-            'cells': tune.randint(20, 100),
-            'embedding_dim': tune.randint(10, 100)
-        }
+    def _get_hp_search_space(self):
+        hp = kt.HyperParameters()
+        hp.Fixed('epochs', 20)
+        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp.Float('wr', 1e-7, 1e-4, sampling='log')
+        hp.Float('er', 1e-7, 1e-4, sampling='log')
+        hp.Int('cells', 20, 100, sampling='linear')
+        hp.Int('embedding_dim', 10, 100, sampling='linear')
+
+        return hp
 
     def _build_model(self, config: dict):
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+        embedding_reg = regularizers.l2(config['er']) if config['er'] > 0 else None
 
         # two inputs: one tensor for cell inputs, one for cell operators
         inputs = layers.Input(shape=(self.search_space.B, 2))
@@ -47,9 +51,9 @@ class LSTMPredictor(KerasPredictor):
 
         # input dim is the max integer value present in the embedding + 1.
         inputs_embed = layers.Embedding(input_dim=self.search_space.inputs_embedding_max, output_dim=config['embedding_dim'],
-                                        embeddings_regularizer=weight_reg, mask_zero=True)(inputs)
+                                        embeddings_regularizer=embedding_reg, mask_zero=True)(inputs)
         ops_embed = layers.Embedding(input_dim=self.search_space.operator_embedding_max, output_dim=config['embedding_dim'],
-                                     embeddings_regularizer=weight_reg, mask_zero=True)(ops)
+                                     embeddings_regularizer=embedding_reg, mask_zero=True)(ops)
 
         embed = layers.Concatenate()([inputs_embed, ops_embed])
         # pass from 4D (None, B, 2, 2 * embedding_dim) to 3D (None, B, 4 * embedding_dim),

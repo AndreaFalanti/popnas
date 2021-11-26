@@ -1,10 +1,9 @@
-import os
 from logging import Logger
 
-import tensorflow as tf
-from ray import tune
-from tensorflow.keras import layers, regularizers, callbacks, optimizers, losses, metrics, Model
-from tensorflow.keras.utils import plot_model
+
+import keras_tuner as kt
+from tensorflow.keras import layers, regularizers, Model
+
 
 from encoder import SearchSpace
 from keras_predictor import KerasPredictor
@@ -33,15 +32,16 @@ class Conv1D1IPredictor(KerasPredictor):
             'dense_units': 10
         }
 
-    def _get_default_hp_search_space(self):
-        return {
-            'epochs': 20,
-            'lr': tune.loguniform(0.01, 0.15),
-            'wr': tune.uniform(1e-6, 1e-4),
-            'filters': tune.uniform(10, 40),
-            'kernel_size': tune.randint(2, 4),
-            'dense_units': tune.uniform(5, 40)
-        }
+    def _get_hp_search_space(self):
+        hp = kt.HyperParameters()
+        hp.Fixed('epochs', 20)
+        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp.Float('wr', 1e-7, 1e-4, sampling='log')
+        hp.Int('filters', 10, 40, step=2, sampling='uniform')
+        hp.Int('kernel_size', 2, 3, sampling='linear')
+        hp.Int('dense_units', 5, 40, sampling='linear')
+
+        return hp
 
     def _build_model(self, config: dict):
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None

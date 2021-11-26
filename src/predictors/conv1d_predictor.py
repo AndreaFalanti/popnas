@@ -1,6 +1,6 @@
 from logging import Logger
 
-from ray import tune
+import keras_tuner as kt
 from tensorflow.keras import layers, regularizers, Model
 
 from encoder import SearchSpace
@@ -27,18 +27,21 @@ class Conv1DPredictor(KerasPredictor):
             'wr': 1e-5,
             'filters': 12,
             'kernel_size': 2,
+            'kernel_size_block': 2,
             'dense_units': 10
         }
 
-    def _get_default_hp_search_space(self):
-        return {
-            'epochs': 20,
-            'lr': tune.loguniform(0.01, 0.15),
-            'wr': tune.uniform(1e-6, 1e-4),
-            'filters': tune.uniform(10, 40),
-            'kernel_size': tune.randint(2, 4),
-            'dense_units': tune.uniform(5, 40)
-        }
+    def _get_hp_search_space(self):
+        hp = kt.HyperParameters()
+        hp.Fixed('epochs', 20)
+        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp.Float('wr', 1e-7, 1e-4, sampling='log')
+        hp.Int('filters', 10, 40, step=2, sampling='uniform')
+        hp.Int('kernel_size', 2, 3, sampling='linear')
+        hp.Int('kernel_size_block', 2, 3, sampling='linear')
+        hp.Int('dense_units', 5, 40, sampling='linear')
+
+        return hp
 
     def _build_model(self, config: dict):
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
@@ -53,7 +56,8 @@ class Conv1DPredictor(KerasPredictor):
         # indicating [batch_size, serie_length, features(whole block embedding)]
         block_serie = layers.Concatenate()([inputs_temp_conv, ops_temp_conv])
 
-        block_temp_conv = layers.Conv1D(config['filters'], * 2, config['kernel_size'], activation='relu', kernel_regularizer=weight_reg)(block_serie)
+        block_temp_conv = layers.Conv1D(config['filters'] * 2, config['kernel_size_block'],
+                                        activation='relu', kernel_regularizer=weight_reg)(block_serie)
 
         flatten = layers.Flatten()(block_temp_conv)
         sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
