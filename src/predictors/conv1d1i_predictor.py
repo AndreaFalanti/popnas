@@ -13,12 +13,12 @@ from predictors.common.datasets_gen import build_temporal_series_dataset
 class Conv1D1IPredictor(KerasPredictor):
     def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]',
                  logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_auto_tuning: bool = True):
+                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         # generate a relevant name if not set
         if name is None:
-            name = f'Conv1D1I_{"default" if hp_config is None else hp_config}_{"tune" if hp_auto_tuning else "manual"}'
+            name = f'Conv1D1I_{"default" if hp_config is None else hp_config}_{"tune" if hp_tuning else "manual"}'
 
-        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, use_previous_data, save_weights, hp_config, hp_auto_tuning)
+        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, use_previous_data, save_weights, hp_config, hp_tuning)
 
         self.search_space = search_space
 

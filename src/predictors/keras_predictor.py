@@ -17,7 +17,7 @@ from utils.rstr import rstr
 
 class KerasPredictor(Predictor):
     def __init__(self, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_auto_tuning: bool = True):
+                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         super().__init__(logger, log_folder, name, override_logs)
 
         self.y_col = y_col
@@ -25,7 +25,7 @@ class KerasPredictor(Predictor):
         self.use_previous_data = use_previous_data
         self.save_weights = save_weights
 
-        self.hp_auto_tuning = hp_auto_tuning
+        self.hp_tuning = hp_tuning
 
         # used to accumulate samples in a common dataset (a list for each B), if use_previous_data is True
         self.children_history = []
@@ -138,15 +138,15 @@ class KerasPredictor(Predictor):
             self.score_history.extend(rewards)
 
             train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history,
-                                                      use_data_augmentation, validation_split=self.hp_auto_tuning)
+                                                      use_data_augmentation, validation_split=self.hp_tuning)
         # use only current data
         else:
             train_ds, val_ds = self._build_tf_dataset(cells, rewards,
-                                                      use_data_augmentation, validation_split=self.hp_auto_tuning)
+                                                      use_data_augmentation, validation_split=self.hp_tuning)
 
         train_callbacks = self._get_callbacks()
 
-        if self.hp_auto_tuning:
+        if self.hp_tuning:
             tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)]
             tuner = kt.Hyperband(self._compile_model, objective='val_loss', hyperparameters=self._get_hp_search_space(),
                                  max_epochs=20,
