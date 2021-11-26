@@ -1,7 +1,8 @@
+import operator
 import random
 
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
+from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
 
 
 def depth_zero_pad_closure(desired_depth, op_layer):
@@ -79,10 +80,10 @@ class Identity(Layer):
         return config
 
 
-class SeperableConvolution(Layer):
+class SeparableConvolution(Layer):
     def __init__(self, filters, kernel, strides, weight_norm=None, name='dconv', **kwargs):
         '''
-        Constructs a Seperable Convolution - Batch Normalization - Relu block.
+        Constructs a Separable Convolution - Batch Normalization - Relu block.
         '''
         super().__init__(name=name, **kwargs)
         self.filters = filters
@@ -111,6 +112,7 @@ class SeperableConvolution(Layer):
         return config
 
 
+# TODO: remove duplication between layers using (single op - bn - activation) by implementing an abstract Layer subclass
 class Convolution(Layer):
     def __init__(self, filters, kernel, strides, weight_norm=None, name='conv', **kwargs):
         '''
@@ -129,6 +131,45 @@ class Convolution(Layer):
     def call(self, inputs, training=None, mask=None):
         x = self.conv(inputs)
         x = self.bn(x, training=training)
+        return tf.nn.relu(x)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'filters': self.filters,
+            'kernel': self.kernel,
+            'strides': self.strides,
+            'weight_norm': self.weight_norm
+        })
+        return config
+
+
+class TransposeConvolution(Layer):
+    def __init__(self, filters, kernel, strides, weight_norm=None, name='tconv', **kwargs):
+        '''
+        Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
+        '''
+        super().__init__(name=name, **kwargs)
+        self.filters = filters
+        self.kernel = kernel
+        self.strides = strides
+        self.weight_norm = weight_norm
+
+        transpose_stride = (2, 2)
+        conv_strides = tuple(map(operator.mul, transpose_stride, strides))
+
+        self.transposeConv = Conv2DTranspose(filters, kernel, transpose_stride, padding='same',
+                                             kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
+        self.conv = Conv2D(filters, kernel, conv_strides, padding='same', kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
+        self.bn = BatchNormalization()
+        self.bn2 = BatchNormalization()
+
+    def call(self, inputs, training=None, mask=None):
+        x = self.transposeConv(inputs)
+        x = self.bn(x, training=training)
+        x = tf.nn.relu(x)
+        x = self.conv(x)
+        x = self.bn2(x, training=training)
         return tf.nn.relu(x)
 
     def get_config(self):
@@ -251,8 +292,8 @@ class ScheduledDropPath(Layer):
     def __init__(self, keep_probability: float, cell_ratio: float, total_training_steps: int, name='scheduled_drop_path', **kwargs):
         super().__init__(name=name, **kwargs)
         self.keep_probability = keep_probability
-        self.cell_ratio = cell_ratio    # (self._cell_num + 1) / float(self._total_num_cells)
-        self.total_training_steps = total_training_steps    # number of times weights are updated (batches_per_epoch * epochs)
+        self.cell_ratio = cell_ratio  # (self._cell_num + 1) / float(self._total_num_cells)
+        self.total_training_steps = total_training_steps  # number of times weights are updated (batches_per_epoch * epochs)
         self.current_step = tf.Variable(0, trainable=False, dtype=tf.float32)
 
     # def build(self, input_shape):

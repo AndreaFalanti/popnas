@@ -76,6 +76,7 @@ class ModelGenerator:
         '''
         return {'conv': re.compile(r'(\d+)x(\d+) conv'),
                 'dconv': re.compile(r'(\d+)x(\d+) dconv'),
+                'tconv': re.compile(r'(\d+)x(\d+) tconv'),
                 'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
                 'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
 
@@ -351,7 +352,15 @@ class ModelGenerator:
         match = self.op_regexes['dconv'].match(operator)  # type: re.Match
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.SeperableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
+            x = ops.SeparableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
+                                         name=model_name, weight_norm=self.weight_norm)
+            return x
+
+        # check for transpose conv
+        match = self.op_regexes['tconv'].match(operator)  # type: re.Match
+        if match:
+            model_name = f'{match.group(1)}x{match.group(2)}_tconv_c{self.cell_index}b{self.block_index}{tag}'
+            x = ops.TransposeConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
                                          name=model_name, weight_norm=self.weight_norm)
             return x
 
