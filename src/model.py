@@ -31,7 +31,7 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, lr: float, filters: int, weight_norm: float, normal_cells_per_motif: int, motifs: int, drop_path_prob: int,
+    def __init__(self, lr: float, filters: int, weight_reg: float, normal_cells_per_motif: int, motifs: int, drop_path_prob: int,
                  epochs: int, training_steps_per_epoch: int, concat_only_unused: bool = True, data_augmentation_model: Sequential = None):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
@@ -43,7 +43,7 @@ class ModelGenerator:
         self.normal_cells_per_motif = normal_cells_per_motif
         self.total_cells = motifs * (normal_cells_per_motif + 1) - 1
 
-        self.weight_norm = regularizers.l2(weight_norm) if weight_norm is not None else None
+        self.weight_reg = regularizers.l2(weight_reg) if weight_reg is not None else None
         self.drop_path_keep_prob = 1.0 - drop_path_prob
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
@@ -185,7 +185,7 @@ class ModelGenerator:
 
         gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
         # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
-        output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_norm)(gap)  # only logits
+        output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_reg)(gap)  # only logits
 
         return Model(inputs=model_input, outputs=output), partitions_dict
 
@@ -340,7 +340,7 @@ class ModelGenerator:
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2):
                 model_name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, name=model_name, weight_norm=self.weight_norm)
+                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, name=model_name, weight_reg=self.weight_reg)
                 return x
             else:
                 # else just submits a linear layer if shapes match
@@ -353,7 +353,7 @@ class ModelGenerator:
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.SeparableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_norm=self.weight_norm)
+                                         name=model_name, weight_reg=self.weight_reg)
             return x
 
         # check for transpose conv
@@ -361,7 +361,7 @@ class ModelGenerator:
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_tconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.TransposeConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_norm=self.weight_norm)
+                                         name=model_name, weight_reg=self.weight_reg)
             return x
 
         # check for stacked conv operation
@@ -372,7 +372,7 @@ class ModelGenerator:
             s = [strides, (1, 1)]
 
             model_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.StackedConvolution(f, k, s, name=model_name, weight_norm=self.weight_norm)
+            x = ops.StackedConvolution(f, k, s, name=model_name, weight_reg=self.weight_reg)
             return x
 
         # check for standard conv
@@ -380,7 +380,7 @@ class ModelGenerator:
         if match:
             model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                name=model_name, weight_norm=self.weight_norm)
+                                name=model_name, weight_reg=self.weight_reg)
             return x
 
         # check for pooling
@@ -390,7 +390,7 @@ class ModelGenerator:
             pool_type = match.group(3)
 
             model_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_norm=self.weight_norm) if adapt_depth \
+            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_reg=self.weight_reg) if adapt_depth \
                 else ops.Pooling(pool_type, size, strides, name=model_name)
 
             return x

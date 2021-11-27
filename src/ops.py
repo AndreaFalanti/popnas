@@ -81,7 +81,7 @@ class Identity(Layer):
 
 
 class SeparableConvolution(Layer):
-    def __init__(self, filters, kernel, strides, weight_norm=None, name='dconv', **kwargs):
+    def __init__(self, filters, kernel, strides, weight_reg=None, name='dconv', **kwargs):
         '''
         Constructs a Separable Convolution - Batch Normalization - Relu block.
         '''
@@ -89,11 +89,11 @@ class SeparableConvolution(Layer):
         self.filters = filters
         self.kernel = kernel
         self.strides = strides
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
 
         self.conv = SeparableConv2D(filters, kernel, strides=strides, padding='same',
                                     depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
-                                    depthwise_regularizer=weight_norm, pointwise_regularizer=weight_norm)
+                                    depthwise_regularizer=weight_reg, pointwise_regularizer=weight_reg)
         self.bn = BatchNormalization()
 
     def call(self, inputs, training=None, mask=None):
@@ -107,14 +107,14 @@ class SeparableConvolution(Layer):
             'filters': self.filters,
             'kernel': self.kernel,
             'strides': self.strides,
-            'weight_norm': self.weight_norm
+            'weight_reg': self.weight_reg
         })
         return config
 
 
 # TODO: remove duplication between layers using (single op - bn - activation) by implementing an abstract Layer subclass
 class Convolution(Layer):
-    def __init__(self, filters, kernel, strides, weight_norm=None, name='conv', **kwargs):
+    def __init__(self, filters, kernel, strides, weight_reg=None, name='conv', **kwargs):
         '''
         Constructs a Spatial Convolution - Batch Normalization - Relu block.
         '''
@@ -122,10 +122,10 @@ class Convolution(Layer):
         self.filters = filters
         self.kernel = kernel
         self.strides = strides
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
 
         self.conv = Conv2D(filters, kernel, strides=strides, padding='same',
-                           kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
+                           kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
         self.bn = BatchNormalization()
 
     def call(self, inputs, training=None, mask=None):
@@ -139,13 +139,13 @@ class Convolution(Layer):
             'filters': self.filters,
             'kernel': self.kernel,
             'strides': self.strides,
-            'weight_norm': self.weight_norm
+            'weight_reg': self.weight_reg
         })
         return config
 
 
 class TransposeConvolution(Layer):
-    def __init__(self, filters, kernel, strides, weight_norm=None, name='tconv', **kwargs):
+    def __init__(self, filters, kernel, strides, weight_reg=None, name='tconv', **kwargs):
         '''
         Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
         '''
@@ -153,14 +153,14 @@ class TransposeConvolution(Layer):
         self.filters = filters
         self.kernel = kernel
         self.strides = strides
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
 
         transpose_stride = (2, 2)
         conv_strides = tuple(map(operator.mul, transpose_stride, strides))
 
         self.transposeConv = Conv2DTranspose(filters, kernel, transpose_stride, padding='same',
-                                             kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
-        self.conv = Conv2D(filters, kernel, conv_strides, padding='same', kernel_initializer='he_uniform', kernel_regularizer=weight_norm)
+                                             kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+        self.conv = Conv2D(filters, kernel, conv_strides, padding='same', kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
         self.bn = BatchNormalization()
         self.bn2 = BatchNormalization()
 
@@ -178,13 +178,13 @@ class TransposeConvolution(Layer):
             'filters': self.filters,
             'kernel': self.kernel,
             'strides': self.strides,
-            'weight_norm': self.weight_norm
+            'weight_reg': self.weight_reg
         })
         return config
 
 
 class StackedConvolution(Layer):
-    def __init__(self, filter_list, kernel_list, stride_list, weight_norm=None, name='stack_conv', **kwargs):
+    def __init__(self, filter_list, kernel_list, stride_list, weight_reg=None, name='stack_conv', **kwargs):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
@@ -192,13 +192,13 @@ class StackedConvolution(Layer):
         self.filter_list = filter_list
         self.kernel_list = kernel_list
         self.stride_list = stride_list
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
 
         assert len(filter_list) == len(kernel_list) and len(kernel_list) == len(stride_list), "List lengths must match"
 
         self.convs = []
         for (f, k, s) in zip(filter_list, kernel_list, stride_list):
-            conv = Convolution(f, k, s, weight_norm=weight_norm)
+            conv = Convolution(f, k, s, weight_reg=weight_reg)
             self.convs.append(conv)
 
     def call(self, inputs, training=None, mask=None):
@@ -215,7 +215,7 @@ class StackedConvolution(Layer):
             'filter_list': self.filter_list,
             'kernel_list': self.kernel_list,
             'stride_list': self.stride_list,
-            'weight_norm': self.weight_norm
+            'weight_reg': self.weight_reg
         })
         return config
 
@@ -249,7 +249,7 @@ class Pooling(Layer):
 
 
 class PoolingConv(Layer):
-    def __init__(self, filters, pool_type, size, strides, weight_norm=None, name='pool_conv', **kwargs):
+    def __init__(self, filters, pool_type, size, strides, weight_reg=None, name='pool_conv', **kwargs):
         '''
         Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
         to adapt the output depth to filters size.
@@ -259,10 +259,10 @@ class PoolingConv(Layer):
         self.pool_type = pool_type
         self.size = size
         self.strides = strides
-        self.weight_norm = weight_norm
+        self.weight_reg = weight_reg
 
         self.pool = Pooling(pool_type, size, strides)
-        self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_norm=weight_norm)
+        self.pointwise_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_reg=weight_reg)
 
     def call(self, inputs, training=None, mask=None):
         output = self.pool(inputs)
@@ -275,7 +275,7 @@ class PoolingConv(Layer):
             'pool_type': self.pool_type,
             'size': self.size,
             'strides': self.strides,
-            'weight_norm': self.weight_norm
+            'weight_reg': self.weight_reg
         })
         return config
 
