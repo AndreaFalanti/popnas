@@ -47,12 +47,8 @@ def main():
     nn_y_col = 'best val accuracy'
     nn_y_domain = (0, 1)
 
-    new_catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_acc.csv')
-    new_training_acc_csv_path = os.path.join(csv_path, 'new_training_acc.csv')
-
     # compute dataset correlation
-    generate_dataset_correlation_heatmap(new_training_acc_csv_path, log_path)
-    generate_dataset_correlation_heatmap(training_acc_csv_path, log_path, save_name='dataset_corr_heatmap_old.png')
+    generate_dataset_correlation_heatmap(training_acc_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
     # TODO: get these info from file from keeping consistency with choices of run tested.
@@ -66,20 +62,14 @@ def main():
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
-        #               lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6),
-        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
-        #              lr=0.002, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        # CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, name='CatBoost (new features)'),
-        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-5),
-        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.002, weight_reg=1e-6),
-        Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, epochs=25, lr=0.004, weight_reg=1e-6, kernel_size=3),
+        LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
-        dataset_path = nn_training_data_path if isinstance(p, NNPredictor) else \
-            (new_training_acc_csv_path if isinstance(p, CatBoostPredictor) else training_acc_csv_path)
+        dataset_path = nn_training_data_path if isinstance(p, KerasPredictor) else training_acc_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
         p.perform_prediction_test(dataset_path, 'accuracy')

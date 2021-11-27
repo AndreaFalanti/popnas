@@ -1,74 +1,71 @@
-import os
 from logging import Logger
 
-import tensorflow as tf
-from tensorflow.keras import layers, regularizers, callbacks, optimizers, losses, metrics, Model
-from tensorflow.keras.utils import plot_model
+import keras_tuner as kt
+from tensorflow.keras import layers, regularizers, Model
 
 from encoder import SearchSpace
-from nn_predictor import NNPredictor
+from keras_predictor import KerasPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
+from utils.func_utils import alternative_dict_to_string
 
 
-class Conv1DPredictor(NNPredictor):
-    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None,
-                 override_logs: bool = True, epochs: int = 15, lr: float = 0.002, weight_reg: float = 1e-5, filters: int = 12, kernel_size: int = 2,
-                 use_previous_data: bool = True, save_weights: bool = False):
+class Conv1DPredictor(KerasPredictor):
+    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]',
+                 logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
+                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         # generate a relevant name if not set
         if name is None:
-            name = f'Conv1D_kernel({kernel_size})_f({filters})_wr({weight_reg})_lr({lr})_e({epochs})_prev({use_previous_data})'
-        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs,
-                         epochs=epochs, use_previous_data=use_previous_data, save_weights=save_weights)
+            name = f'Conv1D_{"default" if hp_config is None else alternative_dict_to_string(hp_config)}_{"tune" if hp_tuning else "manual"}'
+
+        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, use_previous_data, save_weights, hp_config, hp_tuning)
 
         self.search_space = search_space
-        self.kernel_size = kernel_size
-        self.filters = filters
 
-        self.loss = losses.MeanSquaredError()
-        self.train_metrics = [metrics.MeanAbsolutePercentageError()]
-        self.optimizer = optimizers.Adam(learning_rate=lr)
-        self.weight_reg = regularizers.l2(weight_reg) if weight_reg > 0 else None
-        self.callbacks = [
-            callbacks.TensorBoard(log_dir=self.log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
-            callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
-        ]
+    def _get_default_hp_config(self):
+        return {
+            'epochs': 20,
+            'lr': 0.01,
+            'wr': 1e-5,
+            'filters': 12,
+            'kernel_size': 2,
+            'kernel_size_block': 2,
+            'dense_units': 10
+        }
 
-        self.model = self._build_model()
-        self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=self.train_metrics)
+    def _get_hp_search_space(self):
+        hp = kt.HyperParameters()
+        hp.Fixed('epochs', 20)
+        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp.Float('wr', 1e-7, 1e-4, sampling='log')
+        hp.Int('filters', 10, 40, step=2, sampling='uniform')
+        hp.Int('kernel_size', 2, 3, sampling='linear')
+        hp.Int('kernel_size_block', 2, 3, sampling='linear')
+        hp.Int('dense_units', 5, 40, sampling='linear')
 
-        plot_model(self.model, to_file=os.path.join(self.log_folder, 'model.png'), show_shapes=True, show_layer_names=True)
+        return hp
 
-    def _build_model(self):
-        # two inputs: one tensor for cell inputs, one for cell operators (both of 1-dim)
-        # since the length varies, None is given as dimension
+    def _build_model(self, config: dict):
+        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+
+        # two inputs: one tensor for cell inputs, one for cell operators
         inputs = layers.Input(shape=(self.search_space.B, 2))
         ops = layers.Input(shape=(self.search_space.B, 2))
 
-        inputs_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(inputs)
-        ops_temp_conv = layers.Conv1D(self.filters, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(ops)
+        inputs_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg)(inputs)
+        ops_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg)(ops)
 
         # indicating [batch_size, serie_length, features(whole block embedding)]
         block_serie = layers.Concatenate()([inputs_temp_conv, ops_temp_conv])
 
-        block_temp_conv = layers.Conv1D(self.filters * 2, self.kernel_size, activation='relu', kernel_regularizer=self.weight_reg)(block_serie)
+        block_temp_conv = layers.Conv1D(config['filters'] * 2, config['kernel_size_block'],
+                                        activation='relu', kernel_regularizer=weight_reg)(block_serie)
 
         flatten = layers.Flatten()(block_temp_conv)
-        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=self.weight_reg)(flatten)
+        sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
+        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=weight_reg)(sig_dense)
 
         return Model(inputs=(inputs, ops), outputs=score)
 
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, use_data_augmentation: bool = True):
-        '''
-        Build a dataset to be used in the RNN controller.
-
-        Args:
-            cell_specs (list): List of lists of inputs and operators, specification of cells in value form (no encoding).
-            rewards (list[float], optional): List of rewards (y labels). Defaults to None, provide it for building
-                a dataset for training purposes.
-
-        Returns:
-            tf.data.Dataset: [description]
-        '''
-        # data augmentation is used only in training (rewards are given), if the respective flag is set.
-        # if data augment is performed, the cell_specs and rewards parameters are replaced with their augmented counterpart.
-        return build_temporal_series_dataset_2i(self.search_space, cell_specs, rewards, use_data_augmentation)
+    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None,
+                          use_data_augmentation: bool = True, validation_split: bool = True):
+        return build_temporal_series_dataset_2i(self.search_space, cell_specs, rewards, validation_split, use_data_augmentation)

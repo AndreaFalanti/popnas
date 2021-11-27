@@ -229,9 +229,7 @@ class Train:
 
         # accuracy predictors to be used
         acc_lstm = LSTMPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
-                                 lr=self.lstm_config['learning_rate'], weight_reg=self.lstm_config['weight_reg'],
-                                 embedding_dim=self.lstm_config['embedding_dim'], rnn_cells=self.lstm_config['cells'],
-                                 epochs=self.lstm_config['epochs'], save_weights=True)
+                                 save_weights=True, hp_config=self.lstm_config)
 
         # restore NN weights when restoring a previous run
         # TODO: it will be a NOP if checkpoint is not present, but is not very intuitive...

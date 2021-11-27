@@ -48,12 +48,8 @@ def main():
     nn_y_col = 'training time(seconds)'
     nn_y_domain = (0, math.inf)
 
-    new_catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_time.csv')
-    new_training_time_csv_path = os.path.join(csv_path, 'new_training_time.csv')
-
     # compute dataset correlation
-    generate_dataset_correlation_heatmap(new_training_time_csv_path, log_path)
-    generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap_old.png')
+    generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
     # TODO: get these info from file from keeping consistency with choices of run tested.
@@ -67,17 +63,16 @@ def main():
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path, name='aMLLibrary_XGBoost (new features)'),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
-        #               lr=0.01, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, lr=0.005, weight_reg=0, epochs=20),
-        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path,
-        #              epochs=20, lr=0.01, weight_reg=1e-6, embedding_dim=20, rnn_cells=100),
-        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, use_random_search=True),
-        CatBoostPredictor(new_catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU'),
+        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True),
+        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU'),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
-        dataset_path = nn_training_data_path if isinstance(p, NNPredictor) else new_training_time_csv_path
+        dataset_path = nn_training_data_path if isinstance(p, KerasPredictor) else training_time_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
         p.perform_prediction_test(dataset_path, 'time')
