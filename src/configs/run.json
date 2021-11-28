@@ -22,7 +22,14 @@
         "learning_rate": 0.05,
         "filters": 24,
         "weight_reg": null,
-        "drop_path_prob": 0.0
+        "drop_path_prob": 0.0,
+        "cosine_decay_restart": {
+            "enabled": true,
+            "period_in_epochs": 3,
+            "t_mul": 2.0,
+            "m_mul": 1.0,
+            "alpha": 0.0
+        }
     },
     "architecture_parameters": {
         "motifs": 3,

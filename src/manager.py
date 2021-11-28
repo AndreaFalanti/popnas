@@ -91,9 +91,7 @@ class NetworkManager:
         self.__prepare_datasets(x_train_init, y_train_init)
         self._logger.info('Dataset folds built successfully')
 
-        self.model_gen = ModelGenerator(cnn_config['learning_rate'], cnn_config['filters'], cnn_config['weight_reg'],
-                                        arc_config['normal_cells_per_motif'], arc_config['motifs'], cnn_config['drop_path_prob'],
-                                        self.epochs, self.train_batches, arc_config['concat_only_unused_blocks'],
+        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
                                         data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
 
         # DEBUG ONLY
@@ -226,7 +224,7 @@ class NetworkManager:
         train_batches = np.ceil(len(x_train) / self.batch_size)
         val_batches = np.ceil(len(x_val) / self.batch_size)
 
-        return train_dataset, validation_dataset, train_batches, val_batches
+        return train_dataset, validation_dataset, int(train_batches), int(val_batches)
 
     # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
     # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras

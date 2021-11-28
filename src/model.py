@@ -31,23 +31,25 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, lr: float, filters: int, weight_reg: float, normal_cells_per_motif: int, motifs: int, drop_path_prob: int,
-                 epochs: int, training_steps_per_epoch: int, concat_only_unused: bool = True, data_augmentation_model: Sequential = None):
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, data_augmentation_model: Sequential = None):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
-        self.concat_only_unused = concat_only_unused
-        self.lr = lr
-        self.filters = filters
-        self.motifs = motifs
-        self.normal_cells_per_motif = normal_cells_per_motif
-        self.total_cells = motifs * (normal_cells_per_motif + 1) - 1
+        self.concat_only_unused = arc_params['concat_only_unused_blocks']
+        self.lr = cnn_hp['learning_rate']
+        self.filters = cnn_hp['filters']
+        self.motifs = arc_params['motifs']
+        self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
+        self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
 
-        self.weight_reg = regularizers.l2(weight_reg) if weight_reg is not None else None
-        self.drop_path_keep_prob = 1.0 - drop_path_prob
+        weight_reg_factor = cnn_hp['weight_reg']
+        self.weight_reg = regularizers.l2(weight_reg_factor) if weight_reg_factor is not None else None
+        self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
+
+        self.cdr_config = cnn_hp['cosine_decay_restart']   # type: dict
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
-        self.epochs = epochs
+        self.epochs = cnn_hp['epochs']
         self.training_steps_per_epoch = training_steps_per_epoch
 
         # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
@@ -402,7 +404,7 @@ class ModelGenerator:
         Define callbacks used in model training.
 
         Returns:
-            (tf.keras.Callback[]): Keras callbacks
+            (list[callbacks.Callback]): Keras callbacks
         '''
         # By default shows losses and metrics for both training and validation
         tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
@@ -417,9 +419,17 @@ class ModelGenerator:
         metrics = ['accuracy']
 
         # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
-        schedule = optimizers.schedules.CosineDecayRestarts(self.lr, self.training_steps_per_epoch * 3)
+        if self.cdr_config['enabled']:
+            decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
+            schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config['t_mul'],
+                                                                self.cdr_config['m_mul'], self.cdr_config['alpha'])
+        # if cosine decay restart is not enabled, use plain learning rate
+        else:
+            schedule = self.lr
+
         # schedule_2 = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
         # sgdr_optimizer = optimizers.SGD(learning_rate=schedule_2, momentum=0.9)
+
         adam_optimizer = optimizers.Adam(learning_rate=schedule)
 
         return loss, adam_optimizer, metrics
