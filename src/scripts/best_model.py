@@ -1,9 +1,11 @@
 import argparse
 import importlib.util
+import json
 import operator
 import os
 
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics, layers, Sequential
@@ -11,7 +13,9 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
 import log_service
-from utils.func_utils import create_empty_folder
+from model import ModelGenerator
+from utils.func_utils import create_empty_folder, parse_cell_structures
+from utils.rstr import rstr
 from utils.timing_callback import TimingCallback
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
@@ -27,6 +31,23 @@ def create_log_folder(log_path: str):
 
     log_service.set_log_path(model_training_folder_path)
     return model_training_folder_path
+
+
+def get_best_cell_spec(log_folder_path: str):
+    training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
+    df = pd.read_csv(training_results_csv_path)
+    best_acc_row = df.loc[df['best val accuracy'].idxmax()]
+
+    cell_spec = parse_cell_structures([best_acc_row['cell structure']])[0]
+    return cell_spec, best_acc_row['best val accuracy']
+
+
+def load_run_json(log_folder_path: str):
+    json_path = os.path.join(log_folder_path, 'restore', 'run.json')
+    with open(json_path, 'r') as f:
+        run_config = json.load(f)
+
+    return run_config
 
 
 def load_dataset(dataset):
@@ -53,24 +74,25 @@ def load_dataset(dataset):
     return (x_train, y_train), (x_test, y_test)
 
 
-def apply_data_augmentation():
-    # TODO: convert in command line argument or config file
-    use_data_augmentation = True
-
-    # Create training ImageDataGenerator object
-    if use_data_augmentation:
-        train_datagen = ImageDataGenerator(horizontal_flip=True,
-                                           rotation_range=20,
-                                           width_shift_range=4,
-                                           height_shift_range=4,
-                                           zoom_range=0.1,
-                                           rescale=1. / 255)
-    else:
-        train_datagen = ImageDataGenerator()
-
-    validation_datagen = ImageDataGenerator()
-
-    return train_datagen, validation_datagen
+# TODO: legacy code for reference, delete it later
+# def apply_data_augmentation():
+#     # TODO: convert in command line argument or config file
+#     use_data_augmentation = True
+#
+#     # Create training ImageDataGenerator object
+#     if use_data_augmentation:
+#         train_datagen = ImageDataGenerator(horizontal_flip=True,
+#                                            rotation_range=20,
+#                                            width_shift_range=4,
+#                                            height_shift_range=4,
+#                                            zoom_range=0.1,
+#                                            rescale=1. / 255)
+#     else:
+#         train_datagen = ImageDataGenerator()
+#
+#     validation_datagen = ImageDataGenerator()
+#
+#     return train_datagen, validation_datagen
 
 
 def generate_dataset(batch_size: int):
@@ -94,10 +116,10 @@ def generate_dataset(batch_size: int):
     train_batches = np.ceil(len(x_train) / batch_size)
     val_batches = np.ceil(len(x_val) / batch_size)
 
-    return train_dataset, validation_dataset, train_batches, val_batches
+    return train_dataset, validation_dataset, int(train_batches), int(val_batches)
 
 
-def define_callbacks() -> 'list[callbacks.Callback]':
+def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
     '''
     Define callbacks used in model training.
 
@@ -109,40 +131,79 @@ def define_callbacks() -> 'list[callbacks.Callback]':
     ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
                                               save_weights_only=True, save_best_only=True, monitor='val_accuracy', mode='max')
     # By default shows losses and metrics for both training and validation
-    tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=1)
+    tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
 
     es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max')
-    plateau_callback = callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max')
 
-    return [ckpt_callback, tb_callback, es_callback, plateau_callback]
+    # these callbacks are shared between all models
+    train_callbacks = [ckpt_callback, tb_callback, es_callback]
+
+    # if using plain lr, adapt it with reduce learning rate on plateau
+    # NOTE: for unknown reasons, activating plateau callback when cdr is present will also cause an error at the end of the first epoch
+    if not cdr_enabled:
+        train_callbacks.append(callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max'))
+
+    return [ckpt_callback, tb_callback, es_callback]
 
 
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
+    parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     args = parser.parse_args()
 
     save_path = create_log_folder(args.p)
     logger = log_service.get_logger(__name__)
 
-    logger.info('Loading best model from provided folder...')
-    model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
-    model.summary(line_length=140, print_fn=logger.info)
-
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
     train_dataset, validation_dataset, train_batches, val_batches = generate_dataset(batch_size=128)
+    logger.info('Datasets generated successfully')
 
-    # Define training procedure and hyperparameters
-    loss = losses.CategoricalCrossentropy()
-    optimizer = optimizers.Adam(learning_rate=0.01)
-    train_metrics = ['accuracy', metrics.TopKCategoricalAccuracy(k=3)]
+    # load model from checkpoint
+    if args.load:
+        logger.info('Loading best model from provided folder...')
+        model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
 
-    # Compile model (should also reinitialize the weights, providing training from scratch)
-    model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+        # Define training procedure and hyperparameters
+        loss = losses.CategoricalCrossentropy()
+        optimizer = optimizers.Adam(learning_rate=0.01)
+        train_metrics = ['accuracy', metrics.TopKCategoricalAccuracy(k=3)]
+
+        # Compile model (should also reinitialize the weights, providing training from scratch)
+        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+        cdr_enabled = False
+
+        logger.info('Model loaded successfully')
+    else:
+        # find best model found during search and log some relevant info
+        cell_spec, best_acc = get_best_cell_spec(args.p)
+        logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
+        logger.info('Cell specification:')
+        for i, block in enumerate(cell_spec):
+            logger.info("Block %d: %s", i + 1, rstr(block))
+        logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
+        logger.info('*' * 60)
+
+        # reproduce the model from run configuration
+        logger.info('Generating Keras model from best cell specification...')
+        config = load_run_json(args.p)
+        cnn_config = config['cnn_hp']
+        arc_config = config['architecture_parameters']
+        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, data_augmentation_model=None)
+
+        model, _ = model_gen.build_model(cell_spec)
+        loss, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+        train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
+        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+        cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
+
+        logger.info('Model generated successfully')
+
+    model.summary(line_length=140, print_fn=logger.info)
 
     # Define callbacks
-    train_callbacks = define_callbacks()
+    train_callbacks = define_callbacks(cdr_enabled)
     time_cb = TimingCallback()
     train_callbacks.append(time_cb)
 
