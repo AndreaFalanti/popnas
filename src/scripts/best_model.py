@@ -9,7 +9,6 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics, layers, Sequential
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
 import log_service
@@ -74,35 +73,14 @@ def load_dataset(dataset):
     return (x_train, y_train), (x_test, y_test)
 
 
-# TODO: legacy code for reference, delete it later
-# def apply_data_augmentation():
-#     # TODO: convert in command line argument or config file
-#     use_data_augmentation = True
-#
-#     # Create training ImageDataGenerator object
-#     if use_data_augmentation:
-#         train_datagen = ImageDataGenerator(horizontal_flip=True,
-#                                            rotation_range=20,
-#                                            width_shift_range=4,
-#                                            height_shift_range=4,
-#                                            zoom_range=0.1,
-#                                            rescale=1. / 255)
-#     else:
-#         train_datagen = ImageDataGenerator()
-#
-#     validation_datagen = ImageDataGenerator()
-#
-#     return train_datagen, validation_datagen
-
-
 def generate_dataset(batch_size: int):
     (x_train_init, y_train_init), _ = load_dataset('cifar10')
     x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, train_size=0.9, shuffle=True, stratify=y_train_init)
 
     data_augmentation = Sequential([
         layers.experimental.preprocessing.RandomFlip('horizontal'),
-        layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
-        layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
+        # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
+        # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
         layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
     ], name='data_augmentation')
 
@@ -190,6 +168,19 @@ def main():
         config = load_run_json(args.p)
         cnn_config = config['cnn_hp']
         arc_config = config['architecture_parameters']
+
+        # optimize some hyperparameters for final training
+        config['cnn_hp']['weight_reg'] = 1e-6
+        config['cnn_hp']['drop_path_prob'] = 0.2
+
+        config['cnn_hp']['cosine_decay_restart'] = {
+            "enabled": True,
+            "period_in_epochs": 2,
+            "t_mul": 2.0,
+            "m_mul": 0.9,
+            "alpha": 0.0
+        }
+
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, data_augmentation_model=None)
 
         model, _ = model_gen.build_model(cell_spec)
