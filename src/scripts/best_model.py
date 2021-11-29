@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import tensorflow_addons as tfa
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics, layers, Sequential
 from tensorflow.keras.utils import to_categorical
@@ -77,6 +78,10 @@ def generate_dataset(batch_size: int):
     (x_train_init, y_train_init), _ = load_dataset('cifar10')
     x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, train_size=0.9, shuffle=True, stratify=y_train_init)
 
+    # follow similar augmentation techniques used in other papers, which usually are:
+    # - horizontal flip
+    # - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
+    # - whitening (not always used)
     data_augmentation = Sequential([
         layers.experimental.preprocessing.RandomFlip('horizontal'),
         # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
@@ -124,10 +129,28 @@ def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
     return [ckpt_callback, tb_callback, es_callback]
 
 
+def get_experimental_training_configuration(cnn_hp: dict, training_steps_per_epoch: int, weight_reg: float):
+    loss = losses.CategoricalCrossentropy()
+    train_metrics = ['accuracy', metrics.TopKCategoricalAccuracy(k=3)]
+
+    cdr_config = cnn_hp['cosine_decay_restart']
+    decay_period = training_steps_per_epoch * cdr_config['period_in_epochs']
+    lr_schedule = optimizers.schedules.CosineDecayRestarts(cnn_hp['learning_rate'], decay_period, cdr_config['t_mul'],
+                                                           cdr_config['m_mul'], cdr_config['alpha'])
+    wr_schedule = optimizers.schedules.CosineDecayRestarts(weight_reg, decay_period, cdr_config['t_mul'],
+                                                           cdr_config['m_mul'], cdr_config['alpha'])
+
+    # optimizer = optimizers.Adam(learning_rate=schedule)
+    optimizer = tfa.optimizers.AdamW(weight_decay=wr_schedule, learning_rate=lr_schedule)
+
+    return loss, optimizer, train_metrics
+
+
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
+    parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     args = parser.parse_args()
 
     save_path = create_log_folder(args.p)
@@ -150,8 +173,8 @@ def main():
 
         # Compile model (should also reinitialize the weights, providing training from scratch)
         model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
-        cdr_enabled = False
 
+        cdr_enabled = False
         logger.info('Model loaded successfully')
     else:
         # find best model found during search and log some relevant info
@@ -169,26 +192,32 @@ def main():
         cnn_config = config['cnn_hp']
         arc_config = config['architecture_parameters']
 
-        # optimize some hyperparameters for final training
-        config['cnn_hp']['weight_reg'] = 1e-6
-        config['cnn_hp']['drop_path_prob'] = 0.2
+        if not args.same:
+            # optimize some hyperparameters for final training
+            config['cnn_hp']['weight_reg'] = 0
+            # config['cnn_hp']['drop_path_prob'] = 0.2
+            config['cnn_hp']['drop_path_prob'] = 0.0
 
-        config['cnn_hp']['cosine_decay_restart'] = {
-            "enabled": True,
-            "period_in_epochs": 2,
-            "t_mul": 2.0,
-            "m_mul": 0.9,
-            "alpha": 0.0
-        }
+            config['cnn_hp']['cosine_decay_restart'] = {
+                "enabled": True,
+                "period_in_epochs": 2,
+                "t_mul": 2.0,
+                "m_mul": 0.9,
+                "alpha": 0.0
+            }
 
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, data_augmentation_model=None)
-
         model, _ = model_gen.build_model(cell_spec)
-        loss, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-        train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
-        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
-        cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
 
+        if args.same:
+            loss, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+            train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
+        else:
+            loss, optimizer, train_metrics = get_experimental_training_configuration(config['cnn_hp'], train_batches, weight_reg=1e-4)
+
+        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+
+        cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
         logger.info('Model generated successfully')
 
     model.summary(line_length=140, print_fn=logger.info)
@@ -209,7 +238,7 @@ def main():
 
     # hist.history is a dictionary of lists (each metric is a key)
     epoch_index, best_val_accuracy = max(enumerate(hist.history['val_accuracy']), key=operator.itemgetter(1))
-    loss, acc, top3 = hist.history['loss'][epoch_index], hist.history['accuracy'][epoch_index],\
+    loss, acc, top3 = hist.history['loss'][epoch_index], hist.history['accuracy'][epoch_index], \
                       hist.history['top_k_categorical_accuracy'][epoch_index]
     val_loss, top3_val = hist.history['val_loss'][epoch_index], hist.history['val_top_k_categorical_accuracy'][epoch_index]
 
