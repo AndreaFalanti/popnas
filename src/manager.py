@@ -95,7 +95,7 @@ class NetworkManager:
         self.__prepare_datasets(x_train_init, y_train_init)
         self._logger.info('Dataset folds built successfully')
 
-        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
+        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches, output_classes=self.dataset_classes_count,
                                         data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
 
         # DEBUG ONLY

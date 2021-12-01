@@ -71,11 +71,11 @@ def load_dataset(dataset):
     y_train = to_categorical(y_train, classes_count)
     y_test = to_categorical(y_test, classes_count)
 
-    return (x_train, y_train), (x_test, y_test)
+    return (x_train, y_train), (x_test, y_test), classes_count
 
 
 def generate_dataset(batch_size: int):
-    (x_train_init, y_train_init), _ = load_dataset('cifar10')
+    (x_train_init, y_train_init), _, classes_count = load_dataset('cifar10')
     x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, train_size=0.9, shuffle=True, stratify=y_train_init)
 
     # follow similar augmentation techniques used in other papers, which usually are:
@@ -99,7 +99,7 @@ def generate_dataset(batch_size: int):
     train_batches = np.ceil(len(x_train) / batch_size)
     val_batches = np.ceil(len(x_val) / batch_size)
 
-    return train_dataset, validation_dataset, int(train_batches), int(val_batches)
+    return train_dataset, validation_dataset, int(train_batches), int(val_batches), classes_count
 
 
 def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
@@ -158,7 +158,7 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    train_dataset, validation_dataset, train_batches, val_batches = generate_dataset(batch_size=128)
+    train_dataset, validation_dataset, train_batches, val_batches, classes_count = generate_dataset(batch_size=128)
     logger.info('Datasets generated successfully')
 
     # load model from checkpoint
@@ -206,7 +206,7 @@ def main():
                 "alpha": 0.0
             }
 
-        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, data_augmentation_model=None)
+        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, data_augmentation_model=None)
         model, _ = model_gen.build_model(cell_spec)
 
         if args.same:

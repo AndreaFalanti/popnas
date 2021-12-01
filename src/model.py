@@ -31,21 +31,22 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, data_augmentation_model: Sequential = None):
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes: int,
+                 data_augmentation_model: Sequential = None):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
         self.concat_only_unused = arc_params['concat_only_unused_blocks']
-        self.lr = cnn_hp['learning_rate']
-        self.filters = cnn_hp['filters']
         self.motifs = arc_params['motifs']
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+        self.output_classes = output_classes
 
+        self.lr = cnn_hp['learning_rate']
+        self.filters = cnn_hp['filters']
         weight_reg_factor = cnn_hp['weight_reg']
         self.weight_reg = regularizers.l2(weight_reg_factor) if weight_reg_factor is not None else None
         self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
-
         self.cdr_config = cnn_hp['cosine_decay_restart']   # type: dict
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
@@ -186,8 +187,7 @@ class ModelGenerator:
         self.__adjust_partitions(partitions_dict, last_output)
 
         gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
-        # TODO: other datasets have a different number of classes, should be a parameter (10 as constant is bad)
-        output = layers.Dense(10, activation='softmax', name='Softmax', kernel_regularizer=self.weight_reg)(gap)  # only logits
+        output = layers.Dense(self.output_classes, activation='softmax', name='Softmax', kernel_regularizer=self.weight_reg)(gap)
 
         return Model(inputs=model_input, outputs=output), partitions_dict
 
