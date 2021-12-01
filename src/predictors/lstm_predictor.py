@@ -22,21 +22,19 @@ class LSTMPredictor(KerasPredictor):
         self.search_space = search_space
 
     def _get_default_hp_config(self):
-        return {
-            'epochs': 20,
-            'lr': 0.01,
+        return dict(super()._get_default_hp_config(), **{
             'wr': 1e-5,
+            'use_er': False,
             'er': 0,
             'cells': 48,
             'embedding_dim': 10
-        }
+        })
 
     def _get_hp_search_space(self):
-        hp = kt.HyperParameters()
-        hp.Fixed('epochs', 20)
-        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp = super()._get_hp_search_space()
         hp.Float('wr', 1e-7, 1e-4, sampling='log')
-        hp.Float('er', 1e-7, 1e-4, sampling='log')
+        hp.Boolean('use_er')
+        hp.Float('er', 1e-7, 1e-4, sampling='log', parent_name='use_er', parent_values=[True])
         hp.Int('cells', 20, 100, sampling='linear')
         hp.Int('embedding_dim', 10, 100, sampling='linear')
 
@@ -44,7 +42,7 @@ class LSTMPredictor(KerasPredictor):
 
     def _build_model(self, config: dict):
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
-        embedding_reg = regularizers.l2(config['er']) if config['er'] > 0 else None
+        embedding_reg = regularizers.l2(config['er']) if config['use_er'] else None
 
         # two inputs: one tensor for cell inputs, one for cell operators
         inputs = layers.Input(shape=(self.search_space.B, 2))

@@ -52,7 +52,7 @@ class KerasPredictor(Predictor):
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
         return {
-            'epochs': 20,
+            'epochs': 25,
             'lr': 0.01
         }
 
@@ -63,8 +63,8 @@ class KerasPredictor(Predictor):
         Note that keras-tuner HyperParameters class can be treated as a dictionary.
         '''
         hp = kt.HyperParameters()
-        hp.Fixed('epochs', 20)
-        hp.Float('lr', 0.01, 0.15, sampling='linear')
+        hp.Fixed('epochs', 25)
+        hp.Float('lr', 0.002, 0.02, sampling='linear')
 
         return hp
 

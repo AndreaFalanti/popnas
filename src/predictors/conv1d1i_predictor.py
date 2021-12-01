@@ -24,22 +24,18 @@ class Conv1D1IPredictor(KerasPredictor):
         self.search_space = search_space
 
     def _get_default_hp_config(self):
-        return {
-            'epochs': 20,
-            'lr': 0.01,
+        return dict(super()._get_default_hp_config(), **{
             'wr': 1e-5,
             'filters': 12,
             'kernel_size': 2,
             'dense_units': 10
-        }
+        })
 
     def _get_hp_search_space(self):
-        hp = kt.HyperParameters()
-        hp.Fixed('epochs', 20)
-        hp.Float('lr', 0.004, 0.04, sampling='linear')
+        hp = super()._get_hp_search_space()
         hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Int('filters', 10, 40, step=2, sampling='uniform')
-        hp.Int('kernel_size', 2, 3, sampling='linear')
+        hp.Choice('kernel_size', [2, 3])
         hp.Int('dense_units', 5, 40, sampling='linear')
 
         return hp
