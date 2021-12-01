@@ -40,6 +40,7 @@ class ModelGenerator:
         self.motifs = arc_params['motifs']
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+        self.multi_output = arc_params['multi_output']
         self.output_classes = output_classes
 
         self.lr = cnn_hp['learning_rate']
@@ -47,6 +48,7 @@ class ModelGenerator:
         weight_reg_factor = cnn_hp['weight_reg']
         self.weight_reg = regularizers.l2(weight_reg_factor) if weight_reg_factor is not None else None
         self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
+        self.dropout_prob = cnn_hp['softmax_dropout']   # dropout probability on final softmax
         self.cdr_config = cnn_hp['cosine_decay_restart']   # type: dict
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
@@ -66,9 +68,10 @@ class ModelGenerator:
         # for depth adaptation purposes
         self.prev_cell_filters = 0
 
-        # info about the actual cell processed
+        # info about the actual cell processed and current model outputs
         # noinspection PyTypeChecker
         self.cell = None  # type: CellInfo
+        self.output_layers = {}
 
     def __compile_op_regexes(self):
         '''
@@ -120,6 +123,9 @@ class ModelGenerator:
         adapt_depth = filters != self.prev_cell_filters
 
         cell_output = self.__build_cell(filters, stride, inputs, adapt_depth)
+        if self.multi_output:
+            self.__generate_output(cell_output)     # TODO: use dropout also here? maybe scheduled?
+
         self.cell_index += 1
         self.prev_cell_filters = filters
 
@@ -130,8 +136,19 @@ class ModelGenerator:
         partitions_dict['sizes'].append(self.__compute_partition_size(new_inputs))
         return new_inputs
 
+    def __generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0):
+        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.total_cells else ''  # don't add suffix in single output
+        gap = layers.GlobalAveragePooling2D(name=f'GAP{name_suffix}')(input_tensor)
+        if dropout_prob > 0.0:
+            gap = layers.Dropout(dropout_prob)(gap)
+        output = layers.Dense(self.output_classes, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.weight_reg)(gap)
+
+        self.output_layers.update({f'Softmax{name_suffix}': output})
+        return output
+
     def build_model(self, cell_spec: 'list[tuple]'):
         self.cell = CellInfo(cell_spec)
+        self.output_layers = {}
 
         if len(cell_spec) > 0:
             M = self.motifs
@@ -186,10 +203,12 @@ class ModelGenerator:
 
         self.__adjust_partitions(partitions_dict, last_output)
 
-        gap = layers.GlobalAveragePooling2D(name='GAP')(last_output)
-        output = layers.Dense(self.output_classes, activation='softmax', name='Softmax', kernel_regularizer=self.weight_reg)(gap)
-
-        return Model(inputs=model_input, outputs=output), partitions_dict
+        # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
+        if self.multi_output and len(self.output_layers) > 0:
+            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict
+        else:
+            output = self.__generate_output(last_output, self.dropout_prob)
+            return Model(inputs=model_input, outputs=output), partitions_dict
 
     def __build_cell(self, filters, stride, inputs, adapt_depth: bool):
         '''
@@ -415,7 +434,17 @@ class ModelGenerator:
         return [tb_callback]
 
     def define_training_hyperparams_and_metrics(self):
-        loss = losses.CategoricalCrossentropy()
+        if self.multi_output and len(self.output_layers) > 1:
+            loss = {}
+            loss_weights = {}
+            for key in self.output_layers:
+                index = int(re.match(r'Softmax_c(\d+)', key).group(1))
+                loss.update({key: losses.CategoricalCrossentropy()})
+                loss_weights.update({key: 1 / (2 ** (self.total_cells - index))})
+        else:
+            loss = losses.CategoricalCrossentropy()
+            loss_weights = None
+
         metrics = ['accuracy']
 
         # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
@@ -432,4 +461,4 @@ class ModelGenerator:
 
         adam_optimizer = optimizers.Adam(learning_rate=schedule)
 
-        return loss, adam_optimizer, metrics
+        return loss, loss_weights, adam_optimizer, metrics

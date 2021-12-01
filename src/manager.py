@@ -1,6 +1,7 @@
 import importlib.util
 import logging
 import os
+import re
 from typing import Tuple
 
 import numpy as np
@@ -97,6 +98,7 @@ class NetworkManager:
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches, output_classes=self.dataset_classes_count,
                                         data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
+        self.multi_output_model = arc_config['multi_output']
 
         # DEBUG ONLY
         # self.__test_data_augmentation(self.dataset_folds[0][0])
@@ -289,8 +291,8 @@ class NetworkManager:
 
         model, partition_dict = self.model_gen.build_model(cell_spec)
 
-        loss, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
-        model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+        loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
+        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
@@ -349,7 +351,13 @@ class NetworkManager:
 
             times[i] = sum(time_cb.logs)
             # compute the reward (best validation accuracy)
-            accuracies[i] = max(hist.history['val_accuracy'])
+            if self.multi_output_model and len(cell_spec) > 0:
+                # use as val accuracy metric only the one of the softmax placed after the last cell
+                r = re.compile(r'val_Softmax_c(\d+)_accuracy')
+                max_index = max([int(match.group(1)) for match in map(r.match, hist.history.keys()) if match])
+                accuracies[i] = max(hist.history[f'val_Softmax_c{max_index}_accuracy'])
+            else:
+                accuracies[i] = max(hist.history['val_accuracy'])
 
         training_time = times.mean()
         reward = accuracies.mean()

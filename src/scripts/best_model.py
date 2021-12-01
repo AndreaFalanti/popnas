@@ -143,7 +143,7 @@ def get_experimental_training_configuration(cnn_hp: dict, training_steps_per_epo
     # optimizer = optimizers.Adam(learning_rate=schedule)
     optimizer = tfa.optimizers.AdamW(weight_decay=wr_schedule, learning_rate=lr_schedule)
 
-    return loss, optimizer, train_metrics
+    return loss, None, optimizer, train_metrics
 
 
 def main():
@@ -210,12 +210,12 @@ def main():
         model, _ = model_gen.build_model(cell_spec)
 
         if args.same:
-            loss, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
             train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
         else:
-            loss, optimizer, train_metrics = get_experimental_training_configuration(config['cnn_hp'], train_batches, weight_reg=1e-4)
+            loss, loss_weights, optimizer, train_metrics = get_experimental_training_configuration(config['cnn_hp'], train_batches, weight_reg=1e-4)
 
-        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
 
         cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
         logger.info('Model generated successfully')
