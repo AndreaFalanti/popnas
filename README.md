@@ -91,11 +91,12 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **operators**: list of operators that can be used inside each cell. Note that the string format is important, since they are recognized by regexes.
   Actually supported operators, with customizable kernel size(@):
   - identity
-  - @x@ dconv
+  - @x@ dconv      (Depthwise-separable convolution)
   - @x@-@x@ conv
   - @x@ conv
   - @x@ maxpool
   - @x@ avgpool
+  - @x@ tconv      (Transpose convolution)
 
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
@@ -103,6 +104,10 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **learning_rate**: defines the learning rate of the child CNN networks.
 - **filters**: defines the initial number of filters to use.
 - **weight_reg**: defines the L2 regularization factor to use in CNNs. If _null_, regularization is not applied.
+- **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
+  - **enabled**: use cosine decay restart or not (plain learning rate)
+  - **period_in_epochs**: first decay period in epochs
+  - **[t_mul, m_mul, alpha]**: see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts)
 
 **CNN architecture parameters**:
 - **motifs**: motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell, here instead it is used to indicate
@@ -113,8 +118,9 @@ Here it's presented a list of the configuration sections and fields, with a brie
 
 **LSTM hyperparameters**:
 - **epochs**: how many epochs the LSTM is trained on, at each expansion step.
-- **learning_rate**: LSTM learning rate.
-- **weight_reg**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
+- **lr**: LSTM learning rate.
+- **wr**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
+- **er**: LSTM L2 weight regularization factor applied on embeddings only. If _null_, regularization is not applied.
 - **embedding_dim**: LSTM embedding dimension, used for both inputs and operator embeddings.
 - **cells**: total LSTM cells of the model.
 
@@ -126,6 +132,11 @@ Here it's presented a list of the configuration sections and fields, with a brie
   the ones obtained on each fold.
 - **samples**: if provided, limits the total dataset samples to the number provided (integer). This means that the total training and validation
   samples will amount to this value (or less if the dataset has actually fewer samples than the value indicated). Useful for fast testing.
+- **data_augmentation**: dictionary with parameters related to data augmentation
+  - **enabled**: use data augmentation or not.
+  - **perform_on_gpu**: perform data augmentation directly on GPU (through Keras experimental layers).
+    Usually advised only if CPU is very slow, since CPU prepares the images while the GPU trains the network (asynchronous prefetch),
+    instead performing data augmentation on the GPU will make the process sequential, always causing delays even if it's faster to perform.
 
 **Others**:
 - **pnas_mode**: if _true_, the algorithm will not use the temporal regressor and pareto front search, making the run very similar to PNAS.
@@ -179,6 +190,9 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
 - Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
+- Add ScheduledDropPath in local version (see FractalNet), since it was used in both PNAS and NASNet.
+- Allow the usage of flexible kernel sizes for each operation supported by the algorithm.
+- Add support for TransposeConvolution operation.
 
 
 ### Equivalent networks detection
@@ -197,6 +211,8 @@ In each tensorboard folder it's also present the model summary as txt file, to h
   like specified in PNAS paper.
 - Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
   These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
+- Keras predictors supports hyperparameters tuning via Keras Tuner library. The search space for the parameters is
+  defined in each class and can be overridden by each model to adapt it for each specific model.
 
 ### Exploration step
 - Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
@@ -242,8 +258,7 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 ### Command line arguments changes
 - Add --cpu option to easily choose between running on cpu or gpu.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add --abc and -f options, to make the cell structure more configurable and flexible.
-- Add -m and -n options, allowing to change the CNN structure (how the cells are stacked).
+- Add a lot of new configuration parameters, which can be set in the new json configuration file.
 
 
 ### Other bug fixes
