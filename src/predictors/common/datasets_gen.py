@@ -112,7 +112,7 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
             ds_label = tf.data.Dataset.from_tensor_slices([[1]])
             ds = tf.data.Dataset.zip((ds, ds_label))
 
-        return ds.shuffle(10000).batch(1)
+        return ds.shuffle(10000).batch(4)
 
     cells_train, rewards_train = __preprocess_cell_specs_and_rewards(search_space, cell_specs, rewards, use_data_augmentation)
     if validation_split:
@@ -146,7 +146,7 @@ def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[l
             ds_label = tf.data.Dataset.from_tensor_slices(y_rewards)
             ds = tf.data.Dataset.zip((ds, ds_label))
 
-        return ds.shuffle(10000).batch(1)
+        return ds.shuffle(10000).batch(4)
 
     cells_train, rewards_train = __preprocess_cell_specs_and_rewards(search_space, cell_specs, rewards, use_data_augmentation)
     if validation_split:
