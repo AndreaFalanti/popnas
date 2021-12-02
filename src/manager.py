@@ -267,11 +267,7 @@ class NetworkManager:
         return flops.total_float_ops
 
     def __write_partitions_file(self, partition_dict: dict, save_dir: str):
-        incr = 2 if partition_dict['use_skip_only'] else 1
-        # first value is CNN input size, last is for partition between last cell and GAP; these two cases are handled separately below.
-        lines = [f'cell_{i} - cell_{i + incr}: {size:,} bytes' for i, size in enumerate(partition_dict['sizes'][1:-1])]
-        lines.insert(0, f'initial input size: {partition_dict["sizes"][0]:,} bytes')
-        lines.append(f'last_cell - GAP: {partition_dict["sizes"][-1]:,} bytes')
+        lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
 
         with open(save_dir, 'w') as f:
             # GG python devs for this crap, a writelines function that works like a write, not adding \n automatically...
