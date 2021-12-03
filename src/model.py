@@ -290,13 +290,12 @@ class ModelGenerator:
         stride_L = stride if input_L < 0 else (1, 1)
         stride_R = stride if input_R < 0 else (1, 1)
 
-        # check if tensor depth (filter) diverge
-        adapt_depth_L = filters != inputs[input_L].shape.as_list()[3]
-        adapt_depth_R = filters != inputs[input_R].shape.as_list()[3]
+        input_L_depth = inputs[input_L].shape.as_list()[3]
+        input_R_depth = inputs[input_R].shape.as_list()[3]
 
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.__build_layer(filters, op_L, adapt_depth_L, strides=stride_L, tag='L')(inputs[input_L])
-        right_layer = self.__build_layer(filters, op_R, adapt_depth_R, strides=stride_R, tag='R')(inputs[input_R])
+        left_layer = self.__build_layer(filters, op_L, input_L_depth, strides=stride_L, tag='L')(inputs[input_L])
+        right_layer = self.__build_layer(filters, op_R, input_R_depth, strides=stride_R, tag='R')(inputs[input_R])
 
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
@@ -307,10 +306,10 @@ class ModelGenerator:
         else:
             return layers.Add()([left_layer, right_layer])
 
-    def __build_layer(self, filters, operator, adapt_depth: bool, strides=(1, 1), tag='L'):
+    def __build_layer(self, filters, operator, input_filters, strides=(1, 1), tag='L'):
         '''
-        Generate correct custom layer for provided action. Certain cases are handled incorrectly,
-        so that model can still be built, albeit not with original specification
+        Generate a custom Keras layer for the provided operator and parameter. Certain operations are handled in a different way
+        when used in reduction cells, compared to the normal cells, to handle the tensor shape changes and allow addition at the end of a block.
 
         # Args:
             filters: number of filters
@@ -323,17 +322,19 @@ class ModelGenerator:
             (tf.keras.Model): The custom layer corresponding to the action (see ops.py)
         '''
 
+        adapt_depth = filters != input_filters
+
         # check non parametrized operations first since they don't require a regex and are faster
         if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
-            if strides == (2, 2):
-                model_name = f'pointwise_conv_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Convolution(filters, kernel=(1, 1), strides=strides, name=model_name, weight_reg=self.weight_reg)
+            if strides == (2, 2) or adapt_depth:
+                model_name = f'identity_R_c{self.cell_index}b{self.block_index}{tag}'
+                x = ops.IdentityReshaper(filters, input_filters, strides, name=model_name)
                 return x
             else:
                 # else just submits a linear layer if shapes match
                 model_name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Identity(filters, name=model_name)
+                x = ops.Identity(name=model_name)
                 return x
 
         # check for separable conv

@@ -293,7 +293,7 @@ class NetworkManager:
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
 
-        onnx_model = tf2onnx.convert.from_keras(model)
+        onnx_model = tf2onnx.convert.from_keras(model, opset=10)
         with open(os.path.join(tb_logdir, 'model.onnx'), 'wb') as f:
             f.write(onnx_model[0].SerializeToString())
         self._logger.info('Equivalent ONNX model serialized successfully and saved to file')

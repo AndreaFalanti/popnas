@@ -1,3 +1,4 @@
+import math
 import operator
 import random
 
@@ -5,6 +6,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
 
 
+# TODO: actually not used, delete it?
 def depth_zero_pad_closure(desired_depth, op_layer):
     '''
     Pad depth of a Keras layer with zeros, if it has not already the right depth for performing addition at the end of the block.
@@ -61,22 +63,40 @@ def depth_pointwise_conv_closure(desired_depth, op_layer):
 
 
 class Identity(Layer):
-    def __init__(self, filters, name='identity', **kwargs):
+    def __init__(self, name='identity', **kwargs):
         '''
-        Simply adds an identity connection, padding in depth with 0 if necessary to enable block add operator.
+        Simply adds an identity connection.
+        '''
+        super().__init__(name=name, **kwargs)
+
+    def call(self, inputs, training=None, mask=None):
+        return tf.identity(inputs)
+
+
+class IdentityReshaper(Layer):
+    def __init__(self, filters, input_filters, strides, name='identity_reduction', **kwargs):
+        '''
+        Identity alternative when the tensor shape between input and output differs.
+        IdentityReshaper can apply a stride without doing any operation,
+        also adapting depth by replicating multiple times the tensor and concatenating the replicas on depth axis.
         '''
         super().__init__(name=name, **kwargs)
         self.filters = filters
+        self.input_filters = input_filters
+        self.strides = strides
 
-        self.op = Layer()  # Identity layer in Keras
-        self.identity_call = depth_zero_pad_closure(filters, self.op)
+        self.replication_factor = math.ceil(filters / input_filters)
 
     def call(self, inputs, training=None, mask=None):
-        return self.identity_call(inputs)
+        input_stride = inputs[::1, ::self.strides[0], ::self.strides[1], ::1]
+        return tf.tile(input_stride, [1, 1, 1, self.replication_factor])[:, :, :, :self.filters]
 
     def get_config(self):
         config = super().get_config()
-        config.update({'filters': self.filters})
+        config.update({
+            'filters': self.filters,
+            'strides': self.strides
+        })
         return config
 
 
