@@ -71,9 +71,6 @@ class ModelGenerator:
         self.block_index = 0
         self.prev_cell_index = 0
 
-        # for depth adaptation purposes
-        self.prev_cell_filters = 0
-
         # info about the actual cell processed and current model outputs
         # noinspection PyTypeChecker
         self.network_build_info = None  # type: NetworkBuildInfo
@@ -122,7 +119,6 @@ class ModelGenerator:
             partitions_dict[f'{input_name} -> cell_{self.cell_index}'] = self.__compute_partition_size(inputs)
 
             cell_output = self.__build_cell(filters, stride, inputs)
-            self.prev_cell_filters = filters
             self.prev_cell_index = self.cell_index
 
             if self.multi_output:
@@ -171,8 +167,6 @@ class ModelGenerator:
         # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
         # TODO: dims are required for inputs normalization, hardcoded for now
         model_input = layers.Input(shape=(32, 32, 3))
-        # put prev filters = input depth
-        self.prev_cell_filters = 3
 
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is set to None to trigger
@@ -277,7 +271,7 @@ class ModelGenerator:
 
         return inputs
 
-    def __build_block(self, block_spec: tuple, filters: int, stride: 'tuple(int, int)', inputs: list):
+    def __build_block(self, block_spec: tuple, filters: int, stride: 'tuple(int, int)', inputs: 'list[tf.Tensor]'):
         '''
         Generate a block, following PNAS conventions.
 
@@ -296,11 +290,13 @@ class ModelGenerator:
         stride_L = stride if input_L < 0 else (1, 1)
         stride_R = stride if input_R < 0 else (1, 1)
 
-        adapt_depth = filters != self.prev_cell_filters
+        # check if tensor depth (filter) diverge
+        adapt_depth_L = filters != inputs[input_L].shape.as_list()[3]
+        adapt_depth_R = filters != inputs[input_R].shape.as_list()[3]
 
         # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.__build_layer(filters, op_L, adapt_depth, strides=stride_L, tag='L')(inputs[input_L])
-        right_layer = self.__build_layer(filters, op_R, adapt_depth, strides=stride_R, tag='R')(inputs[input_R])
+        left_layer = self.__build_layer(filters, op_L, adapt_depth_L, strides=stride_L, tag='L')(inputs[input_L])
+        right_layer = self.__build_layer(filters, op_R, adapt_depth_R, strides=stride_R, tag='R')(inputs[input_R])
 
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
