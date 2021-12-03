@@ -74,7 +74,7 @@ class Identity(Layer):
 
 
 class IdentityReshaper(Layer):
-    def __init__(self, filters, input_filters, strides, name='identity_reduction', **kwargs):
+    def __init__(self, filters, input_filters, strides, name='identity_reshaper', **kwargs):
         '''
         Identity alternative when the tensor shape between input and output differs.
         IdentityReshaper can apply a stride without doing any operation,
