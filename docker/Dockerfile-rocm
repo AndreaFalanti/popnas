@@ -1,0 +1,18 @@
+FROM rocm/tensorflow:rocm4.3.1-tf2.6-dev
+
+# Install graphviz
+RUN apt-get update
+RUN apt-get install graphviz nano -y
+
+# Present in the image and not necessary in python >3.6, but causing problems in some package installation
+RUN pip uninstall -y enum34
+
+# Install extras
+COPY requirements-rocm.txt /root/requirements.txt
+RUN pip install -r requirements.txt
+
+# Copy POPNAS folder into the container
+WORKDIR /exp
+COPY . .
+
+CMD ["bash"]
