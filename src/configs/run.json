@@ -21,8 +21,8 @@
         "batch_size": 128,
         "learning_rate": 0.05,
         "filters": 24,
-        "weight_reg": null,
-        "use_adamW": false,
+        "weight_reg": 5e-4,
+        "use_adamW": true,
         "drop_path_prob": 0.0,
         "cosine_decay_restart": {
             "enabled": true,

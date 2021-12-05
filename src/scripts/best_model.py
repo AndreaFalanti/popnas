@@ -7,7 +7,6 @@ import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import tensorflow_addons as tfa
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, callbacks, optimizers, losses, models, metrics, layers, Sequential
 from tensorflow.keras.utils import to_categorical
@@ -129,23 +128,6 @@ def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
     return [ckpt_callback, tb_callback, es_callback]
 
 
-def get_experimental_training_configuration(cnn_hp: dict, training_steps_per_epoch: int, weight_reg: float):
-    loss = losses.CategoricalCrossentropy()
-    train_metrics = ['accuracy', metrics.TopKCategoricalAccuracy(k=3)]
-
-    cdr_config = cnn_hp['cosine_decay_restart']
-    decay_period = training_steps_per_epoch * cdr_config['period_in_epochs']
-    lr_schedule = optimizers.schedules.CosineDecayRestarts(cnn_hp['learning_rate'], decay_period, cdr_config['t_mul'],
-                                                           cdr_config['m_mul'], cdr_config['alpha'])
-    wr_schedule = optimizers.schedules.CosineDecayRestarts(weight_reg, decay_period, cdr_config['t_mul'],
-                                                           cdr_config['m_mul'], cdr_config['alpha'])
-
-    # optimizer = optimizers.Adam(learning_rate=schedule)
-    optimizer = tfa.optimizers.AdamW(weight_decay=wr_schedule, learning_rate=lr_schedule)
-
-    return loss, None, optimizer, train_metrics
-
-
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
@@ -194,7 +176,8 @@ def main():
 
         if not args.same:
             # optimize some hyperparameters for final training
-            config['cnn_hp']['weight_reg'] = 0
+            config['cnn_hp']['weight_reg'] = 1e-4
+            config['cnn_hp']['use_adamW'] = True
             # config['cnn_hp']['drop_path_prob'] = 0.2
             config['cnn_hp']['drop_path_prob'] = 0.0
 
@@ -209,11 +192,8 @@ def main():
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, data_augmentation_model=None)
         model, _ = model_gen.build_model(cell_spec)
 
-        if args.same:
-            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-            train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
-        else:
-            loss, loss_weights, optimizer, train_metrics = get_experimental_training_configuration(config['cnn_hp'], train_batches, weight_reg=1e-4)
+        loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+        train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
 
         model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
 
