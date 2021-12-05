@@ -22,6 +22,7 @@
         "learning_rate": 0.05,
         "filters": 24,
         "weight_reg": null,
+        "use_adamW": false,
         "drop_path_prob": 0.0,
         "cosine_decay_restart": {
             "enabled": true,

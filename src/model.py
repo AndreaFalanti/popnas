@@ -1,6 +1,7 @@
 import re
 
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model, Sequential
 
 import log_service
@@ -12,6 +13,7 @@ class NetworkBuildInfo:
     '''
     Helper class that extrapolate and store some relevant info from the cell specification, used for building the actual CNN.
     '''
+
     def __init__(self, cell_spec: 'list[tuple]', total_cells: int, normal_cells_per_motif: int) -> None:
         self.cell_specification = cell_spec
         # it's a list of tuples, so already grouped by 4
@@ -50,11 +52,12 @@ class ModelGenerator:
 
         self.lr = cnn_hp['learning_rate']
         self.filters = cnn_hp['filters']
-        weight_reg_factor = cnn_hp['weight_reg']
-        self.weight_reg = regularizers.l2(weight_reg_factor) if weight_reg_factor is not None else None
+        self.wr = cnn_hp['weight_reg']
+        self.use_adamW = cnn_hp['use_adamW']
+        self.l2_weight_reg = regularizers.l2(self.wr) if (self.wr is not None and not self.use_adamW) else None
         self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
-        self.dropout_prob = cnn_hp['softmax_dropout']   # dropout probability on final softmax
-        self.cdr_config = cnn_hp['cosine_decay_restart']   # type: dict
+        self.dropout_prob = cnn_hp['softmax_dropout']  # dropout probability on final softmax
+        self.cdr_config = cnn_hp['cosine_decay_restart']  # type: dict
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
         self.epochs = cnn_hp['epochs']
@@ -138,7 +141,7 @@ class ModelGenerator:
         gap = layers.GlobalAveragePooling2D(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.weight_reg)(gap)
+        output = layers.Dense(self.output_classes, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
 
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
@@ -342,7 +345,7 @@ class ModelGenerator:
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.SeparableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_reg=self.weight_reg)
+                                         name=model_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for transpose conv
@@ -350,7 +353,7 @@ class ModelGenerator:
         if match:
             model_name = f'{match.group(1)}x{match.group(2)}_tconv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.TransposeConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_reg=self.weight_reg)
+                                         name=model_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for stacked conv operation
@@ -361,7 +364,7 @@ class ModelGenerator:
             s = [strides, (1, 1)]
 
             model_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.StackedConvolution(f, k, s, name=model_name, weight_reg=self.weight_reg)
+            x = ops.StackedConvolution(f, k, s, name=model_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for standard conv
@@ -369,7 +372,7 @@ class ModelGenerator:
         if match:
             model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                name=model_name, weight_reg=self.weight_reg)
+                                name=model_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for pooling
@@ -379,7 +382,7 @@ class ModelGenerator:
             pool_type = match.group(3)
 
             model_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_reg=self.weight_reg) if adapt_depth \
+            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_reg=self.l2_weight_reg) if adapt_depth \
                 else ops.Pooling(pool_type, size, strides, name=model_name)
 
             return x
@@ -418,15 +421,19 @@ class ModelGenerator:
         # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
         if self.cdr_config['enabled']:
             decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
-            schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config['t_mul'],
-                                                                self.cdr_config['m_mul'], self.cdr_config['alpha'])
+            lr_schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config['t_mul'],
+                                                                   self.cdr_config['m_mul'], self.cdr_config['alpha'])
+            # weight decay for adamW, if used
+            wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config['t_mul'],
+                                                                   self.cdr_config['m_mul'], self.cdr_config['alpha'])
         # if cosine decay restart is not enabled, use plain learning rate
         else:
-            schedule = self.lr
+            lr_schedule = self.lr
+            wd_schedule = self.wr
 
         # schedule_2 = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
         # sgdr_optimizer = optimizers.SGD(learning_rate=schedule_2, momentum=0.9)
 
-        adam_optimizer = optimizers.Adam(learning_rate=schedule)
+        optimizer = tfa.optimizers.AdamW(wd_schedule, lr_schedule) if self.use_adamW else optimizers.Adam(learning_rate=lr_schedule)
 
-        return loss, loss_weights, adam_optimizer, metrics
+        return loss, loss_weights, optimizer, metrics
