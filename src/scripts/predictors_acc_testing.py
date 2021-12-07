@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 
 import log_service
@@ -51,18 +52,24 @@ def main():
     generate_dataset_correlation_heatmap(training_acc_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
-    # TODO: get these info from file from keeping consistency with choices of run tested.
-    #  Right now the operators set in runs executed is always this one, but could change in future.
-    operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-    search_space = SearchSpace(B=5, operators=operators, cell_stack_depth=8, input_lookback_depth=-2)
+    # get some search space info from the run logs, so that SearchSpace instance can be correctly initialized
+    run_config_path = os.path.join(args.p, 'restore', 'run.json')
+    with open(run_config_path, 'r') as f:
+        run_config = json.load(f)
+
+    ss_config = run_config['search_space']
+    operators = ss_config['operators']
+    # TODO: cell_stack_depth is not important for these tests, but could be computed
+    search_space = SearchSpace(B=ss_config['blocks'], operators=operators, cell_stack_depth=8, input_lookback_depth=-ss_config['lookback_depth'])
 
     predictors_to_test = [
         # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
-        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
+        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # AttentionLSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
