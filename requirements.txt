@@ -1,9 +1,9 @@
-sklearn==0.0
-pandas==1.2.4
+scikit-learn==0.21.2
+pandas==0.25.2
 mlxtend==0.18.0
-xgboost==1.4.2
-matplotlib==3.4.2
+xgboost==0.90
+matplotlib==3.1.1
 eli5==0.11.0
 mypy==0.812
-tqdm==4.60.0
+tqdm==4.32.1
 keras==2.2.4
