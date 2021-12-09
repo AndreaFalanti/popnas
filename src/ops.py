@@ -84,11 +84,13 @@ class IdentityReshaper(Layer):
         self.filters = filters
         self.input_filters = input_filters
         self.strides = strides
+        self.no_stride = self.strides[0] == 1 and self.strides[1] == 1
 
         self.replication_factor = math.ceil(filters / input_filters)
 
     def call(self, inputs, training=None, mask=None):
-        input_stride = inputs[::1, ::self.strides[0], ::self.strides[1], ::1]
+        # TODO: it seems that ::1 slice is bugged, if stride is used when not needed the model has random output. TF bug?
+        input_stride = inputs if self.no_stride else inputs[:, ::self.strides[0], ::self.strides[1], :]
         return tf.tile(input_stride, [1, 1, 1, self.replication_factor])[:, :, :, :self.filters]
 
     def get_config(self):
