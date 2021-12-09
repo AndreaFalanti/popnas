@@ -92,10 +92,7 @@ class Train:
         # initialize use_columns string for the configuration file
         use_columns = '\"blocks\",'
 
-        # operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-
-        operators = ['5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool',
-                     '3x3 avgpool']
+        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
@@ -176,7 +173,7 @@ class Train:
             else:
                 k = self.children
 
-            actions = controller.get_actions(top_k=2)  # get all actions for the previous state
+            actions = controller.get_actions(top_k=k)  # get all actions for the previous state
             rewards = []
             timers = []
             encoded_actions = []

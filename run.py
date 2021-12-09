@@ -13,7 +13,7 @@ def main():
     parser.add_argument('-d', metavar=('DATASET'), type=str, help = "python file to use as dataset", default = "cifar10") #
     parser.add_argument('-s', metavar=('NUM_DATASETS'), type=int, help = "how many times a child network has to be trained", default = 1) #
     parser.add_argument('-e', metavar=('EPOCHS'), type=int, help = "number of epochs each child network has to be trained", default = 20) #
-    parser.add_argument('-z', metavar=('BATCH_SIZE'), type=int, help = "batch size dimension of the dataset", default = 64) #
+    parser.add_argument('-z', metavar=('BATCH_SIZE'), type=int, help = "batch size dimension of the dataset", default = 128) #
     parser.add_argument('-l', metavar=('LEARNING_RATE'), type=float, help = "learning rate of the child networks", default = 0.01) #
     parser.add_argument('-r', '--restore', help = "restore a previous run", action = "store_true") #
     parser.add_argument('-t', metavar=('FOLDER'), type=str, help = "log folder to restore", default = "") #
