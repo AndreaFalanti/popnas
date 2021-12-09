@@ -129,8 +129,10 @@ def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
 
 
 def main():
+    # spec argument can be taken from model summary.txt, changing commas between tuples with ;
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
+    parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     args = parser.parse_args()
@@ -159,17 +161,22 @@ def main():
         cdr_enabled = False
         logger.info('Model loaded successfully')
     else:
-        # find best model found during search and log some relevant info
-        cell_spec, best_acc = get_best_cell_spec(args.p)
-        logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
-        logger.info('Cell specification:')
-        for i, block in enumerate(cell_spec):
-            logger.info("Block %d: %s", i + 1, rstr(block))
-        logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
-        logger.info('*' * 60)
+        if args.spec is None:
+            # find best model found during search and log some relevant info
+            cell_spec, best_acc = get_best_cell_spec(args.p)
+            logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
+            logger.info('Cell specification:')
+            for i, block in enumerate(cell_spec):
+                logger.info("Block %d: %s", i + 1, rstr(block))
+            logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
+            logger.info('*' * 60)
+
+            logger.info('Generating Keras model from best cell specification...')
+        else:
+            cell_spec = parse_cell_structures([args.spec])[0]
+            logger.info('Generating Keras model from given cell specification...')
 
         # reproduce the model from run configuration
-        logger.info('Generating Keras model from best cell specification...')
         config = load_run_json(args.p)
         cnn_config = config['cnn_hp']
         arc_config = config['architecture_parameters']
