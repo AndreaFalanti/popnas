@@ -7,15 +7,11 @@ import time
 import csv
 
 import tensorflow as tf
-from tensorflow.python.util import deprecation
-deprecation._PRINT_DEPRECATION_WARNINGS = False #to hide warning
-from tensorflow.contrib.eager.python import tfe
-tfe.enable_eager_execution(device_policy=tfe.DEVICE_PLACEMENT_SILENT)
 
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.callbacks import ModelCheckpoint
 
-from keras.utils.vis_utils import plot_model # per stampare modello
+from keras.utils.vis_utils import plot_model  # per stampare modello
 
 if not os.path.exists('temp_weights/'):
     os.makedirs('temp_weights/')
@@ -28,6 +24,7 @@ class NetworkManager:
     '''
     Helper class to manage the generation of subnetwork training given a dataset
     '''
+
     def __init__(self, dataset, timestr, data_num=1, epochs=5, batchsize=64, learning_rate=0.002):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
@@ -46,7 +43,7 @@ class NetworkManager:
         self.batchsize = batchsize
         self.lr = learning_rate
 
-        self.num_child = 0 # SUMMARY
+        self.num_child = 0  # SUMMARY
 
     def get_rewards(self, model_fn, actions, display_model_summary=True):
         '''
@@ -83,14 +80,16 @@ class NetworkManager:
         else:
             device = '/cpu:0'
         '''
+
         device = '/gpu:0'
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard
         self.num_child = self.num_child + 1
         self.logdir = 'logs/%s/children/%s' % (self.timestr, self.num_child)
-        self.summary_writer = tf.contrib.summary.create_file_writer(self.logdir)
+        self.summary_writer = tf.summary.create_file_writer(self.logdir)
         self.summary_writer.set_as_default()
+        tf.name_scope("children")
 
         acc_list = []
 
@@ -100,26 +99,29 @@ class NetworkManager:
                 if self.data_num > 1:
                     print("\nTraining dataset #%d / #%d" % (index + 1, self.data_num))
                 model = model_fn(actions)  # type: Model
-                
+
                 # build model shapes
                 x_train, y_train, x_val, y_val = self.dataset[index]
 
                 # generate the dataset for training
-                train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-                train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(10000, seed=0))
-                train_dataset = train_dataset.batch(self.batchsize)
-                train_dataset = train_dataset.prefetch(4) # da usare se prefetch_to_device non funziona
+                train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)) \
+                    .shuffle(buffer_size=10000, seed=0, reshuffle_each_iteration=True) \
+                    .batch(self.batchsize)
+                train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
                 # train_dataset = train_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
                 # generate the dataset for evaluation
-                val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-                val_dataset = val_dataset.batch(self.batchsize)
-                val_dataset = val_dataset.prefetch(4) # da usare se prefetch_to_device non funziona
+                val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(self.batchsize)
+                val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
                 # val_dataset = val_dataset.apply(tf.data.experimental.prefetch_to_device(device)) # dà errore su GPU
 
                 num_train_batches = x_train.shape[0] // self.batchsize + 1
 
-                global_step = tf.train.get_or_create_global_step()
+                train_loss = tf.keras.losses.CategoricalCrossentropy(name='train_loss', from_logits=True)
+
+                val_accuracy = tf.keras.metrics.CategoricalAccuracy(name='test_accuracy')
+
+                global_step = tf.compat.v1.train.get_or_create_global_step()
                 lr = tf.compat.v1.train.cosine_decay(self.lr, global_step, decay_steps=num_train_batches * self.epochs, alpha=0.1)
 
                 # construct the optimizer and saver of the child model
@@ -127,10 +129,10 @@ class NetworkManager:
                 saver = tf.train.Checkpoint(model=model, optimizer=optimizer, global_step=global_step)
 
                 best_val_acc = 0.0
-                timer = 0 # inizialize timer to evaluate training time
+                timer = 0  # inizialize timer to evaluate training time
 
                 print()
-                
+
                 for epoch in range(self.epochs):
                     # train child model
                     with tqdm(train_dataset,
@@ -144,10 +146,10 @@ class NetworkManager:
                                 # get training starting time
                                 start = time.clock()
                                 preds = model(x, training=True)
-                                loss = tf.keras.losses.categorical_crossentropy(y, preds)
-                                
-                            grad = tape.gradient(loss, model.variables)
-                            grad_vars = zip(grad, model.variables)
+                                loss = train_loss(y, preds)
+
+                            grad = tape.gradient(loss, model.trainable_variables)
+                            grad_vars = zip(grad, model.trainable_variables)
 
                             # update weights of the child models
                             optimizer.apply_gradients(grad_vars, global_step)
@@ -157,28 +159,26 @@ class NetworkManager:
 
                             # evaluate training time
                             timer = timer + (stop - start)
-                            
+
                             if (i + 1) >= num_train_batches:
                                 break
-                                          
+
                     print()
 
                     # evaluate child model
-                    acc = tfe.metrics.CategoricalAccuracy()
                     for j, (x, y) in enumerate(val_dataset):
                         preds = model(x, training=False)
-                        acc(y, preds)
+                        val_accuracy(y, preds)
 
-                    acc = acc.result().numpy()
+                    acc = val_accuracy.result().numpy()
 
                     # add forward pass and accuracy to Tensorboard
-                    with self.summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-                        tf.contrib.summary.scalar("training_time", timer, family="children", step=epoch+1)
-                        if acc > best_val_acc:
-                            summary_acc = acc
-                        else:
-                            summary_acc = best_val_acc
-                        tf.contrib.summary.scalar("child_accuracy", summary_acc, family="children", step=epoch+1)
+                    tf.summary.scalar("training_time", timer, step=epoch + 1)
+                    if acc > best_val_acc:
+                        summary_acc = acc
+                    else:
+                        summary_acc = best_val_acc
+                    tf.summary.scalar("child_accuracy", summary_acc, step=epoch + 1)
 
                     print("\tEpoch %d: Training time = %0.6f" % (epoch + 1, timer))
                     print("\tEpoch %d: Val accuracy = %0.6f" % (epoch + 1, acc))
@@ -187,13 +187,13 @@ class NetworkManager:
                     if acc > best_val_acc:
                         print("\tVal accuracy improved from %0.6f to %0.6f. Saving weights !" % (
                             best_val_acc, acc))
-                        
+
                         best_val_acc = acc
                         saver.save('temp_weights/temp_network')
-                        
+
                     print()
 
-                #test_writer.close()
+                # test_writer.close()
 
                 # load best weights of the child model
                 path = tf.train.latest_checkpoint('temp_weights/')
@@ -204,14 +204,11 @@ class NetworkManager:
                     model.summary()
                     # plot_model(model, to_file='%s/model_plot.png' % self.logdir, show_shapes=True, show_layer_names=True)
 
-                # evaluate the best weights of the child model
-                acc = tfe.metrics.CategoricalAccuracy()
-
                 for j, (x, y) in enumerate(val_dataset):
                     preds = model(x, training=False)
-                    acc(y, preds)
+                    val_accuracy(y, preds)
 
-                acc = acc.result().numpy()
+                acc = val_accuracy.result().numpy()
                 acc_list.append(acc)
 
             # compute the reward (validation accuracy)
@@ -219,8 +216,9 @@ class NetworkManager:
 
             print()
             print("Manager: Accuracy = ", reward)
-        
+
         # clean up resources and GPU memory
+
         del model
         del optimizer
         del global_step

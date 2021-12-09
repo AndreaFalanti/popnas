@@ -17,9 +17,9 @@ class ModelGenerator(Model):
     def __init__(self, actions):
         '''
         Utility Model class to construct child models provided with an action list.
-        
+
         # Args:
-            actions: list of [input; action] pairs that define the cell. 
+            actions: list of [input; action] pairs that define the cell.
         '''
         super(ModelGenerator, self).__init__()
 
@@ -43,22 +43,22 @@ class ModelGenerator(Model):
         for i in range(self.M - 1):
             # add N times a normal cell
             for j in range(self.N):
-                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1,1))
+                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1))
                 self.cells.append(normal_cell)
             # add 1 time a reduction cell
             filters = filters * 2
-            reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2,2))
+            reduction_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(2, 2))
             self.cells.append(reduction_cell)
         # add N time a normal cell
         for i in range(self.N):
-                normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1,1))
-                self.cells.append(normal_cell)
-                
+            normal_cell = self.build_cell(self.B, self.action_list, filters=filters, stride=(1, 1))
+            self.cells.append(normal_cell)
+
         self.gap = GlobalAveragePooling2D(name='Avg')
-        self.logits = Dense(10, activation='softmax', name='Softmax') # only logits
+        self.logits = Dense(10, activation='softmax', name='Softmax')  # only logits
 
     def call(self, inputs, training=None, mask=None):
-        
+
         x = inputs
         for cell in self.cells:
             cell_ops = []
@@ -66,7 +66,7 @@ class ModelGenerator(Model):
                 out = op(x, training=training)
                 cell_ops.append(out)
             x = tf.concat(cell_ops, axis=-1)
-        
+
         x = self.gap(x)
         out = self.logits(x)
 
@@ -84,7 +84,7 @@ class ModelGenerator(Model):
         for i in range(B):
             left_action = self.parse_action(filters, action_list[i * 2][1], strides=stride)
             right_action = self.parse_action(filters, action_list[i * 2 + 1][1], strides=stride)
-            
+
             actions.extend([left_action, right_action])
 
         return actions

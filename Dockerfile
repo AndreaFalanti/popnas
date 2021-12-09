@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:1.14.0-gpu-py3
+FROM tensorflow/tensorflow:1.13.2-gpu-py3
 
 # Install graphviz
 RUN apt-get update
