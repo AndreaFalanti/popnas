@@ -62,21 +62,26 @@ class CatBoostPredictor(Predictor):
         create_empty_folder(train_log_folder)
 
         # specify the training parameters
+        # allow a finer quantization of op_score (index 2), since it is the main driving feature. also increase its weight in scoring decisions.
+        feature_quantization = ['2:border_count=1024']
+        feature_weights = '2:2.0'
         # NOTE: task type = 'GPU' is very slow in our case, because it uses ordered sampling on datasets with few samples (< 10k).
         #  CPU is very fast and the models between GPU and CPU seems to not have so much different results
-        self.model = catboost.CatBoostRegressor(early_stopping_rounds=40, train_dir=train_log_folder, task_type=self.task_type)
+        self.model = catboost.CatBoostRegressor(early_stopping_rounds=40, train_dir=train_log_folder, task_type=self.task_type,
+                                                per_float_feature_quantization=feature_quantization, feature_weights=feature_weights)
+
         # train the model with random search
         if self.use_random_search:
             param_grid = {
-                'learning_rate': uniform(0.03, 0.3),
-                'depth': randint(3, 8),
-                'l2_leaf_reg': loguniform(0.1, 7),
+                'learning_rate': uniform(0.02, 0.2),
+                'depth': randint(3, 7),
+                'l2_leaf_reg': uniform(0.1, 5),
                 'random_strength': uniform(0.3, 3),
                 'bagging_temperature': uniform(0.3, 3),
-                # 'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
+                'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
             }
 
-            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=25, train_size=0.8)
+            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=40, train_size=0.8)
             self._logger.info('Best parameters: %s', str(results_dict['params']))
         # else simply train the model with default parameters
         else:
