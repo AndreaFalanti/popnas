@@ -1,4 +1,5 @@
 # module that contains generic helper functions used by multiple modules
+import json
 import operator
 import os
 import re
@@ -139,3 +140,28 @@ def get_valid_inputs_for_block_size(input_values: list, current_blocks: int, max
 def alternative_dict_to_string(d: dict):
     ''' Avoids characters that are invalid in some OS filesystem '''
     return f'({",".join([f"{key}={value}" for key, value in d.items()])})'
+
+
+def instantiate_search_space_from_logs(log_folder_path: str):
+    '''
+    Instantiate a SearchSpace instance, using the settings specified in the run configuration saved in a log folder.
+
+    Args:
+        log_folder_path: path to log folder
+
+    Returns:
+        (SearchSpace): the search space instance
+    '''
+    # import must be done here, to avoid circular dependency
+    from encoder import SearchSpace
+
+    run_config_path = os.path.join(log_folder_path, 'restore', 'run.json')
+    with open(run_config_path, 'r') as f:
+        run_config = json.load(f)
+
+    ss_config = run_config['search_space']
+    arc_config = run_config['architecture_parameters']
+    operators = ss_config['operators']
+    max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
+
+    return SearchSpace(B=ss_config['blocks'], operators=operators, cell_stack_depth=max_cells, input_lookback_depth=-ss_config['lookback_depth'])

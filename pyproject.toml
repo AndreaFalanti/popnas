@@ -23,7 +23,8 @@ seaborn = "0.11.2"
 tf2onnx = "1.9.3"
 keras-tuner = "1.1.0"
 tensorflow-addons = {extras = ["tensorflow"], version = "0.15.0"}
-tensorflow-probability = "^0.15.0"
+tensorflow-probability = "0.15.0"
+igraph = "0.9.8"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"

@@ -3,8 +3,9 @@ import csv
 import math
 import os.path
 
+import igraph
 from encoder import SearchSpace
-from utils.func_utils import list_flatten
+from utils.func_utils import list_flatten, to_list_of_tuples
 
 
 def compute_real_cnn_cell_stack_depth(cell_spec: list, max_cells: int):
@@ -257,3 +258,58 @@ def generate_all_feature_sets(cell_spec: list, search_space: SearchSpace):
     prefix_features, suffix_features = generate_shared_features(cell_spec, search_space)
 
     return prefix_features + op_features_time + suffix_features, prefix_features + op_features_acc + suffix_features
+
+
+def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int, int]]', total_op_score: float):
+    blocks = len(op_features)
+    flat_ops = list_flatten(op_features)
+
+    basic_edges = list_flatten([[(i*3, i*3 + 2), (i*3 + 1, i*3 + 2)] for i in range(blocks)])
+    block_dep_edges = [(2 + 3 * inp, i + (i // 2)) for i, inp in enumerate(inputs) if inp >= 0]
+
+    # for each block the 2 operations plus the add (3 vertices)
+    g = igraph.Graph(n=3 * blocks, edges=basic_edges + block_dep_edges, directed=True)
+
+    g.vs['op_time'] = list_flatten([(op1, op2, 0) for op1, op2 in op_features])
+    # DEBUG
+    if not g.is_dag():
+        print('Fuck')
+
+    # add nodes should not be considered
+    dag_depth = 1 + g.diameter() // 2
+
+    add_vertices = g.vs.select([2 + 3 * i for i in range(blocks)])  # type: igraph.VertexSeq
+    adds_in_cell_outputs = add_vertices.select(_outdegree_eq=0)
+    concat_inputs_len = len(adds_in_cell_outputs) if len(adds_in_cell_outputs) > 1 else 0   # if 1, there is no concat
+
+    # get heaviest path
+    if dag_depth == 1:
+        heaviest_path_op_score_fraction = max(flat_ops) / total_op_score
+    else:
+        heaviest_path_op_score_fraction = 0
+        # get all vertexes involved in paths to reach one of the ops of the adds involved in final concatenation
+        for av in adds_in_cell_outputs:
+            vertexes_that_reach_op1 = g.subcomponent(av.index - 2, mode='in')
+            vertexes_that_reach_op2 = g.subcomponent(av.index - 1, mode='in')
+
+            op1_path_op_score = sum(g.vs.select(vertexes_that_reach_op1)['op_time'])
+            op2_path_op_score = sum(g.vs.select(vertexes_that_reach_op2)['op_time'])
+            heaviest_path_op_score_fraction = max(heaviest_path_op_score_fraction, op1_path_op_score, op2_path_op_score)
+
+        heaviest_path_op_score_fraction = heaviest_path_op_score_fraction / total_op_score
+
+    return [dag_depth, concat_inputs_len, heaviest_path_op_score_fraction]
+
+
+def compute_new_cell_features(cell_spec: list, search_space: SearchSpace):
+    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
+    op_time_features = to_list_of_tuples(op_time_features_flat, 2)
+    inputs = list_flatten(cell_spec)[::2]
+
+    total_op_score = sum(op_time_features_flat)
+    use_different_lookbacks = 1 if len(set([inp for inp in inputs if inp < 0])) > 1 else 0
+    first_level_op_score_fraction = sum([op for inp, op in zip(inputs, op_time_features_flat) if inp < 0]) / total_op_score
+    block_dependencies = len([inp for inp in inputs if inp >= 0])   # with also duplications
+
+    return [total_op_score, use_different_lookbacks, first_level_op_score_fraction, block_dependencies]\
+           + compute_features_from_dag(inputs, op_time_features, total_op_score)
