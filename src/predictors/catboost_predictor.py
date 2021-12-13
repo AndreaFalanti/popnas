@@ -26,7 +26,6 @@ class CatBoostPredictor(Predictor):
         self.perform_feature_analysis = perform_feature_analysis
         self.task_type = task_type
 
-        # TODO: get indexes from column_desc file and then find from indexes these fields
         self.feature_names = None
         self.drop_columns = None
         self.y_col = None
@@ -63,7 +62,8 @@ class CatBoostPredictor(Predictor):
         create_empty_folder(train_log_folder)
 
         # specify the training parameters
-        # TODO: task type = 'GPU' is very slow, why?
+        # NOTE: task type = 'GPU' is very slow in our case, because it uses ordered sampling on datasets with few samples (< 10k).
+        #  CPU is very fast and the models between GPU and CPU seems to not have so much different results
         self.model = catboost.CatBoostRegressor(early_stopping_rounds=40, train_dir=train_log_folder, task_type=self.task_type)
         # train the model with random search
         if self.use_random_search:
