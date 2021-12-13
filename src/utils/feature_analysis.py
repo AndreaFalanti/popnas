@@ -43,7 +43,7 @@ def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: st
 
 # inspired from: https://towardsdatascience.com/the-art-of-finding-the-best-features-for-machine-learning-a9074e2ca60d
 def generate_dataset_correlation_heatmap(csv_path: str, save_folder: str, save_name: str = 'dataset_corr_heatmap.png'):
-    dataset_df = pd.read_csv(csv_path).drop(columns=['data_augmented'])
+    dataset_df = pd.read_csv(csv_path).drop(columns=['data_augmented', 'exploration'], errors='ignore')
 
     # use the pands .corr() function to compute pairwise correlations for the dataframe
     corr = dataset_df.corr()

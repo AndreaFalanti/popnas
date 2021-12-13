@@ -44,7 +44,7 @@ class AMLLibraryPredictor(Predictor):
         # y to predict is always the first column in POPNAS case
         self.y_col = df.columns.values.tolist()[0]
         self.drop_columns = [self.y_col, 'exploration', 'data_augmented']
-        df = df.drop(columns=self.drop_columns)
+        df = df.drop(columns=self.drop_columns, errors='ignore')
 
         self.feature_names = df.columns.values.tolist()
 
@@ -97,7 +97,7 @@ class AMLLibraryPredictor(Predictor):
 
         # TODO: actually tested only on linear models, SVR should use kernel probably while XGBoost the tree explainer
         if self.perform_feature_analysis and set(self.techniques).issubset({'NNLS', 'LRRidge'}):
-            features_df = dataset_df.drop(columns=self.drop_columns)
+            features_df = dataset_df.drop(columns=self.drop_columns, errors='ignore')
             save_feature_analysis_plots(self.model.get_regressor(), features_df, output_folder, save_pred_every=500, model_type='linear')
 
     def predict(self, sample: list) -> float:
@@ -119,10 +119,14 @@ class AMLLibraryPredictor(Predictor):
             train_df.to_csv(save_path, index=False)
             dataset_paths.append(save_path)
 
-            # use == False, otherwise it will not work properly
-            predictions_df = dataset_df[(dataset_df['blocks'] == (b + 1)) & (dataset_df['data_augmented'] == False)]
+            predictions_df = dataset_df[dataset_df['blocks'] == (b + 1)]
+            # in datasets that use data augmentation, filter them in prediction phase
+            if 'data_augmented' in predictions_df.columns:
+                # use == False, otherwise it will not work properly
+                predictions_df = predictions_df[dataset_df['data_augmented'] == False]
+
             real_values.append(predictions_df[self.y_col].values.tolist())
-            predictions_df = predictions_df.drop(columns=self.drop_columns)
+            predictions_df = predictions_df.drop(columns=self.drop_columns, errors='ignore')
             prediction_samples.append(predictions_df.values.tolist())
 
         return dataset_paths, prediction_samples, real_values

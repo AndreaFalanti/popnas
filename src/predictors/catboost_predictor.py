@@ -64,7 +64,7 @@ class CatBoostPredictor(Predictor):
 
         # specify the training parameters
         # TODO: task type = 'GPU' is very slow, why?
-        self.model = catboost.CatBoostRegressor(early_stopping_rounds=20, train_dir=train_log_folder, task_type=self.task_type)
+        self.model = catboost.CatBoostRegressor(early_stopping_rounds=40, train_dir=train_log_folder, task_type=self.task_type)
         # train the model with random search
         if self.use_random_search:
             param_grid = {
@@ -116,8 +116,12 @@ class CatBoostPredictor(Predictor):
             train_df.to_csv(save_path, index=False)
             dataset_paths.append(save_path)
 
-            # use == False, otherwise it will not work properly
-            predictions_df = dataset_df[(dataset_df['blocks'] == (b + 1)) & (dataset_df['data_augmented'] == False)]
+            predictions_df = dataset_df[dataset_df['blocks'] == (b + 1)]
+            # in datasets that use data augmentation, filter them in prediction phase
+            if 'data_augmented' in predictions_df.columns:
+                # use == False, otherwise it will not work properly
+                predictions_df = predictions_df[dataset_df['data_augmented'] == False]
+
             real_values.append(predictions_df[self.y_col].values.tolist())
             predictions_df = predictions_df.drop(columns=self.drop_columns)
             prediction_samples.append(predictions_df.values.tolist())
