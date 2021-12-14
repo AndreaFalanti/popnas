@@ -11,7 +11,8 @@ from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
 from predictors import *
-from utils.feature_utils import generate_all_feature_sets, build_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function
+from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function, build_acc_feature_names, \
+    generate_time_features, generate_acc_features
 from utils.func_utils import get_valid_inputs_for_block_size
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, restore_search_space_children
 
@@ -106,7 +107,7 @@ class Train:
 
         return reward, time, total_params, flops
 
-    def perform_initial_thrust(self, time_features_len: int, acc_features_len: int):
+    def perform_initial_thrust(self, acc_features_len: int):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
         '''
@@ -115,7 +116,7 @@ class Train:
         acc, time, params, flops = self.generate_and_train_model_from_spec([])
 
         # last fields are exploration and data augmentation
-        time_data = [time] + [0] * (time_features_len - 3) + [False, False]
+        time_data = [time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
         acc_data = [acc] + [0] * (acc_features_len - 3) + [False, False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -148,36 +149,6 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def generate_eqv_cells_features(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool):
-        '''
-        Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
-        Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
-
-        Returns:
-            (list): features to be used in predictors (ML techniques)
-        '''
-
-        # equivalent cells can be useful to train better the regressor
-        eqv_cells, _ = self.search_space.generate_eqv_cells(cell_spec, size=self.blocks)
-
-        # expand cell_spec for bool comparison of data_augmented field
-        cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
-
-        time_features_list, acc_features_list = [], []
-        for eqv_cell in eqv_cells:
-            time_features, acc_features = generate_all_feature_sets(eqv_cell, self.search_space)
-
-            # features are expanded with labels and data_augmented field
-            time_features_list.append([time] + time_features + [exploration, eqv_cell != cell_spec])
-            acc_features_list.append([accuracy] + acc_features + [exploration, eqv_cell != cell_spec])
-
-        return time_features_list, acc_features_list
-
-        # TODO: legacy features
-        # return [[time, current_blocks] + state_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
-        #         for cell in eqv_cells],\
-        #        [[accuracy, current_blocks] + state_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
-
     def write_training_data(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool = False):
         '''
         Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
@@ -190,12 +161,20 @@ class Train:
             cell_spec (list): [description]
             exploration:
         '''
+        # single record, no data augmentation needed
+        time_row = [time] + generate_time_features(cell_spec, self.search_space) + [exploration]
 
-        time_rows, acc_rows = self.generate_eqv_cells_features(current_blocks, time, accuracy, cell_spec, exploration)
+        # accuracy features need data augmentation to generalize on equivalent cell specifications
+        eqv_cells, _ = self.search_space.generate_eqv_cells(cell_spec, size=self.blocks)
+        # expand cell_spec for bool comparison of data_augmented field
+        full_cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
+
+        acc_rows = [[accuracy] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
+                    for eqv_cell in eqv_cells]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
-            writer.writerows(time_rows)
+            writer.writerow(time_row)
 
         with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -241,16 +220,14 @@ class Train:
             #  the algorithm is ran. Hopefully pull requests will be merged in near future.
             time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True,
                                               override_logs=False, perform_feature_analysis=False)
-            time_xgboost = AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], self._logger, predictors_log_path,
-                                               override_logs=False, perform_feature_analysis=False)
-            time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path,
-                                               override_logs=False, perform_feature_analysis=False)
+            # time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path,
+            #                                    override_logs=False, perform_feature_analysis=False)
 
         def get_acc_predictor_for_b(b: int):
             return acc_lstm
 
         def get_time_predictor_for_b(b: int):
-            return None if self.pnas_mode else (time_lrridge if b == 1 else time_catboost)
+            return None if self.pnas_mode else time_catboost
 
         self._logger.info('Predictors generated successfully')
 
@@ -293,8 +270,8 @@ class Train:
         '''
         Main function, executed by run.py to start POPNAS algorithm.
         '''
-        time_headers, time_feature_types = build_feature_names('time', self.blocks, self.input_lookback_depth)
-        acc_headers, acc_feature_types = build_feature_names('acc', self.blocks, self.input_lookback_depth)
+        time_headers, time_feature_types = build_time_feature_names()
+        acc_headers, acc_feature_types = build_acc_feature_names(self.blocks, self.input_lookback_depth)
 
         # create the predictors
         acc_pred_func, time_pred_func = self.initialize_predictors()
@@ -311,7 +288,7 @@ class Train:
             # add headers to csv and create CatBoost feature files
             initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
 
-            initial_thrust_time = self.perform_initial_thrust(len(time_headers), len(acc_headers))
+            initial_thrust_time = self.perform_initial_thrust(len(acc_headers))
             self.starting_b = 1
             self.restore_info.update(current_b=1, total_time=self._compute_total_time())
 

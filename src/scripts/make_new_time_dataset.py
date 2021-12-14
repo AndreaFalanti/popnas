@@ -22,7 +22,7 @@ def write_new_time_dataset_csv(cells_info: 'list[tuple[list, float, int]]', sear
 
     for cell_spec, target, blocks in cells_info[1:]:
         total_cells = compute_real_cnn_cell_stack_depth(cell_spec, search_space.cell_stack_depth)
-        cell_dag_features = compute_new_cell_features(cell_spec, search_space)
+        cell_dag_features = generate_time_features(cell_spec, search_space)
 
         features_list = [target] + [blocks, total_cells] + cell_dag_features + [False]
         csv_rows.append(features_list)
