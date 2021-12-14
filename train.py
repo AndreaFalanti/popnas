@@ -49,13 +49,19 @@ class Train:
         self.timestr = timestr
 
     def process(self):
-
         # I don't know why I am doing this =(
         os.environ['CUDA_VISIBLE_DEVICES'] = "0"
         # create the complete headers row of the CSV files
         headers = ["time", "blocks"]
         index_list = [0]
         t_max = 0
+
+        # create headers for csv files
+        for b in range(1, self.blocks + 1):
+            a = b * 2
+            c = a - 1
+            new_block = ["input_%d" % c, "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
+            headers.extend(new_block)
 
         if self.restore == True:
             timestr = self.timestr
@@ -82,17 +88,11 @@ class Train:
                 writer = csv.writer(f)
                 writer.writerow(headers)
 
-        # create headers for csv files
-        for b in range(1, self.blocks + 1):
-            a = b * 2
-            c = a - 1
-            new_block = ["input_%d" % c, "operation_%d" % c, "input_%d" % a, "operation_%d" % a]
-            headers.extend(new_block)
-
         # initialize use_columns string for the configuration file
         use_columns = '\"blocks\",'
 
-        operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        # operators = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv', '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
+        operators = ['identity', '3x3 conv']
 
         # construct a state space
         state_space = StateSpace(self.blocks, input_lookback_depth=-2, input_lookforward_depth=None, operators=operators)
@@ -120,6 +120,10 @@ class Train:
             set = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(set)
             (x_train_init, y_train_init), (x_test_init, y_test_init) = set.load_data()
+
+        # reduce dataset dimensions to 10000 samples
+        x_train_init = x_train_init[:10000]
+        y_train_init = y_train_init[:10000]
 
         x_train_init = x_train_init.astype('float32') / 255.
         x_test_init = x_test_init.astype('float32') / 255.
