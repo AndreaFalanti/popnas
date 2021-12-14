@@ -1,3 +1,4 @@
+import os.path
 import statistics
 from typing import NamedTuple
 import logging
@@ -366,27 +367,33 @@ def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inp
     __logger.info("Children inputs usage plot for b=%d written successfully", b)
 
 
-def __build_prediction_dataframe(b: int, pnas_mode: bool):
+def __build_prediction_dataframe(b: int, k: int, pnas_mode: bool):
     # PNAS mode has no pareto front, use sorted predictions (by score)
-    pred_csv_path = log_service.build_path('csv', f'predictions_B{b}.csv') if pnas_mode \
-        else log_service.build_path('csv', f'pareto_front_B{b}.csv')
-    training_csv_path = log_service.build_path('csv', 'training_results.csv')
+    if pnas_mode:
+        pred_csv_path = log_service.build_path('csv', f'predictions_B{b}.csv')
+        # PNAS takes best k cells, the others are useless
+        pred_df = pd.read_csv(pred_csv_path).head(k)
+    else:
+        pareto_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
+        exploration_csv_path = log_service.build_path('csv', f'exploration_pareto_front_B{b}.csv')
 
-    pred_df = pd.read_csv(pred_csv_path)
+        # POPNAS trains the top k cells of the pareto front, plus all the ones of the exploration front, if produced
+        pred_df = pd.read_csv(pareto_csv_path).head(k)
+        if os.path.exists(exploration_csv_path):
+            exploration_df = pd.read_csv(exploration_csv_path)
+            pred_df = pd.concat([pred_df, exploration_df], ignore_index=True)
+
+    training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
 
     # take only trained CNN with correct block length
     training_df = training_df[training_df['# blocks'] == b]
 
-    # take first k CNN from predictions / pareto front (k can be found as the actual trained CNN count)
-    trained_cnn_count = len(training_df)
-    pred_df = pred_df.head(trained_cnn_count)
-
     # now both dataframes have same length and they have the same CNN order. Confront items in order to get differences.
     return pd.merge(training_df, pred_df, on=['cell structure'], how='inner')
 
 
-def plot_predictions_error(B: int, pnas_mode: bool):
+def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     time_errors, avg_time_errors, max_time_errors, min_time_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     acc_errors, avg_acc_errors, max_acc_errors, min_acc_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
@@ -400,7 +407,7 @@ def plot_predictions_error(B: int, pnas_mode: bool):
     # TODO: find a good way to remove duplication
     for b in range(2, B + 1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
-        merge_df = __build_prediction_dataframe(b, pnas_mode)
+        merge_df = __build_prediction_dataframe(b, K, pnas_mode)
 
         # compute time prediction errors (regressor)
         if not pnas_mode:
