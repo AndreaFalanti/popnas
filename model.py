@@ -37,7 +37,7 @@ class ModelGenerator(Model):
         self.global_counter = 0
 
         self.cells = []
-        filters = 32
+        filters = 24
 
         # add (M - 1) times N normal cells and a reduction cell
         for i in range(self.M - 1):
