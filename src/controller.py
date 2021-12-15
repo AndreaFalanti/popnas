@@ -12,7 +12,7 @@ from encoder import SearchSpace
 from predictors import Predictor
 from utils.cell_counter import CellCounter
 from utils.feature_utils import generate_time_features
-from utils.func_utils import get_valid_inputs_for_block_size
+from utils.func_utils import get_valid_inputs_for_block_size, to_list_of_tuples
 from utils.rstr import rstr
 
 
@@ -122,24 +122,35 @@ class ControllerManager:
         #  if you can make it more performant prune them before the evaluations again.
         next_models = list(generate_models())
 
-        pbar = tqdm(iterable=next_models,
+        # process the models to predict in batches, to vastly optimize the time needed to process them all
+        pred_batch_size = 16
+        batched_models = to_list_of_tuples(next_models, pred_batch_size)
+        # use as total the actual predictions to make, but manually iterate on the batches with custom pbar update to reflect actual prediction speed
+        pbar = tqdm(iterable=None,
                     unit='model', desc='Estimating models: ',
                     total=len(next_models))
 
-        # iterate through all the intermediate children (intermediate_child is a list of repeated (input,op,input,op) tuple blocks)
-        for cell_spec in pbar:
-            # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
-            #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
-            time_features = None if self.pnas_mode else generate_time_features(cell_spec, self.search_space)
-            estimated_time = None if self.pnas_mode else time_predictor.predict(time_features)
+        # iterate through all the possible cells for next B step and predict their score and time
+        with pbar:
+            for cells_batch in batched_models:
+                # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
+                #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
+                batch_time_features = None if self.pnas_mode else [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
 
-            estimated_score = acc_predictor.predict(cell_spec)
+                estimated_times = None if self.pnas_mode else time_predictor.predict_batch(batch_time_features)
+                estimated_scores = acc_predictor.predict_batch(cells_batch)
 
-            pbar.set_postfix({'time': estimated_time, 'score': estimated_score}, refresh=False)
+                # always preserve the child and its score in pnas mode
+                if self.pnas_mode:
+                    model_estimations.extend([ModelEstimate(cell_spec, score, time) for cell_spec, score, time
+                                              in zip(cells_batch, estimated_scores, estimated_times)])
+                # in popnas mode instead check that time estimation is < T (time threshold)
+                else:
+                    ests_in_time_limit = [ModelEstimate(cell_spec, score, time) for cell_spec, score, time
+                                          in zip(cells_batch, estimated_scores, estimated_times) if time <= self.T]
+                    model_estimations.extend(ests_in_time_limit)
 
-            # always preserve the child and its score in pnas mode, otherwise check that time estimation is < T (time threshold)
-            if self.pnas_mode or estimated_time <= self.T:
-                model_estimations.append(ModelEstimate(cell_spec, estimated_score, estimated_time))
+                pbar.update(len(cells_batch))
 
         # sort the children according to their score
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
