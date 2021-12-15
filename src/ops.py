@@ -97,6 +97,7 @@ class IdentityReshaper(Layer):
         config = super().get_config()
         config.update({
             'filters': self.filters,
+            'input_filters': self.input_filters,
             'strides': self.strides
         })
         return config
