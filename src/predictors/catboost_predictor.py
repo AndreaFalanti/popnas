@@ -3,6 +3,7 @@ from logging import Logger
 from typing import Union, Tuple
 
 import catboost
+import numpy as np
 import pandas as pd
 from scipy.stats import randint, loguniform, uniform
 
@@ -39,6 +40,8 @@ class CatBoostPredictor(Predictor):
         column_desc_df = pd.read_csv(self.column_desc_path, sep='\t', names=['index', 'type'])
         self.drop_column_indexes = column_desc_df[(column_desc_df['type'] == 'Label') | (column_desc_df['type'] == 'Auxiliary')]['index']
         self.cat_indexes = column_desc_df[column_desc_df['type'] == 'Categ']['index'].tolist()
+        # categorical indexes are based on whole file, since first column is the label, indexes must be decreased by 1 when using only features
+        self.cat_indexes = [i - 1 for i in self.cat_indexes] if len(self.cat_indexes) else None
 
         # y to predict is always the first column in POPNAS case
         self.y_col = df.columns.values.tolist()[0]
@@ -94,17 +97,27 @@ class CatBoostPredictor(Predictor):
             features_df = dataset_df.drop(columns=self.drop_columns)
             save_feature_analysis_plots(self.model, features_df, train_log_folder, save_pred_every=500)
 
-    def predict(self, sample: list) -> float:
+    def predict(self, x: list) -> float:
         # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)
-        # categorical indexes are based on whole file, since first column is the label, indexes must be decreased by 1 when using only features
-        pred_cat_indexes = [i - 1 for i in self.cat_indexes]
-        for cat_index in pred_cat_indexes:
-            # indexes are based on whole file, since first column is the label, indexes must be decreased by 1 when using only features
-            sample[cat_index] = int(sample[cat_index])
+        if self.cat_indexes is not None:
+            for cat_index in self.cat_indexes:
+                x[cat_index] = int(x[cat_index])
 
-        features_pool = catboost.Pool([sample], cat_features=pred_cat_indexes, feature_names=self.feature_names)
+        features_pool = catboost.Pool([x], cat_features=self.cat_indexes, feature_names=self.feature_names)
         # returned as a numpy array of single element
         return self.model.predict(features_pool)[0]
+
+    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+        # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)
+        if self.cat_indexes is not None:
+            for sample in x:
+                for cat_index in self.cat_indexes:
+                    sample[cat_index] = int(sample[cat_index])
+
+        features_pool = catboost.Pool(x, cat_features=self.cat_indexes, feature_names=self.feature_names)
+        # returned as a numpy array of single element
+        preds = self.model.predict(features_pool)  # type: np.ndarray
+        return preds.reshape(-1)
 
     def prepare_prediction_test_data(self, file_path: str) -> 'tuple[list[Union[str, list[tuple]]], list[list], list[list[float]]]':
         dataset_df = pd.read_csv(file_path)

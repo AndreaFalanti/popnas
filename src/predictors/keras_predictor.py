@@ -5,6 +5,7 @@ from typing import Union, Any
 
 import keras
 import keras_tuner as kt
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 
@@ -142,12 +143,11 @@ class KerasPredictor(Predictor):
             self.children_history.extend(cells)
             self.score_history.extend(rewards)
 
-            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history,
-                                                      use_data_augmentation, validation_split=self.hp_tuning)
+            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history, use_data_augmentation,
+                                                      validation_split=self.hp_tuning)
         # use only current data
         else:
-            train_ds, val_ds = self._build_tf_dataset(cells, rewards,
-                                                      use_data_augmentation, validation_split=self.hp_tuning)
+            train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation, validation_split=self.hp_tuning)
 
         train_callbacks = self._get_callbacks()
 
@@ -181,9 +181,14 @@ class KerasPredictor(Predictor):
         if self.save_weights:
             self.model.save_weights(os.path.join(self.log_folder, 'weights'))
 
-    def predict(self, sample: list) -> float:
-        pred_dataset, _ = self._build_tf_dataset([sample], validation_split=False)
+    def predict(self, x: list) -> float:
+        pred_dataset, _ = self._build_tf_dataset([x], validation_split=False, shuffle=False)
         return self.model.predict(x=pred_dataset)[0, 0]
+
+    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+        pred_dataset, _ = self._build_tf_dataset(x, batch_size=2, validation_split=False, shuffle=False)   # preserve order
+        preds = self.model.predict(x=pred_dataset)  # type: np.ndarray
+        return preds.reshape(-1)
 
     def prepare_prediction_test_data(self, file_path: str) -> 'tuple[list[Union[str, list[tuple]]], list[list], list[list[float]]]':
         dataset_df = pd.read_csv(file_path)

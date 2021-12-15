@@ -90,14 +90,26 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def predict(self, sample: list) -> float:
+    def predict(self, x: list) -> float:
         '''
-        Predict a value.
+        Predict a value for x.
         Args:
-            sample: list of features, input of prediction
+            x: a single sample. The sample is expected to be a list of features, input of the prediction.
 
         Returns:
             (float): prediction
+        '''
+        pass
+
+    @abstractmethod
+    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+        '''
+        Predict a value for a batch of samples.
+        Args:
+            x: batch of samples. Each samples is expected to be a list of features, input of the prediction.
+
+        Returns:
+            (list[float]): predictions
         '''
         pass
 
@@ -123,6 +135,7 @@ class Predictor(ABC):
         for b, dataset_b, samples_b in zip(range(1, b_max), datasets, samples_to_predict):
             self._logger.info('Starting test procedure on B=%d', b)
             self.train(dataset_b)
+            # TODO: use predict_batch for more speed, but prediction time here is negligible compared to training time
             self._y_pred.append(list(map(self.predict, samples_b)))
 
         self._logger.info('Computing additional metrics...')

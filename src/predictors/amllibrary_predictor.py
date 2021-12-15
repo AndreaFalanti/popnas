@@ -4,6 +4,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from logging import Logger
 from typing import Union, Tuple
 
+import numpy as np
 import pandas as pd
 import psutil
 
@@ -100,9 +101,14 @@ class AMLLibraryPredictor(Predictor):
             features_df = dataset_df.drop(columns=self.drop_columns, errors='ignore')
             save_feature_analysis_plots(self.model.get_regressor(), features_df, output_folder, save_pred_every=500, model_type='linear')
 
-    def predict(self, sample: list) -> float:
-        features_df = pd.DataFrame([sample], columns=self.feature_names)
+    def predict(self, x: list) -> float:
+        features_df = pd.DataFrame([x], columns=self.feature_names)
         return self.model.predict(features_df)[0]
+
+    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+        features_df = pd.DataFrame(x, columns=self.feature_names)
+        preds = self.model.predict(features_df)     # type: np.ndarray
+        return preds.reshape(-1)
 
     def prepare_prediction_test_data(self, file_path: str) -> 'tuple[list[Union[str, list[tuple]]], list[list], list[list[float]]]':
         dataset_df = pd.read_csv(file_path)
