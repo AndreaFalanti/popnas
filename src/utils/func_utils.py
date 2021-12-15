@@ -24,8 +24,8 @@ def list_flatten(nested_l: 'list[Iterable]'):
     return [el for iterable_el in nested_l for el in iterable_el]
 
 
-def to_list_of_tuples(sequence, chunk_size):
-    return list(zip(*[iter(sequence)] * chunk_size))
+def to_list_of_tuples(seq, chunk_size):
+    return list(tuple(seq[pos:(pos + chunk_size)]) for pos in range(0, len(seq), chunk_size))
 
 
 def clamp(n: float, lower_bound: float, upper_bound: float):
