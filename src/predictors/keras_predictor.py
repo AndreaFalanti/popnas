@@ -73,8 +73,8 @@ class KerasPredictor(Predictor):
         pass
 
     @abstractmethod
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None,
-                          use_data_augmentation: bool = True, validation_split: bool = True) -> 'tuple[tf.data.Dataset, tf.data.Dataset]':
+    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4, use_data_augmentation: bool = True,
+                          validation_split: bool = True, shuffle: bool = True) -> 'tuple[tf.data.Dataset, tf.data.Dataset]':
         '''
         Build a dataset to be used in the RNN controller.
 
@@ -82,9 +82,11 @@ class KerasPredictor(Predictor):
             cell_specs: List of lists of inputs and operators, specification of cells in value form (no encoding).
             rewards: List of rewards (y labels). Defaults to None, provide it for building
                 a dataset for training purposes.
+            batch_size: Dataset batch size
             use_data_augmentation: flag for enabling data augmentation. Data augmentation simply insert in the dataset some equivalent cell
                 representation, aimed to make the neural network to generalize better.
             validation_split: set it to False to use all samples for training, without generating a validation set.
+            shuffle: shuffle the dataset. Set it to False in prediction to maintain order.
 
         Returns:
             (tuple[tf.data.Dataset, tf.data.Dataset]): training and validation datasets. Validation dataset is None if validation split is False.

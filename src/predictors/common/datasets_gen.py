@@ -81,8 +81,8 @@ def __preprocess_cell_specs_and_rewards(search_space: SearchSpace, cell_specs: '
     return cell_specs, rewards
 
 
-def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None,
-                                     validation_split: bool = True, use_data_augmentation: bool = True):
+def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4,
+                                     validation_split: bool = True, use_data_augmentation: bool = True, shuffle: bool = True):
     '''
     Build a dataset to be used in the RNN controller, 2 separate series for inputs and operators.
 
@@ -109,10 +109,14 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
             ds = tf.data.Dataset.zip((ds, ds_label))
         else:
             # TODO: add fake y, otherwise the input will be separated instead of using a pair of tensors... Better ideas to address this bug?
-            ds_label = tf.data.Dataset.from_tensor_slices([[1]])
+            fake_y = np.ones(shape=(len(x_cell_specs), 1))
+            ds_label = tf.data.Dataset.from_tensor_slices(fake_y)
             ds = tf.data.Dataset.zip((ds, ds_label))
 
-        return ds.shuffle(10000).batch(4)
+        if shuffle:
+            ds = ds.shuffle(10000)
+
+        return ds.batch(batch_size)
 
     cells_train, rewards_train = __preprocess_cell_specs_and_rewards(search_space, cell_specs, rewards, use_data_augmentation)
     if validation_split:
@@ -122,8 +126,8 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
         return build_dataset(cells_train, rewards_train), None
 
 
-def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None,
-                                  validation_split: bool = True, use_data_augmentation: bool = True):
+def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4,
+                                  validation_split: bool = True, use_data_augmentation: bool = True, shuffle: bool = True):
     '''
     Build a dataset to be used in the RNN controller, using whole blocks as a temporal serie.
 
@@ -146,7 +150,10 @@ def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[l
             ds_label = tf.data.Dataset.from_tensor_slices(y_rewards)
             ds = tf.data.Dataset.zip((ds, ds_label))
 
-        return ds.shuffle(10000).batch(4)
+        if shuffle:
+            ds = ds.shuffle(10000)
+
+        return ds.batch(batch_size)
 
     cells_train, rewards_train = __preprocess_cell_specs_and_rewards(search_space, cell_specs, rewards, use_data_augmentation)
     if validation_split:
