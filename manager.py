@@ -117,7 +117,7 @@ class NetworkManager:
 
                 num_train_batches = x_train.shape[0] // self.batchsize + 1
 
-                train_loss = tf.keras.losses.CategoricalCrossentropy(name='train_loss', from_logits=True)
+                train_loss = tf.keras.losses.CategoricalCrossentropy(name='train_loss')
 
                 val_accuracy = tf.keras.metrics.CategoricalAccuracy(name='test_accuracy')
 
