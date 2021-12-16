@@ -370,7 +370,7 @@ class ModelGenerator:
         # check for standard conv
         match = self.op_regexes['conv'].match(operator)  # type: re.Match
         if match:
-            model_name = f'3x3_conv_c{self.cell_index}b{self.block_index}{tag}'
+            model_name = f'{match.group(1)}x{match.group(2)}_conv_c{self.cell_index}b{self.block_index}{tag}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
                                 name=model_name, weight_reg=self.l2_weight_reg)
             return x
