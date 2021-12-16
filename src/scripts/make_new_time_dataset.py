@@ -21,10 +21,9 @@ def write_new_time_dataset_csv(cells_info: 'list[tuple[list, float, int]]', sear
     csv_rows.append([target] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False])
 
     for cell_spec, target, blocks in cells_info[1:]:
-        total_cells = compute_real_cnn_cell_stack_depth(cell_spec, search_space.cell_stack_depth)
-        cell_dag_features = generate_time_features(cell_spec, search_space)
+        time_features = generate_time_features(cell_spec, search_space)
 
-        features_list = [target] + [blocks, total_cells] + cell_dag_features + [False]
+        features_list = [target] + time_features + [False]
         csv_rows.append(features_list)
 
     with open(log_service.build_path('csv', f'new_training_time.csv'), mode='w', newline='') as f:
