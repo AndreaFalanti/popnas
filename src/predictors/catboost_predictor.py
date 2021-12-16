@@ -64,14 +64,13 @@ class CatBoostPredictor(Predictor):
         train_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
         create_empty_folder(train_log_folder)
 
-        # specify the training parameters
-        # allow a finer quantization of op_score (index 2), since it is the main driving feature. also increase its weight in scoring decisions.
-        feature_quantization = ['2:border_count=1024']
-        feature_weights = '2:2.0'
+        # Increase weight in scoring decisions of: [cells, op_score, concat_inputs], since they are the main driving factors
+        # in significant time alterations.
+        feature_weights = '1:1.5,2:1.5,7:1.2'
         # NOTE: task type = 'GPU' is very slow in our case, because it uses ordered sampling on datasets with few samples (< 10k).
         #  CPU is very fast and the models between GPU and CPU seems to not have so much different results
-        self.model = catboost.CatBoostRegressor(early_stopping_rounds=40, train_dir=train_log_folder, task_type=self.task_type,
-                                                per_float_feature_quantization=feature_quantization, feature_weights=feature_weights)
+        self.model = catboost.CatBoostRegressor(iterations=2500, early_stopping_rounds=50, train_dir=train_log_folder, task_type=self.task_type,
+                                                feature_weights=feature_weights)
 
         # train the model with random search
         if self.use_random_search:
@@ -81,7 +80,7 @@ class CatBoostPredictor(Predictor):
                 'l2_leaf_reg': uniform(0.1, 5),
                 'random_strength': uniform(0.3, 3),
                 'bagging_temperature': uniform(0.3, 3),
-                'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
+                # 'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
             }
 
             results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=40, train_size=0.8)
