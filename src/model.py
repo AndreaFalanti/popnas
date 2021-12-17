@@ -331,8 +331,11 @@ class ModelGenerator:
         if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2) or adapt_depth:
-                model_name = f'identity_R_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.IdentityReshaper(filters, input_filters, strides, name=model_name)
+                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it is disable, reverting to pointwise convolution
+                # model_name = f'identity_R_c{self.cell_index}b{self.block_index}{tag}'
+                # x = ops.IdentityReshaper(filters, input_filters, strides, name=model_name)
+                model_name = f'pointwise_id_c{self.cell_index}b{self.block_index}{tag}'
+                x = ops.Convolution(filters, (1, 1), strides, weight_reg=self.l2_weight_reg, name=model_name)
                 return x
             else:
                 # else just submits a linear layer if shapes match
