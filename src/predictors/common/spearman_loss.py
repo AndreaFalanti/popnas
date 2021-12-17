@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from scipy.stats import spearmanr
 from tensorflow.keras.losses import Loss, MeanSquaredError
+from tensorflow.python.keras.utils import losses_utils
 
 
 @tf.function
@@ -27,6 +28,8 @@ def spearman_correlation_loss(y_true, y_pred):
     # TODO: map_fn is probably ok in case predictions are not a single value, here instead we work on batches of single predictions
     # First we obtain the ranking of the predicted values
     # y_pred_rank = tf.map_fn(lambda x: get_rank(x), y_pred, fn_output_signature=tf.int32)
+    if len(y_true) == 1:
+        return 0.0
 
     y_pred_rank = get_rank(tf.squeeze(y_pred))
     y_pred_rank = tf.cast(y_pred_rank, dtype=tf.float32)
@@ -58,13 +61,19 @@ class Spearman(Loss):
 
 
 class MSEWithSpearman(Loss):
+
     ''' Mean squared error loss, rescaled with a factor based on the spearman correlation coefficient computed on the batch. '''
+
+    def __init__(self, spearman_weight: float = 1.0, reduction=losses_utils.ReductionV2.AUTO, name=None):
+        super().__init__(reduction, name)
+        self.spearman_weight = spearman_weight
+
     def call(self, y_true, y_pred):
         mse = MeanSquaredError().call(y_true, y_pred)
         spearman_loss = spearman_correlation_loss(y_true, y_pred)   # is in [0, 2] interval
 
         # multiply mse based on the spearman correlation
         # if spearman is 1, loss will be simply the plain mse
-        # if spearman is -1, loss will be mse * 3, heavily penalizing the training
-        # this should help the NN to correctly rank the predictions, while also minimizing the predictions error from real value
-        return mse * (1 + spearman_loss)
+        # if spearman is -1, loss will be mse * (1 + 2 * spearman_weight), heavily penalizing the training
+        # this could help the NN to correctly rank the predictions, while also minimizing the predictions error from real value
+        return mse * (1 + spearman_loss * self.spearman_weight)
