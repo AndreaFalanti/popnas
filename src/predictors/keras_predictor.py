@@ -12,6 +12,7 @@ import tensorflow as tf
 from predictors import Predictor
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
+
 from utils.func_utils import parse_cell_structures
 from utils.rstr import rstr
 
@@ -53,8 +54,8 @@ class KerasPredictor(Predictor):
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
         return {
-            'epochs': 25,
-            'lr': 0.01
+            'epochs': 30,
+            'lr': 0.004
         }
 
     @abstractmethod
@@ -64,7 +65,7 @@ class KerasPredictor(Predictor):
         Note that keras-tuner HyperParameters class can be treated as a dictionary.
         '''
         hp = kt.HyperParameters()
-        hp.Fixed('epochs', 25)
+        hp.Fixed('epochs', 30)
         hp.Float('lr', 0.002, 0.02, sampling='linear')
 
         return hp
@@ -74,7 +75,7 @@ class KerasPredictor(Predictor):
         pass
 
     @abstractmethod
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4, use_data_augmentation: bool = True,
+    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True) -> 'tuple[tf.data.Dataset, tf.data.Dataset]':
         '''
         Build a dataset to be used in the RNN controller.
@@ -104,7 +105,7 @@ class KerasPredictor(Predictor):
     def _get_callbacks(self) -> 'list[callbacks.Callback]':
         return [
             callbacks.TensorBoard(log_dir=self.log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
-            callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)
+            callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
         ]
 
     # kt.HyperParameters is basically a dictionary and can be treated as such
@@ -143,18 +144,18 @@ class KerasPredictor(Predictor):
             self.children_history.extend(cells)
             self.score_history.extend(rewards)
 
-            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history, use_data_augmentation,
+            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history, use_data_augmentation=use_data_augmentation,
                                                       validation_split=self.hp_tuning)
         # use only current data
         else:
-            train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation, validation_split=self.hp_tuning)
+            train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
 
         train_callbacks = self._get_callbacks()
 
         if self.hp_tuning:
-            tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=4, verbose=1, mode='min', restore_best_weights=True)]
+            tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)]
             tuner = kt.Hyperband(self._compile_model, objective='val_loss', hyperparameters=self._get_hp_search_space(),
-                                 max_epochs=20,
+                                 max_epochs=30,
                                  directory=os.path.join(self.log_folder, 'keras-tuner'), project_name=f'B{actual_b}')
             tuner.search(x=train_ds,
                          epochs=self.hp_config['epochs'],
@@ -186,7 +187,7 @@ class KerasPredictor(Predictor):
         return self.model.predict(x=pred_dataset)[0, 0]
 
     def predict_batch(self, x: 'list[list]') -> 'list[float]':
-        pred_dataset, _ = self._build_tf_dataset(x, batch_size=2, validation_split=False, shuffle=False)   # preserve order
+        pred_dataset, _ = self._build_tf_dataset(x, batch_size=len(x), validation_split=False, shuffle=False)  # preserve order
         preds = self.model.predict(x=pred_dataset)  # type: np.ndarray
         return preds.reshape(-1)
 

@@ -62,6 +62,6 @@ class Conv1DPredictor(KerasPredictor):
 
         return Model(inputs=(inputs, ops), outputs=score)
 
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4, use_data_augmentation: bool = True,
+    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True):
         return build_temporal_series_dataset_2i(self.search_space, cell_specs, rewards, batch_size, validation_split, use_data_augmentation, shuffle)

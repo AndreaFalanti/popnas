@@ -207,8 +207,8 @@ class Train:
         self._logger.info('Initializing predictors...')
 
         # accuracy predictors to be used
-        acc_lstm = LSTMPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
-                                 save_weights=True, hp_config=self.lstm_config)
+        acc_lstm = RNNPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
+                                save_weights=True, hp_config=self.lstm_config)
 
         # restore NN weights when restoring a previous run
         # TODO: it will be a NOP if checkpoint is not present, but is not very intuitive...
