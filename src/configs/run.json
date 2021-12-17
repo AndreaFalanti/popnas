@@ -39,14 +39,6 @@
         "concat_only_unused_blocks": true,
         "multi_output": false
     },
-    "lstm_hp": {
-        "epochs": 20,
-        "lr": 0.01,
-        "wr": 1e-5,
-        "er": 0,
-        "cells": 48,
-        "embedding_dim": 10
-    },
     "dataset": {
         "name": "cifar10",
         "path": null,
