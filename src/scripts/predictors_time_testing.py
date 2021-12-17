@@ -1,12 +1,11 @@
 import argparse
-import json
 import math
 import os
 
 import log_service
-from encoder import SearchSpace
 from predictors import *
 from utils.feature_analysis import generate_dataset_correlation_heatmap
+from utils.func_utils import instantiate_search_space_from_logs
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 
@@ -49,32 +48,26 @@ def main():
     nn_y_col = 'training time(seconds)'
     nn_y_domain = (0, math.inf)
 
+    # use them when training on datasets produced from "make_new_time_dataset" script
+    # training_time_csv_path = os.path.join(csv_path, 'new_training_time.csv')
+    # catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_time.csv')
+
     # compute dataset correlation
     generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
-    # get some search space info from the run logs, so that SearchSpace instance can be correctly initialized
-    run_config_path = os.path.join(args.p, 'restore', 'run.json')
-    with open(run_config_path, 'r') as f:
-        run_config = json.load(f)
-
-    ss_config = run_config['search_space']
-    operators = ss_config['operators']
-    # TODO: cell_stack_depth is not important for these tests, but could be computed
-    search_space = SearchSpace(B=ss_config['blocks'], operators=operators, cell_stack_depth=8, input_lookback_depth=-ss_config['lookback_depth'])
+    search_space = instantiate_search_space_from_logs(args.p)
 
     predictors_to_test = [
-        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path, name='aMLLibrary_NNLS (new features)'),
-        # AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path, name='aMLLibrary_LRRidge (new features)'),
+        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path, name='aMLLibrary_NNLS_NEW'),
+        # AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path, name='aMLLibrary_LRRidge_NEW'),
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path, name='aMLLibrary_XGBoost (new features)'),
-        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        # LSTMPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # RNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        # GRUPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True),
-        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU'),
+        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, name='CatBoost_CPU_NEW'),
+        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU', name='CatBoost_GPU_NEW'),
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
