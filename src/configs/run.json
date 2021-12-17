@@ -10,8 +10,12 @@
             "3x3 dconv",
             "5x5 dconv",
             "7x7 dconv",
+            "1x3-3x1 conv",
+            "1x5-5x1 conv",
             "1x7-7x1 conv",
+            "1x1 conv",
             "3x3 conv",
+            "5x5 conv",
             "2x2 maxpool",
             "2x2 avgpool"
         ]
