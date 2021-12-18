@@ -13,7 +13,7 @@ from manager import NetworkManager
 from predictors import *
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function, build_acc_feature_names, \
     generate_time_features, generate_acc_features
-from utils.func_utils import get_valid_inputs_for_block_size
+from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, restore_search_space_children
 
 
@@ -193,8 +193,8 @@ class Train:
             if f.tell() == 0:
                 writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'exploration', 'cell structure'])
 
-            cell_structure = f"[{';'.join(map(lambda el: str(el), cell_spec))}]"
-            data = [acc, time, params, flops, blocks, exploration, cell_structure]
+            cell_structure_str = cell_spec_to_str(cell_spec)
+            data = [acc, time, params, flops, blocks, exploration, cell_structure_str]
 
             writer.writerow(data)
 

@@ -1,3 +1,4 @@
+import csv
 import importlib.util
 import logging
 import os
@@ -17,6 +18,7 @@ from tensorflow.python.framework.convert_to_constants import convert_variables_t
 
 import log_service
 from model import ModelGenerator
+from utils.func_utils import cell_spec_to_str
 from utils.timing_callback import TimingCallback
 
 import absl.logging
@@ -98,7 +100,9 @@ class NetworkManager:
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches, output_classes=self.dataset_classes_count,
                                         data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
+
         self.multi_output_model = arc_config['multi_output']
+        self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']
 
         # DEBUG ONLY
         # self.__test_data_augmentation(self.dataset_folds[0][0])
@@ -272,6 +276,19 @@ class NetworkManager:
             # GG python devs for this crap, a writelines function that works like a write, not adding \n automatically...
             f.writelines(line + '\n' for line in lines)
 
+    def __write_multi_output_file(self, cell_spec: list, outputs_dict: dict):
+        # add cell spec to dictionary and write it into the csv
+        outputs_dict['cell_spec'] = cell_spec_to_str(cell_spec)
+
+        with open(log_service.build_path('csv', 'multi_output.csv'), mode='a+', newline='') as f:
+            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            if f.tell() == 0:
+                writer = csv.writer(f)
+                writer.writerow(self.multi_output_csv_headers)
+
+            writer = csv.DictWriter(f, self.multi_output_csv_headers)
+            writer.writerow(outputs_dict)
+
     def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, dict]:
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
@@ -349,8 +366,16 @@ class NetworkManager:
             if self.multi_output_model and len(cell_spec) > 0:
                 # use as val accuracy metric only the one of the softmax placed after the last cell
                 r = re.compile(r'val_Softmax_c(\d+)_accuracy')
-                max_index = max([int(match.group(1)) for match in map(r.match, hist.history.keys()) if match])
+                output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
+                max_index = max(output_indexes)
                 accuracies[i] = max(hist.history[f'val_Softmax_c{max_index}_accuracy'])
+
+                # save best accuracy reached for each output
+                multi_output_accuracies = {}
+                for output_index in output_indexes:
+                    multi_output_accuracies[f'c{output_index}_accuracy'] = max(hist.history[f'val_Softmax_c{output_index}_accuracy'])
+
+                self.__write_multi_output_file(cell_spec, multi_output_accuracies)
             else:
                 accuracies[i] = max(hist.history['val_accuracy'])
 

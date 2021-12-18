@@ -165,3 +165,7 @@ def instantiate_search_space_from_logs(log_folder_path: str):
     max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
 
     return SearchSpace(B=ss_config['blocks'], operators=operators, cell_stack_depth=max_cells, input_lookback_depth=-ss_config['lookback_depth'])
+
+
+def cell_spec_to_str(cell_spec: list):
+    return f"[{';'.join(map(str, cell_spec))}]"
