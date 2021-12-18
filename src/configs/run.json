@@ -21,7 +21,7 @@
         ]
     },
     "cnn_hp": {
-        "epochs": 20,
+        "epochs": 21,
         "batch_size": 128,
         "learning_rate": 0.05,
         "filters": 24,
@@ -54,6 +54,7 @@
             "perform_on_gpu": false
         }
     },
+    "predictions_batch_size": 32,
     "pnas_mode": false,
     "use_cpu": false
 }

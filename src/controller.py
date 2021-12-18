@@ -44,7 +44,7 @@ class ControllerManager:
     '''
 
     def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 B=5, K=256, ex=16, T=np.inf, current_b: int = 1, pnas_mode: bool = False):
+                 B=5, K=256, ex=16, T=np.inf, current_b: int = 1, predictions_batch_size: int = 16, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -64,6 +64,7 @@ class ControllerManager:
         self.ex = ex
         self.T = T
         self.current_b = current_b
+        self.predictions_batch_size = predictions_batch_size
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
@@ -123,8 +124,7 @@ class ControllerManager:
         next_models = list(generate_models())
 
         # process the models to predict in batches, to vastly optimize the time needed to process them all
-        pred_batch_size = 16
-        batched_models = to_list_of_tuples(next_models, pred_batch_size)
+        batched_models = to_list_of_tuples(next_models, self.predictions_batch_size)
         # use as total the actual predictions to make, but manually iterate on the batches with custom pbar update to reflect actual prediction speed
         pbar = tqdm(iterable=None,
                     unit='model', desc='Estimating models: ',

@@ -51,6 +51,7 @@ class Train:
         self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config)
 
         self.pnas_mode = run_config['pnas_mode']
+        self.preds_batch_size = run_config['predictions_batch_size']
 
         self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
 
@@ -280,7 +281,8 @@ class Train:
         # for restoring purposes
         controller_b = self.starting_b if self.starting_b > 1 else 1
         controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, current_b=controller_b,
-                                       B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size, pnas_mode=self.pnas_mode)
+                                       B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size,
+                                       predictions_batch_size=self.preds_batch_size, pnas_mode=self.pnas_mode)
 
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
