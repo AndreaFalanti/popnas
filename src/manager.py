@@ -173,8 +173,7 @@ class NetworkManager:
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
 
             # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1,
-                                                                            random_state=0, stratify=y_train_init)
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, stratify=y_train_init)
 
             train_ds, val_ds, train_batches, val_batches = self.__build_tf_datasets((x_train, y_train, x_validation, y_validation))
             self.train_batches = train_batches
