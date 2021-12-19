@@ -59,6 +59,7 @@ to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https:
 ## Build Docker container
 In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
 and mount POPNAS source code.
+
 To build the image, open the terminal into the _src_ folder and execute this command:
 ```
 docker build -f ../docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
@@ -162,7 +163,8 @@ They depend on the model type chosen for the controller. See model class to have
 ### Time prediction testing script
 An additional script is also provided to analyze the results of multiple predictors on time target, on the data gathered in a POPNAS run.
 The script creates an additional folder (*pred_time_test*) inside the log folder given as argument.
-Script can be launched with the following command:
+
+The script can be launched with the following command:
 ```
 python scripts/predictors_time_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
 ```
@@ -170,13 +172,16 @@ python scripts/predictors_time_testing.py -p {absolute_path_to_logs}/{target_fol
 ### Controller testing script
 Another additional script is provided to analyze the results of multiple controller configurations on the data gathered in a POPNAS run.
 The script creates an additional folder (*pred_acc_test*) inside the log folder given as argument.
-Since the script use relational imports, you must run this script from the main project folder (outside src), with the -m flag:
+
+The script can be launched with the following command:
 ```
 python scripts/predictors_acc_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
 ```
 
 ### Plot slideshow script
-The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way. To use it, only the log folder must be provided.
+The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way.
+To use it, only the log folder must be provided.
+
 An example of the command usage (from src folder):
 ```
 python ./scripts/plot_slideshow.py -p {absolute_path_to_logs}/{target_folder(date)}
@@ -185,8 +190,8 @@ Close a plot overview to visualize the next one, the program terminates after sh
 
 If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
 
-If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder, also their output plots will be visualized
-in additional slides at the end.
+If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder,
+also their output plots will be visualized in additional slides at the end.
 
 
 ### Tensorboard
@@ -205,9 +210,14 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
 - Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
+- Add adamW as an alternative optimizer that can be optionally enabled and used instead of Adam + L2 regularization, providing a more
+  accurate weight decay.
 - Add ScheduledDropPath in local version (see FractalNet), since it was used in both PNAS and NASNet.
-- Allow the usage of flexible kernel sizes for each operation supported by the algorithm.
-- Add support for TransposeConvolution operation.
+- Add cosine decay restart learning rate schedule, since also ADAM benefits a lot from it.
+- Allow the usage of flexible kernel sizes for each operator supported by the algorithm.
+- Add support for TransposeConvolution operator.
+- Add the possibility to generate models with multiple outputs, one at the end of each cell. The CNN is then trained with custom loss weights
+  for each output, scaling exponentially based on the cell index (last cell loss has weight 1/2, the second-last 1/4, the third-last 1/8, etc...)
 
 
 ### Equivalent networks detection
@@ -217,17 +227,19 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 
 ### Predictors changes
-- CatBoost can now be used as time regressor, instead or together aMLLibrary supported regressors.
+- CatBoost can now be used as time regressor, instead or together with aMLLibrary supported regressors. By default, CatBoost is now used in time
+  predictions of each expansion step, with automatic hyperparameters tuning based on random search.
 - Add back the input columns features to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
   Therefore, input values have a great influence on actual training time and must be used by regressor for accurate estimations.
 - Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
   train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
-- Add another optimizer to LSTM controller, to use two different learning rates (one for B=1, the other for any other B value)
-  like specified in PNAS paper.
+- Keras predictors support hyperparameters tuning via Keras Tuner library. The search space for the parameters is
+  defined in each class and can be overridden by each model to adapt it for each specific model structure.
 - Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
-  These scripts are useful to tune the predictors in case their results are not optimal on given dataset.
-- Keras predictors supports hyperparameters tuning via Keras Tuner library. The search space for the parameters is
-  defined in each class and can be overridden by each model to adapt it for each specific model.
+  These scripts are useful to tune the predictors in case their results are far from optimal on the given dataset.
+- A totally new feature set has been engineered for time predictors, based mainly the dag representation of a cell specification. This new set
+  is quite small but very indicative of the main factors that dictates time differences among the networks. It also implicitly generalize on
+  equivalent cell specifications, since they have the same DAG representation and so the same features, making futile the data augmentation step.
 
 ### Exploration step
 - Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
@@ -239,18 +251,19 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 ### Data extrapolation and data analysis
 - Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
-  Add also the plot slideshow script to visualize all produced plots easily in aggregated views.
-- Add new avg_training_time.csv to automatically extrapolate the average CNN training time for each considered block size.
+- Add the plot slideshow script to visualize all produced plots easily in aggregated views.
+- Add _avg_training_time.csv_ to automatically extrapolate the average CNN training time for each considered block size.
+- Add _multi_output.csv_ to extrapolate the best accuracy reached for each cell output, when _multi_output_ is enabled in JSON config.
 
 
 ### Software improvements and refactors
-- Migrate code to Tensorflow 2.
-- Now use json configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
+- Migrate code to Tensorflow 2, in particular to the 2.7 version.
+- Now use JSON configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
   all the various components of the algorithm run. Many parameters and hyperparameters that were hardcoded in POPNAS initial version are now
-  tunable from the json config.
+  tunable from the JSON config.
 - Implement an actually working run restoring functionality. This allows to resume a previously interrupted run.
 - CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
-  New training method supports ImageGenerators and allows using weight regularization if --wr parameter is provided.
+  New training method supports data augmentation and allows the usage of weight regularization if parameter is provided.
 - LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
   This make the whole procedure easier to interpret and also more flexible to further changes and additions.
 - Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
@@ -260,26 +273,27 @@ In each tensorboard folder it's also present the model summary as txt file, to h
   Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2).
   The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders
   at runtime and using them easily when needed. The default encoders are now 1-indexed categorical integers, instead of the 0-indexed used before. 
-- Improve immensely virtual environment creation, by using Poetry tool to easily install all dependencies.
+- Improve immensely virtual environment creation, by using _Poetry_ tool to easily install all dependencies.
 - Improve logging (see log_service.py), using standard python log to print on both console and file. Before, text logs were printed only on console.
-- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments. A script is provided
-  to train the best model.
+- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments.
+- A script is provided to train the best model from checkpoint saved during the POPNAS run. It can also recreate the best network from scratch or
+  train a custom cell specification, provided as argument.
 - Format code with pep8 and flake, to follow standard python formatting conventions.
 - General code fixes and improvements, especially improve readability of various code parts for better future maintainability.
-  Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented.
+  Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented and typed.
   Right now almost the total codebase of original POPNAS version have been refactored, either due to structural or quality changes.
 
 
 ### Command line arguments changes
-- Add --cpu option to easily choose between running on cpu or gpu.
+- Add --cpu option to easily choose between running on CPU or GPU.
 - Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add a lot of new configuration parameters, which can be set in the new json configuration file.
+- Add a lot of new configuration parameters, which can be set in the new JSON configuration file.
 
 
 ### Other bug fixes
 - Fix regressor features bug: dynamic reindexing was nullified by an int cast.
-- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images due to how repeat
-  was wrongly used before batching.
+- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images
+  due to how repeat was wrongly used before batching.
 - Fix tqdm bars for model predictions procedure, to visualize better its progress.
 
 
