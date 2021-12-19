@@ -1,20 +1,24 @@
 # POPNASv2
-Fix and refactor of POPNAS, a neural architecture search method developed for a master thesis by Matteo Vantadori (Politecnico di Milano, academic year 2018-2019),
-based on [PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
+New version of POPNAS algorithm, a neural architecture search method developed for a master thesis by Matteo Vantadori
+(Politecnico di Milano, academic year 2018-2019), based on 
+[PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
+This new version fixes many problems and bugs of the original version, also expanding it with ideas and improving the models involved and
+their training procedure. 
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
 use the provider Docker container and avoid these steps (see Docker section below).
 
 ### Required additional software and tools
-Virtual environment and dependencies are managed by *poetry*, check out its [repository](https://github.com/python-poetry/poetry)
-for installing it on your machine.
+Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
+for installing it on your machine and learning more about it.
 
-You need to have installed python version 3.6.9 or 3.7.4 (advised for windows) for building a valid environment (other versions could work, but are not tested).
-To install and manage the python versions and work with *poetry* tool, it's advised to use [pyenv](https://github.com/pyenv/pyenv)
+You need to have installed either python version 3.7 or 3.8 for building a valid environment (other python versions >= 3.7 could work,
+but they have not been tested).
+To install and manage the python versions and work with _poetry_ tool, it's advised to use [pyenv](https://github.com/pyenv/pyenv)
 or [pyenv-win](https://github.com/pyenv-win/pyenv-win) based on your system.
 
-Make sure also that *graphviz* is installed in your machine, since it is required to generate plots of keras models.
+Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of keras models.
 Follow the installation instructions at: https://graphviz.gitlab.io/download/.
 
 ### Installation steps
@@ -27,11 +31,11 @@ to change the virtual environment generation position directly in the project fo
 To generate the environment, open your terminal inside the repository folder and make sure that the python in use is a compatible version.
 If not, you can install it and activate it through pyenv with these commands:
 ```
-pyenv install 3.6.9 # or 3.7.4
-pyenv shell 3.6.9
+pyenv install 3.7.4 # or any valid version
+pyenv shell 3.7.4
 ```
 
-To install the dependencies, simply execute:
+To install the dependencies, simply run:
 ```
 poetry install
 ```
@@ -44,25 +48,25 @@ poetry shell
 
 After that you should be able to run POPNASv2 with this command:
 ```
-python run.py -b 5 -k 256
+python run.py
 ```
 
 ### GPU support
-To use GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
+To use a GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
 Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
-to install the correct versions of CUDA and CUDNN for Tensorflow 2.5 (see https://www.tensorflow.org/install/source#linux).
+to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
 
 ## Build Docker container
-In *docker* folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
+In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
 and mount POPNAS source code.
-To build the image, open the terminal into the *src* folder and execute this command:
+To build the image, open the terminal into the _src_ folder and execute this command:
 ```
-docker build -f ../docker/Dockerfile -t falanti/popnas:py3.8.10-tf2.7.0gpu .
+docker build -f ../docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
 ```
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run -it --rm -v %cd%:/exp --name popnas-tf2.7 falanti/popnas:py3.8.10-tf2.7.0gpu python run.py -j configs/run_debug.json --cpu
+docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python run.py -j configs/run_debug.json --cpu
 ```
 
 ## Run configuration
@@ -70,9 +74,9 @@ docker run -it --rm -v %cd%:/exp --name popnas-tf2.7 falanti/popnas:py3.8.10-tf2
 All command line arguments are optional.
 - **-j**: specifies the path of the json configuration to use. If non provided, _configs/run.json_ will be used.
 - **-r**: used to restore a previous interrupted run. Specifies the path of the log folder of the run to resume.
-- **--cpu**: if specified, the algorithm will use only the cpu, even if a gpu is actually available.
-- Must be specified if the host machine has no gpu.
-- **--pnas**: if specified, the algorithm will not use a regressor, disabling time estimation.
+- **--cpu**: if specified, the algorithm will use only the CPU, even if a GPU is actually available.
+  It must be specified if the host machine has no gpu.
+- **--pnas**: if specified, the algorithm will not use a time predictor, disabling time estimation and pareto front generation.
   This will make the computation extremely similar to PNAS algorithm.
 
 ### Json configuration file
@@ -97,17 +101,22 @@ Here it's presented a list of the configuration sections and fields, with a brie
   - @x@ maxpool
   - @x@ avgpool
   - @x@ tconv      (Transpose convolution)
-
+  
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
 - **batch_size**: defines the batch size dimension of the dataset.
 - **learning_rate**: defines the learning rate of the child CNN networks.
 - **filters**: defines the initial number of filters to use.
 - **weight_reg**: defines the L2 regularization factor to use in CNNs. If _null_, regularization is not applied.
+- **use_adamW**: use adamW instead of standard L2 regularization
+- **drop_path_prob**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
+  then _scheduled drop path_ is not used.
 - **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
   - **enabled**: use cosine decay restart or not (plain learning rate)
   - **period_in_epochs**: first decay period in epochs
   - **[t_mul, m_mul, alpha]**: see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts)
+- **softmax_dropout**: probability of dropping a value in output softmax. If set to 0, then dropout is not used.
+  Note that dropout is used on each output when _multi_output_ flag is set.
 
 **CNN architecture parameters**:
 - **motifs**: motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell, here instead it is used to indicate
@@ -115,8 +124,11 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **normal_cells_per_motif**: normal cells to stack in each motif.
 - **concat_only_unused_blocks**: when _true_, only blocks' output not used internally by the cell will be used in final concatenation cell output,
   following PNAS and NASNet. If set to _false_, all blocks' output will be concatenated in final cell output.
+- **multi_output**: if true, each CNN generated will have an output (GAP + Softmax) at the end of each cell.
 
-**LSTM hyperparameters**:
+**RNN hyperparameters (controller, optional)**:\
+If the parameters are not provided or the object is omitted in JSON config, default parameters will be applied.
+They depend on the model type chosen for the controller. See model class to have a better idea (TODO).
 - **epochs**: how many epochs the LSTM is trained on, at each expansion step.
 - **lr**: LSTM learning rate.
 - **wr**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
@@ -139,6 +151,9 @@ Here it's presented a list of the configuration sections and fields, with a brie
     instead performing data augmentation on the GPU will make the process sequential, always causing delays even if it's faster to perform.
 
 **Others**:
+- **predictions_batch_size**: defines the batch size used when performing both time and accuracy predictions in controller
+  update step (predictions about cell expansions for blocks b+1). Incrementing it should decrease the prediction time
+  linearly, up to a certain point, defined by hardware resources used.
 - **pnas_mode**: if _true_, the algorithm will not use the temporal regressor and pareto front search, making the run very similar to PNAS.
 - **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs.
 
