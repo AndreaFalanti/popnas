@@ -115,17 +115,16 @@ def define_callbacks(cdr_enabled: bool) -> 'list[callbacks.Callback]':
     # By default shows losses and metrics for both training and validation
     tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
 
-    es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max')
-
     # these callbacks are shared between all models
-    train_callbacks = [ckpt_callback, tb_callback, es_callback]
+    train_callbacks = [ckpt_callback, tb_callback]
 
     # if using plain lr, adapt it with reduce learning rate on plateau
     # NOTE: for unknown reasons, activating plateau callback when cdr is present will also cause an error at the end of the first epoch
     if not cdr_enabled:
         train_callbacks.append(callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max'))
+        train_callbacks.append(callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max'))
 
-    return [ckpt_callback, tb_callback, es_callback]
+    return train_callbacks
 
 
 def main():
@@ -159,6 +158,7 @@ def main():
         model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
 
         cdr_enabled = False
+        epochs = 300
         logger.info('Model loaded successfully')
     else:
         if args.spec is None:
@@ -180,10 +180,11 @@ def main():
         config = load_run_json(args.p)
         cnn_config = config['cnn_hp']
         arc_config = config['architecture_parameters']
+        epochs = 93 if config['cnn_hp']['cosine_decay_restart']['enabled'] else 300     # 5 periods of cosine decay restart with starting period 3
 
         if not args.same:
             # optimize some hyperparameters for final training
-            config['cnn_hp']['weight_reg'] = 1e-4
+            config['cnn_hp']['weight_reg'] = 5e-4
             config['cnn_hp']['use_adamW'] = True
             # config['cnn_hp']['drop_path_prob'] = 0.2
             config['cnn_hp']['drop_path_prob'] = 0.0
@@ -192,9 +193,10 @@ def main():
                 "enabled": True,
                 "period_in_epochs": 2,
                 "t_mul": 2.0,
-                "m_mul": 0.9,
+                "m_mul": 1.0,
                 "alpha": 0.0
             }
+            epochs = 126    # 6 periods of cosine decay restart
 
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, data_augmentation_model=None)
         model, _ = model_gen.build_model(cell_spec)
@@ -215,7 +217,7 @@ def main():
     train_callbacks.append(time_cb)
 
     hist = model.fit(x=train_dataset,
-                     epochs=300,
+                     epochs=epochs,
                      steps_per_epoch=train_batches,
                      validation_data=validation_dataset,
                      validation_steps=val_batches,
