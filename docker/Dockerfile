@@ -12,4 +12,6 @@ RUN /bin/bash -c "pip install -r requirements.txt"
 WORKDIR /exp
 COPY . .
 
+ENV PYTHONPATH="${PYTHONPATH}:/exp"
+
 CMD ["bash"]
