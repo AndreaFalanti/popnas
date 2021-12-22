@@ -193,7 +193,7 @@ class ControllerManager:
             pareto_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
             op_exp, input_exp = self.compute_exploration_value_sets(pareto_front[:pareto_limit], self.search_space)
 
-            if self.current_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
+            if self.ex > 0 and self.current_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
                 self._logger.info('Building exploration pareto front...')
                 self._logger.info('Operators to explore: %s', rstr(op_exp))
                 self._logger.info('Inputs to explore: %s', rstr(input_exp))
