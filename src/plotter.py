@@ -94,10 +94,11 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_l
 
 def __plot_pie_chart(labels, values, title, save_name):
     total = sum(values)
-    # def pct_val_formatter(x):
-    #     return '{:.3f}%\n({:.0f})'.format(x, total*x/100)
 
     fig, ax = plt.subplots()
+
+    pie_cm = plt.get_cmap('tab20')
+    colors = pie_cm(np.linspace(0, 1.0 / 20 * len(labels) - 0.01, len(labels)))
 
     explode = np.empty(len(labels))  # type: np.ndarray
     explode.fill(0.03)
@@ -105,7 +106,7 @@ def __plot_pie_chart(labels, values, title, save_name):
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
     legend_labels = [f'{label} - {(val / total) * 100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
-    patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None)
+    patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None, colors=colors)
     ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
     plt.title(title)
