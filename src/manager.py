@@ -367,14 +367,13 @@ class NetworkManager:
                 # use as val accuracy metric only the one of the softmax placed after the last cell
                 r = re.compile(r'val_Softmax_c(\d+)_accuracy')
                 output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
-                max_index = max(output_indexes)
-                accuracies[i] = max(hist.history[f'val_Softmax_c{max_index}_accuracy'])
 
                 # save best accuracy reached for each output
                 multi_output_accuracies = {}
                 for output_index in output_indexes:
                     multi_output_accuracies[f'c{output_index}_accuracy'] = max(hist.history[f'val_Softmax_c{output_index}_accuracy'])
 
+                accuracies[i] = max(multi_output_accuracies.values())
                 self.__write_multi_output_file(cell_spec, multi_output_accuracies)
             else:
                 accuracies[i] = max(hist.history['val_accuracy'])
