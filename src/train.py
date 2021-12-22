@@ -23,7 +23,6 @@ class Train:
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
-        # TODO: instantiate relevant classes here and avoid to store unnecessary config parameters
         # search space parameters
         ss_config = run_config['search_space']
         self.blocks = ss_config['blocks']
@@ -42,6 +41,7 @@ class Train:
         # CNN architecture parameters
         arc_config = run_config['architecture_parameters']
         max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
+        self.multi_output_models = arc_config['multi_output']
 
         # build a search space
         self.search_space = SearchSpace(ss_config['blocks'], ss_config['operators'], max_cells,
@@ -379,6 +379,8 @@ class Train:
         plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode)
         if not self.pnas_mode:
             plotter.plot_pareto_front_curves(self.blocks, plot3d=True)
+        if self.multi_output_models:
+            plotter.plot_multi_output_boxplot()
 
         self._logger.info("Finished!")
         self.log_run_final_results()

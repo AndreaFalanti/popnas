@@ -75,7 +75,7 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
     __save_and_close_plot(fig, save_name)
 
 
-def __plot_boxplot(values, labels, x_label, y_label, title, save_name):
+def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_labels=False):
     fig = plt.figure()
     plt.boxplot(values, labels=labels)
     plt.xlabel(x_label)
@@ -84,6 +84,10 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name):
 
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
+
+    # use inclined x-labels
+    if incline_labels:
+        plt.gcf().autofmt_xdate()
 
     __save_and_close_plot(fig, save_name)
 
@@ -492,6 +496,32 @@ def plot_pareto_front_curves(B: int, plot3d: bool = False):
         b += 1
 
     __logger.info("Pareto front curve plots written successfully")
+
+
+def plot_multi_output_boxplot():
+    __logger.info("Analyzing accuracy of the multiple outputs for each model...")
+    csv_path = log_service.build_path('csv', 'multi_output.csv')
+    outputs_df = pd.read_csv(csv_path).drop(columns=['cell_spec'])
+
+    # remove all rows that have some missing values (this means the cell don't use -1 lookback, stacking less cells)
+    # removing these rows allow a fair comparison in the plot
+    full_df = outputs_df.dropna()
+    x_labels = full_df.columns.to_list()
+    output_accuracies = [full_df[output_key] for output_key in x_labels]
+
+    # get the entries with less cells
+    na_df = outputs_df[outputs_df[x_labels[-2]].isnull()]
+    x_labels_na = x_labels[::-2][::-1]  # TODO: -2 because it's the lookback used, expand the logic to other lookbacks if needed
+    output_accuracies_na = [na_df[output_key] for output_key in x_labels_na]
+
+    x_labels = [str(label).split('_')[0] for label in x_labels]
+    x_labels_na = x_labels[::-2][::-1]
+
+    __plot_boxplot(output_accuracies, x_labels, 'Outputs', 'Val accuracy', 'Best accuracies for output', 'multi_output_boxplot.png')
+    __plot_boxplot(output_accuracies_na, x_labels_na, 'Outputs', 'Val accuracy',
+                   'Best accuracies for output (-2 lookback)', 'multi_output_boxplot_na.png')
+
+    __logger.info("Multi output overview plot written successfully")
 
 
 class BarInfo(NamedTuple):
