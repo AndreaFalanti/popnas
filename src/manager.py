@@ -2,9 +2,9 @@ import csv
 import importlib.util
 import logging
 import os
-import re
 from typing import Tuple
 
+import absl.logging
 import numpy as np
 import tensorflow as tf
 import tf2onnx
@@ -12,21 +12,18 @@ from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import Model, datasets, layers, Sequential
 from tensorflow.keras.applications.imagenet_utils import preprocess_input
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import plot_model, to_categorical
-from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
 import log_service
 from model import ModelGenerator
 from utils.func_utils import cell_spec_to_str
+from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops
 from utils.timing_callback import TimingCallback
 
-import absl.logging
 absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
 
-# TODO: not working properly, thx tensorflow for the "Callback method `on_train_batch_end` is slow compared to the batch time" at each training...
 # disable Tensorflow info and warning messages (Warning are not on important things, they were investigated. Still, enable them
-# when performing changes to see if there are new potential warnings that can affect negatively the algorithm.
+# when performing changes to see if there are new potential warnings that can affect negatively the algorithm).
 tf.get_logger().setLevel(logging.ERROR)
 
 # disable tf2onnx conversion messages
@@ -188,39 +185,9 @@ class NetworkManager:
     def __build_tf_datasets(self, samples_fold: 'tuple(list, list, list, list)'):
         '''
         Build the training and validation datasets to be used in model.fit().
-
-        Args:
-            samples_fold: dataset index
-            use_data_augmentation (bool): [description]
-
-        Returns:
-            [type]: [description]
         '''
 
         x_train, y_train, x_val, y_val = samples_fold
-
-        # TODO: legacy, ImageDataGenerator is very slow when multiple transformations are performed, instead are handled nicely in both CPU
-        #  and GPU with the Keras model. On horizontal flip only it is faster, but terribly slower on the rest.
-        #  Left here for eventual further testing.
-        # if self.use_data_augmentation:
-        #     train_datagen = ImageDataGenerator(
-        #         horizontal_flip=True,
-        #         width_shift_range=4,
-        #         height_shift_range=4
-        #     )
-        # else:
-        #     train_datagen = ImageDataGenerator()
-        #
-        # train_datagen.fit(x_train)
-        # validation_datagen = ImageDataGenerator()
-        #
-        # # TODO: generalize for other datasets
-        # cifar10_signature = (tf.TensorSpec(shape=(None, 32, 32, 3), dtype=tf.float32),
-        #                      tf.TensorSpec(shape=(None, self.dataset_classes_count), dtype=tf.float32))
-        # train_dataset = tf.data.Dataset.from_generator(train_datagen.flow, args=(x_train, y_train, self.batch_size),
-        #                                                output_signature=cifar10_signature).prefetch(AUTOTUNE)
-        # validation_dataset = tf.data.Dataset.from_generator(validation_datagen.flow, args=(x_val, y_val, self.batch_size),
-        #                                                     output_signature=cifar10_signature).prefetch(AUTOTUNE)
 
         # create a batched dataset, cached in memory for better performance
         train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(self.batch_size).cache()
@@ -234,40 +201,6 @@ class NetworkManager:
         val_batches = np.ceil(len(x_val) / self.batch_size)
 
         return train_dataset, validation_dataset, int(train_batches), int(val_batches)
-
-    # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
-    # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
-    def get_model_flops(self, model, write_path=None):
-        '''
-        Get total flops of current compiled model.
-
-        Returns:
-            (int): number of FLOPS
-        '''
-        # temporarily disable warnings, a lot of them are print and they seems irrelevant
-        # TODO: investigate if something is actually wrong
-        tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-
-        concrete = tf.function(lambda inputs: model(inputs))
-        concrete_func = concrete.get_concrete_function([tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs])
-
-        frozen_func, graph_def = convert_variables_to_constants_v2_as_graph(concrete_func)
-
-        with tf.Graph().as_default() as graph:
-            tf.graph_util.import_graph_def(graph_def, name='')
-            run_meta = tf.compat.v1.RunMetadata()
-            opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
-            if write_path is not None:
-                opts['output'] = 'file:outfile={}'.format(write_path)  # redirect output
-            else:
-                opts['output'] = 'none'
-
-            flops = tf.compat.v1.profiler.profile(graph=graph, run_meta=run_meta, cmd="op", options=opts)
-
-        # enable again warnings
-        tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.WARN)
-
-        return flops.total_float_ops
 
     def __write_partitions_file(self, partition_dict: dict, save_dir: str):
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
@@ -364,15 +297,9 @@ class NetworkManager:
             times[i] = sum(time_cb.logs)
             # compute the reward (best validation accuracy)
             if self.multi_output_model and len(cell_spec) > 0:
-                # use as val accuracy metric only the one of the softmax placed after the last cell
-                r = re.compile(r'val_Softmax_c(\d+)_accuracy')
-                output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
+                multi_output_accuracies = get_best_val_accuracy_per_output(hist)
 
-                # save best accuracy reached for each output
-                multi_output_accuracies = {}
-                for output_index in output_indexes:
-                    multi_output_accuracies[f'c{output_index}_accuracy'] = max(hist.history[f'val_Softmax_c{output_index}_accuracy'])
-
+                # use as val accuracy metric the best one among all softmax layers
                 accuracies[i] = max(multi_output_accuracies.values())
                 self.__write_multi_output_file(cell_spec, multi_output_accuracies)
             else:
@@ -381,7 +308,7 @@ class NetworkManager:
         training_time = times.mean()
         reward = accuracies.mean()
         total_params = model.count_params()
-        flops = self.get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
+        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
 
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:

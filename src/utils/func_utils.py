@@ -1,15 +1,11 @@
-# module that contains generic helper functions used by multiple modules
 import json
-import operator
 import os
 import re
 import shutil
 from configparser import ConfigParser
-from functools import reduce
 from typing import Iterable
 
 import pandas as pd
-import tensorflow as tf
 from sklearn.metrics import mean_absolute_percentage_error
 
 
@@ -84,22 +80,6 @@ def parse_cell_structures(cell_structures: Iterable):
             adjusted_cells.append([(int(in1), op1, int(in2), op2) for in1, op1, in2, op2 in cell])
 
     return adjusted_cells
-
-
-def compute_tensor_byte_size(tensor: tf.Tensor):
-    dtype_sizes = {
-        tf.float32: 4,
-        tf.float64: 8,
-        tf.int32: 4,
-        tf.int64: 8
-    }
-
-    dtype_size = dtype_sizes[tensor.dtype]
-    # remove batch size from shape
-    tensor_shape = tensor.get_shape().as_list()[1:]
-
-    # byte size is: (number of weights) * (size of each weight)
-    return reduce(operator.mul, tensor_shape, 1) * dtype_size
 
 
 def strip_unused_amllibrary_config_sections(config: ConfigParser, techniques: list):

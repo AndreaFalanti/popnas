@@ -6,7 +6,8 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks
 
 import log_service
 import ops
-from utils.func_utils import to_int_tuple, list_flatten, compute_tensor_byte_size
+from utils.func_utils import to_int_tuple, list_flatten
+from utils.nn_utils import compute_tensor_byte_size
 
 
 class NetworkBuildInfo:
