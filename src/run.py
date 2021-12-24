@@ -13,8 +13,6 @@ def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-r', metavar='RESTORE_FOLDER', type=str, help='path of log folder to restore (timestamp-named folder)', default=None)
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with run parameters', default=None)
-    parser.add_argument('--cpu', help='use CPU instead of GPU', action='store_true')
-    parser.add_argument('--pnas', help='run in PNAS mode (no regressor, only LSTM controller)', action='store_true')
     args = parser.parse_args()
 
     if tf.test.gpu_device_name():
@@ -40,8 +38,6 @@ def main():
         with open(json_path, 'r') as f:
             run_config = json.load(f)
 
-        run_config['pnas_mode'] = args.pnas
-        run_config['use_cpu'] = args.cpu
         gpu_msg = 'GPU is not available for execution, run with --cpu flag or troubleshot the issue in case a GPU is actually present in the device'
 
     # DEBUG: To find out which devices your operations and tensors are assigned to
@@ -64,12 +60,13 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
+    # TODO: useless right now since all arguments are in the JSON config
     # print info about the command line arguments provided. Optional ones will list their default value.
-    logger = log_service.get_logger(__name__)
-    logger.info('%s', '*' * 31 + ' COMMAND LINE ARGUMENTS (WITH DEFAULTS) ' + '*' * 31)
-    for arg in vars(args):
-        logger.info('%s: %s', arg, getattr(args, arg))
-    logger.info('%s', '*' * 101)
+    # logger = log_service.get_logger(__name__)
+    # logger.info('%s', '*' * 31 + ' COMMAND LINE ARGUMENTS (WITH DEFAULTS) ' + '*' * 31)
+    # for arg in vars(args):
+    #     logger.info('%s: %s', arg, getattr(args, arg))
+    # logger.info('%s', '*' * 101)
 
     run = Train(run_config)
     run.process()

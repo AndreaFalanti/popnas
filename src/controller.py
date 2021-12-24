@@ -137,7 +137,7 @@ class ControllerManager:
                 #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
                 batch_time_features = None if self.pnas_mode else [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
 
-                estimated_times = None if self.pnas_mode else time_predictor.predict_batch(batch_time_features)
+                estimated_times = [None] * len(cells_batch) if self.pnas_mode else time_predictor.predict_batch(batch_time_features)
                 estimated_scores = acc_predictor.predict_batch(cells_batch)
 
                 # always preserve the child and its score in pnas mode
