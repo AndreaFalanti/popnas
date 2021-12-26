@@ -26,6 +26,12 @@ def __load_dataset_images(dataset_source: str):
     elif dataset_source == 'cifar100':
         (x_train, y_train), (x_test, y_test) = datasets.cifar100.load_data()
         classes_count = 100
+    elif dataset_source == 'fashion_mnist':
+        (x_train, y_train), (x_test, y_test) = datasets.fashion_mnist.load_data()
+        classes_count = 10
+        # add dimension since the images are in grayscale (dimension 1 is omitted)
+        x_train = np.expand_dims(x_train, axis=-1)
+        x_test = np.expand_dims(x_test, axis=-1)
     # TODO: untested legacy code, not sure this is working
     else:
         spec = importlib.util.spec_from_file_location(dataset_source)
