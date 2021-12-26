@@ -206,10 +206,11 @@ class ModelGenerator:
 
         # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
         if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, max(self.network_build_info.used_cell_indexes)
+            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict,\
+                         max(self.network_build_info.used_cell_indexes, default=0)
         else:
             output = self.__generate_output(last_output, self.dropout_prob)
-            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes)
+            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
 
     def __build_cell(self, filters, stride, inputs):
         '''

@@ -11,7 +11,7 @@ from tensorflow.keras import callbacks, models, metrics
 
 import log_service
 from model import ModelGenerator
-from utils.dataset_utils import generate_tensorflow_datasets
+from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import create_empty_folder, parse_cell_structures
 from utils.nn_utils import get_multi_output_best_epoch_stats
 from utils.rstr import rstr
@@ -97,11 +97,12 @@ def main():
 
     cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
     multi_output = arc_config['multi_output']
+    augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
     epochs = (93 if cdr_enabled else 300) if args.same else cnn_config['epochs']
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_folds, classes_count, train_batches, val_batches, = generate_tensorflow_datasets(config['dataset'], logger)
+    dataset_folds, classes_count, train_batches, val_batches = generate_tensorflow_datasets(config['dataset'], logger)
     logger.info('Datasets generated successfully')
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
@@ -128,8 +129,8 @@ def main():
             cell_spec = parse_cell_structures([args.spec])[0]
             logger.info('Generating Keras model from given cell specification...')
 
-        # TODO: allow data augmentation on GPU
-        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, data_augmentation_model=None)
+        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count,
+                                   data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
         model, _, last_cell_index = model_gen.build_model(cell_spec)
 
         loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()

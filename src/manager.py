@@ -1,5 +1,4 @@
 import csv
-import importlib.util
 import logging
 import os
 from typing import Tuple
@@ -9,13 +8,12 @@ import numpy as np
 import tensorflow as tf
 import tf2onnx
 from matplotlib import pyplot as plt
-from sklearn.model_selection import train_test_split
-from tensorflow.keras import Model, datasets, layers, Sequential
-from tensorflow.keras.applications.imagenet_utils import preprocess_input
-from tensorflow.keras.utils import plot_model, to_categorical
+from tensorflow.keras import Model
+from tensorflow.keras.utils import plot_model
 
 import log_service
 from model import ModelGenerator
+from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import cell_spec_to_str
 from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops
 from utils.timing_callback import TimingCallback
@@ -32,15 +30,6 @@ tf2onnx.logging.set_level(logging.WARN)
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-# tentative way of reproducing PNAS transformation
-# TODO: usable in image generator as preprocessing function, unfortunately slow and seems not good for learning too...
-def upsample_and_random_crop(image_tensor):
-    image_tensor = tf.image.resize(image_tensor, [40, 40])
-    image_tensor = tf.image.random_crop(image_tensor, [32, 32, 3])
-    # normalize in [-1, 1] domain
-    return preprocess_input(image_tensor, mode='tf')
-
-
 class NetworkManager:
     '''
     Helper class to manage the generation of subnetwork training given a dataset
@@ -54,49 +43,21 @@ class NetworkManager:
         '''
         self._logger = log_service.get_logger(__name__)
 
-        self.dataset_name = dataset_config['name']
-        self.dataset_path = dataset_config['path']
         self.dataset_folds_count = dataset_config['folds']
-        self.samples_limit = dataset_config['samples']
         self.dataset_classes_count = dataset_config['classes_count']
-
-        data_augmentation_config = dataset_config['data_augmentation']
-        self.use_data_augmentation = data_augmentation_config['enabled']
-        self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
-
-        self.dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
+        self.augment_on_gpu = dataset_config['data_augmentation']['enabled'] and dataset_config['data_augmentation']['perform_on_gpu']
 
         self.epochs = cnn_config['epochs']
-        self.batch_size = cnn_config['batch_size']
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
 
-        # Keras model that can be used in both CPU or GPU for data augmentation
-        if self.use_data_augmentation:
-            # follow similar augmentation techniques used in other papers, which usually are:
-            # - horizontal flip
-            # - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
-            # - whitening (not always used)
-            self.data_augmentation = Sequential([
-                layers.experimental.preprocessing.RandomFlip('horizontal'),
-                # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
-                # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
-                layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
-            ], name='data_augmentation')
-        else:
-            self.data_augmentation = None
-
-        # set in dataset initialization, used for displaying progress during training
-        self.train_batches = 0
-        self.validation_batches = 0
-
-        (x_train_init, y_train_init), _ = self.__load_dataset()
-        self.__prepare_datasets(x_train_init, y_train_init)
-        self._logger.info('Dataset folds built successfully')
+        # setup dataset. Batches variables are used for displaying progress during training
+        self.dataset_folds, ds_classes, self.train_batches, self.validation_batches = generate_tensorflow_datasets(dataset_config, self._logger)
+        self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches, output_classes=self.dataset_classes_count,
-                                        data_augmentation_model=self.data_augmentation if self.augment_on_gpu else None)
+                                        data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None)
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']
@@ -114,6 +75,8 @@ class NetworkManager:
         # switch to an interactive matplotlib backend
         plt.switch_backend('TkAgg')
 
+        data_augmentation_model = get_data_augmentation_model()
+
         # get a batch
         images, labels = next(iter(ds))
 
@@ -124,83 +87,13 @@ class NetworkManager:
             plt.show()
 
             for i in range(9):
-                augmented_image = self.data_augmentation(image)
+                augmented_image = data_augmentation_model(image)
                 _ = plt.subplot(3, 3, i + 1)
                 plt.imshow(augmented_image)
                 plt.axis('off')
 
             plt.show()
         self._logger.debug('Data augmentation debug shown')
-
-    def __load_dataset(self):
-        self._logger.info('Loading dataset...')
-        # for known names, load dataset from Keras and set the correct number of classes, in case there is a mismatch in the json
-        if self.dataset_name == 'cifar10':
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar10.load_data()
-            self.dataset_classes_count = 10
-        elif self.dataset_name == 'cifar100':
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = datasets.cifar100.load_data()
-            self.dataset_classes_count = 100
-        # TODO: untested legacy code, not sure this is working
-        # if dataset name is not recognized, try to import it from path
-        else:
-            spec = importlib.util.spec_from_file_location(self.dataset_path)
-            dataset = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(dataset)
-            (x_train_init, y_train_init), (x_test_init, y_test_init) = dataset.load_data()
-
-        return (x_train_init, y_train_init), (x_test_init, y_test_init)
-
-    def __prepare_datasets(self, x_train_init, y_train_init):
-        """Build a validation set from training set and do some preprocessing
-
-        Args:
-            x_train_init (ndarray): x training
-            y_train_init (ndarray): y training
-
-        Returns:
-            list[tuple(tf.data.Dataset, tf.data.Dataset)]: list with pairs of training and validation datasets, for each fold
-        """
-        if self.samples_limit is not None:
-            x_train_init = x_train_init[:self.samples_limit]
-            y_train_init = y_train_init[:self.samples_limit]
-
-        # normalize image RGB values into [0, 1] domain
-        x_train_init = x_train_init.astype('float32') / 255.
-        y_train_init = to_categorical(y_train_init, self.dataset_classes_count)
-
-        # TODO: is it ok to generate the splits by shuffling randomly?
-        for i in range(self.dataset_folds_count):
-            self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
-
-            # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=0.1, stratify=y_train_init)
-
-            train_ds, val_ds, train_batches, val_batches = self.__build_tf_datasets((x_train, y_train, x_validation, y_validation))
-            self.train_batches = train_batches
-            self.validation_batches = val_batches
-
-            self.dataset_folds.append((train_ds, val_ds))
-
-    def __build_tf_datasets(self, samples_fold: 'tuple(list, list, list, list)'):
-        '''
-        Build the training and validation datasets to be used in model.fit().
-        '''
-
-        x_train, y_train, x_val, y_val = samples_fold
-
-        # create a batched dataset, cached in memory for better performance
-        train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(self.batch_size).cache()
-        validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(self.batch_size).cache().prefetch(AUTOTUNE)
-
-        # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
-        train_dataset = train_dataset.prefetch(AUTOTUNE) if self.augment_on_gpu\
-            else train_dataset.map(lambda x, y: (self.data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
-
-        train_batches = np.ceil(len(x_train) / self.batch_size)
-        val_batches = np.ceil(len(x_val) / self.batch_size)
-
-        return train_dataset, validation_dataset, int(train_batches), int(val_batches)
 
     def __write_partitions_file(self, partition_dict: dict, save_dir: str):
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
@@ -288,7 +181,6 @@ class NetworkManager:
 
             hist = model.fit(x=train_ds,
                              epochs=self.epochs,
-                             batch_size=self.batch_size,
                              steps_per_epoch=self.train_batches,
                              validation_data=val_ds,
                              validation_steps=self.validation_batches,
@@ -313,7 +205,7 @@ class NetworkManager:
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
             # str casting is required since inputs are int
-            f.write('Model actions: ' + ','.join(map(lambda el: str(el), cell_spec)) + '\n\n')
+            f.write('Cell specification: ' + ';'.join(map(str, cell_spec)) + '\n\n')
             model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
             f.write(f'\nFLOPS: {flops:,}')
 

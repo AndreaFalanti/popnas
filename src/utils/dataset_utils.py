@@ -102,19 +102,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     # TODO: produce also the test dataset
     (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
 
-    if use_data_augmentation:
-        # follow similar augmentation techniques used in other papers, which usually are:
-        # - horizontal flip
-        # - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
-        # - whitening (not always used)
-        data_augmentation = Sequential([
-            layers.experimental.preprocessing.RandomFlip('horizontal'),
-            # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
-            # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
-            layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
-        ], name='data_augmentation')
-    else:
-        data_augmentation = None
+    data_augmentation = get_data_augmentation_model() if use_data_augmentation else None
 
     # TODO: is it ok to generate the splits by shuffling randomly?
     for i in range(dataset_folds_count):
@@ -127,5 +115,23 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
 
     train_batches = int(np.ceil(len(x_train) / batch_size))
     val_batches = int(np.ceil(len(x_validation) / batch_size))
+    logger.info('Dataset folds built successfully')
 
     return dataset_folds, classes, train_batches, val_batches
+
+
+def get_data_augmentation_model():
+    '''
+    Keras model that can be used in both CPU or GPU for data augmentation.
+    Follow similar augmentation techniques used in other papers, which usually are:
+
+    - horizontal flip
+    - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
+    - whitening (not always used, here it's not performed)
+    '''
+    return Sequential([
+        layers.experimental.preprocessing.RandomFlip('horizontal'),
+        # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
+        # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
+        layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
+    ], name='data_augmentation')
