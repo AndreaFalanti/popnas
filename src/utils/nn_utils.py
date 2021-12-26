@@ -28,6 +28,37 @@ def get_best_val_accuracy_per_output(hist: History):
     return multi_output_accuracies
 
 
+def get_multi_output_best_epoch_stats(hist: History):
+    '''
+    Produce a dictionary with a key for each model output, that contains the metrics of the best epoch for that output.
+    Args:
+        hist: train history
+
+    Returns:
+        (int, flaot, dict[int, dict[str, float]]): best epoch index, best validation accuracy and dictionary with epoch metrics for each output.
+    '''
+    r = re.compile(r'val_Softmax_c(\d+)_accuracy')
+    output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
+
+    best_accs = [max(enumerate(hist.history[f'val_Softmax_c{output_index}_accuracy']), key=operator.itemgetter(1))
+                  for output_index in output_indexes]
+    # find epoch where max validation accuracy is achieved
+    best_epoch, best_val_acc = max(best_accs, key=operator.itemgetter(1))
+
+    epoch_metrics_per_output = {}
+    for output_index in output_indexes:
+        epoch_metrics_per_output[output_index] = {}
+        epoch_metrics_per_output[output_index]['val_loss'] = hist.history[f'val_Softmax_c{output_index}_loss'][best_epoch]
+        epoch_metrics_per_output[output_index]['val_acc'] = hist.history[f'val_Softmax_c{output_index}_accuracy'][best_epoch]
+        epoch_metrics_per_output[output_index]['val_top3'] = hist.history[f'val_Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
+
+        epoch_metrics_per_output[output_index]['loss'] = hist.history[f'Softmax_c{output_index}_loss'][best_epoch]
+        epoch_metrics_per_output[output_index]['acc'] = hist.history[f'Softmax_c{output_index}_accuracy'][best_epoch]
+        epoch_metrics_per_output[output_index]['top3'] = hist.history[f'Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
+
+    return best_epoch, best_val_acc, epoch_metrics_per_output
+
+
 # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
 # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
 def get_model_flops(model, write_path=None):

@@ -234,7 +234,7 @@ class NetworkManager:
             (tf.keras.Model, list[tf.keras.callbacks.Callback], dict): model and callbacks to use while training
         '''
 
-        model, partition_dict = self.model_gen.build_model(cell_spec)
+        model, partition_dict, _ = self.model_gen.build_model(cell_spec)
 
         loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
         model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)

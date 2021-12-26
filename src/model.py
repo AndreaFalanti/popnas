@@ -148,6 +148,14 @@ class ModelGenerator:
         return output
 
     def build_model(self, cell_spec: 'list[tuple]'):
+        '''
+        Build a Keras model from a given cell specification
+        Args:
+            cell_spec:
+
+        Returns:
+            (Model, dict, int): Keras model, partition dictionary and final cell index
+        '''
         self.network_build_info = NetworkBuildInfo(cell_spec, self.total_cells, self.normal_cells_per_motif)
         self.output_layers = {}
 
@@ -198,10 +206,10 @@ class ModelGenerator:
 
         # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
         if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict
+            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, max(self.network_build_info.used_cell_indexes)
         else:
             output = self.__generate_output(last_output, self.dropout_prob)
-            return Model(inputs=model_input, outputs=output), partitions_dict
+            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes)
 
     def __build_cell(self, filters, stride, inputs):
         '''
