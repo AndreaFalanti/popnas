@@ -53,10 +53,12 @@ class NetworkManager:
         self.best_reward = 0.0
 
         # setup dataset. Batches variables are used for displaying progress during training
-        self.dataset_folds, ds_classes, self.train_batches, self.validation_batches = generate_tensorflow_datasets(dataset_config, self._logger)
+        self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = \
+            generate_tensorflow_datasets(dataset_config, self._logger)
         self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
 
-        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches, output_classes=self.dataset_classes_count,
+        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
+                                        output_classes=self.dataset_classes_count, image_shape=image_shape,
                                         data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None)
 
         self.multi_output_model = arc_config['multi_output']

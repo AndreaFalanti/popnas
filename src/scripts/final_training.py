@@ -102,7 +102,7 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_folds, classes_count, train_batches, val_batches = generate_tensorflow_datasets(config['dataset'], logger)
+    dataset_folds, classes_count, image_shape, train_batches, val_batches = generate_tensorflow_datasets(config['dataset'], logger)
     logger.info('Datasets generated successfully')
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
@@ -129,7 +129,7 @@ def main():
             cell_spec = parse_cell_structures([args.spec])[0]
             logger.info('Generating Keras model from given cell specification...')
 
-        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count,
+        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
                                    data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
         model, _, last_cell_index = model_gen.build_model(cell_spec)
 

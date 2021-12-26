@@ -39,7 +39,7 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes: int,
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes: int, image_shape: 'tuple[int, int, int]',
                  data_augmentation_model: Sequential = None):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
@@ -50,6 +50,7 @@ class ModelGenerator:
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         self.multi_output = arc_params['multi_output']
         self.output_classes = output_classes
+        self.image_shape = image_shape
 
         self.lr = cnn_hp['learning_rate']
         self.filters = cnn_hp['filters']
@@ -176,9 +177,7 @@ class ModelGenerator:
         self.block_index = 0
         self.prev_cell_index = 0
 
-        # TODO: dimensions are unknown a priori (None), but could be inferred by dataset used
-        # TODO: dims are required for inputs normalization, hardcoded for now
-        model_input = layers.Input(shape=(32, 32, 3))
+        model_input = layers.Input(shape=self.image_shape)
 
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is set to None to trigger

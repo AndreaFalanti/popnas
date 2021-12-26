@@ -34,7 +34,9 @@ def __load_dataset_images(dataset_source: str):
         (x_train, y_train), (x_test, y_test) = dataset_source.load_data()
         classes_count = None
 
-    return (x_train, y_train), (x_test, y_test), classes_count
+    image_shape = x_train.shape[1:]
+
+    return (x_train, y_train), (x_test, y_test), classes_count, image_shape
 
 
 def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_limit: Union[int, None]):
@@ -76,12 +78,13 @@ def __build_tf_datasets(samples_fold: 'tuple[list, list, list, list]', batch_siz
 def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     '''
     Generates training and validation tensorflow datasets for each fold to perform, based on the provided configuration parameters.
+
     Args:
         dataset_config:
         logger:
 
     Returns:
-        list of dataset tuples (one for each fold), the number of classes, training batch count and validation batch count
+        list of dataset tuples (one for each fold), the number of classes, the image shape, training batch count and validation batch count
     '''
     dataset_name = dataset_config['name']
     dataset_path = dataset_config['path']
@@ -97,7 +100,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
 
     dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
-    train, test, classes = __load_dataset_images(dataset_name)
+    train, test, classes, image_shape = __load_dataset_images(dataset_name)
     dataset_classes_count = classes or dataset_classes_count    # like || in javascript
     # TODO: produce also the test dataset
     (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
@@ -117,7 +120,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     val_batches = int(np.ceil(len(x_validation) / batch_size))
     logger.info('Dataset folds built successfully')
 
-    return dataset_folds, classes, train_batches, val_batches
+    return dataset_folds, classes, image_shape, train_batches, val_batches
 
 
 def get_data_augmentation_model():
