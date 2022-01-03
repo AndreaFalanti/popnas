@@ -1,9 +1,11 @@
 import importlib
+import math
 from logging import Logger
 from typing import Union
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, layers, Sequential
 from tensorflow.keras.utils import to_categorical
@@ -81,6 +83,28 @@ def __build_tf_datasets(samples_fold: 'tuple[list, list, list, list]', batch_siz
     return train_dataset, validation_dataset
 
 
+def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, None], batch_size: int, validation_size: float,
+                                  data_augmentation: Sequential, augment_on_gpu: bool):
+    split_spec = 'train' if samples_limit is None else f'train[:{samples_limit}]'
+    train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=True,
+                               with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+    samples_count = samples_limit or info.splits['train'].num_examples
+    train_samples = math.ceil(samples_count * (1 - validation_size))
+
+    classes = info.features._feature_dict['label'].num_classes
+    train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
+
+    val_ds = train_ds.skip(train_samples).batch(batch_size).cache().prefetch(AUTOTUNE)
+    train_ds = train_ds.take(train_samples).batch(batch_size).cache()
+
+    # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
+    train_dataset = train_ds.prefetch(AUTOTUNE) if augment_on_gpu \
+        else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+
+    return train_dataset, val_ds, info
+
+
 def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     '''
     Generates training and validation tensorflow datasets for each fold to perform, based on the provided configuration parameters.
@@ -105,25 +129,35 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     augment_on_gpu = data_augmentation_config['perform_on_gpu']
 
     dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
-
-    train, test, classes, image_shape = __load_dataset_images(dataset_name)
-    dataset_classes_count = classes or dataset_classes_count    # like || in javascript
-    # TODO: produce also the test dataset
-    (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
-
     data_augmentation = get_data_augmentation_model() if use_data_augmentation else None
 
-    # TODO: is it ok to generate the splits by shuffling randomly?
-    for i in range(dataset_folds_count):
-        logger.info('Preprocessing and building dataset fold #%d...', i + 1)
+    if dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
+        train, test, classes, image_shape = __load_dataset_images(dataset_name)
+        dataset_classes_count = classes or dataset_classes_count    # like || in javascript
+        # TODO: produce also the test dataset
+        (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
 
-        # create a validation set for evaluation of the child models
-        x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=val_size, stratify=y_train_init)
+        # TODO: is it ok to generate the splits by shuffling randomly?
+        for i in range(dataset_folds_count):
+            logger.info('Preprocessing and building dataset fold #%d...', i + 1)
 
-        dataset_folds.append(__build_tf_datasets((x_train, y_train, x_validation, y_validation), batch_size, data_augmentation, augment_on_gpu))
+            # create a validation set for evaluation of the child models
+            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=val_size, stratify=y_train_init)
 
-    train_batches = int(np.ceil(len(x_train) / batch_size))
-    val_batches = int(np.ceil(len(x_validation) / batch_size))
+            dataset_folds.append(__build_tf_datasets((x_train, y_train, x_validation, y_validation), batch_size, data_augmentation, augment_on_gpu))
+
+        train_batches = int(np.ceil(len(x_train) / batch_size))
+        val_batches = int(np.ceil(len(x_validation) / batch_size))
+    else:
+        train_ds, val_ds, info = __generate_datasets_from_tfds(dataset_name, samples_limit, batch_size, val_size, data_augmentation, augment_on_gpu)
+
+        image_shape = info.features.shape['image']
+        classes = info.features._feature_dict['label'].num_classes
+        train_batches = len(train_ds)
+        val_batches = len(val_ds)
+
+        dataset_folds.append((train_ds, val_ds))
+
     logger.info('Dataset folds built successfully')
 
     return dataset_folds, classes, image_shape, train_batches, val_batches
