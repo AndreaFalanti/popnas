@@ -22,5 +22,5 @@ tf2onnx==1.9.3
 keras-tuner==1.1.0
 tensorflow-addons==0.15.0
 tensorflow-probability==0.15.0
-tfds-nightly==4.4.0-alpha.202201030107
+tfds-nightly==4.4.0.dev202201030107
 igraph==0.9.8
