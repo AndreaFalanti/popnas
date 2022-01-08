@@ -8,18 +8,17 @@ import keras_tuner as kt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-
-from predictors import Predictor
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
+from predictors import Predictor
 from utils.func_utils import parse_cell_structures
 from utils.rstr import rstr
 
 
 class KerasPredictor(Predictor):
     def __init__(self, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
+                 save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         super().__init__(logger, log_folder, name, override_logs)
 
         self.hp_config = self._get_default_hp_config()
@@ -27,14 +26,9 @@ class KerasPredictor(Predictor):
             self.hp_config.update(hp_config)
 
         self.y_col = y_col
-        self.use_previous_data = use_previous_data
         self.save_weights = save_weights
 
         self.hp_tuning = hp_tuning
-
-        # used to accumulate samples in a common dataset (a list for each B), if use_previous_data is True
-        self.children_history = []
-        self.score_history = []
 
         # choose the correct activation for last layer, based on y domain
         self.output_activation = None
@@ -119,13 +113,20 @@ class KerasPredictor(Predictor):
     def _get_max_b(self, df: pd.DataFrame):
         return df['# blocks'].max()
 
-    def _extrapolate_samples_for_b(self, training_data_df: pd.DataFrame, b: int):
-        b_df = training_data_df[training_data_df['# blocks'] == b]
+    def _extrapolate_samples_for_b(self, training_data_df: pd.DataFrame, b: int, keep_previous: bool = False):
+        b_df = training_data_df[training_data_df['# blocks'] <= b] if keep_previous\
+            else training_data_df[training_data_df['# blocks'] == b]
 
         cells = parse_cell_structures(b_df['cell structure'])
 
         # just return two lists: one with the target, one with the cell structures
-        return b_df[self.y_col].tolist(), cells
+        return b_df[self.y_col].to_list(), cells
+
+    def _get_training_data_from_file(self, file_path: str):
+        results_df = pd.read_csv(file_path)
+        cells = parse_cell_structures(results_df['cell structure'])
+
+        return list(zip(cells, results_df['best val accuracy'].to_list()))
 
     def restore_weights(self):
         if os.path.exists(os.path.join(self.log_folder, 'weights.index')):
@@ -133,23 +134,14 @@ class KerasPredictor(Predictor):
             self._logger.info('Weights restored successfully')
 
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
-        # TODO
-        if not isinstance(dataset, list):
-            raise TypeError('NN supports only samples, conversion from file is a TODO...')
+        # get samples for file path string
+        if isinstance(dataset, str):
+            dataset = self._get_training_data_from_file(dataset)
 
         cells, rewards = zip(*dataset)
         actual_b = len(cells[0])
-        # create the dataset using also previous data, if flag is set
-        if self.use_previous_data:
-            self.children_history.extend(cells)
-            self.score_history.extend(rewards)
 
-            train_ds, val_ds = self._build_tf_dataset(self.children_history, self.score_history, use_data_augmentation=use_data_augmentation,
-                                                      validation_split=self.hp_tuning)
-        # use only current data
-        else:
-            train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
-
+        train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         train_callbacks = self._get_callbacks()
 
         if self.hp_tuning:
@@ -202,7 +194,7 @@ class KerasPredictor(Predictor):
         real_values = []
 
         for b in range(1, max_b):
-            targets, cells = self._extrapolate_samples_for_b(dataset_df, b)
+            targets, cells = self._extrapolate_samples_for_b(dataset_df, b, keep_previous=True)
             datasets.append(list(zip(cells, targets)))
 
             true_values, cells_to_predict = self._extrapolate_samples_for_b(dataset_df, b + 1)

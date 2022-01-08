@@ -71,17 +71,14 @@ class ControllerManager:
 
         self.pnas_mode = pnas_mode
 
-    def train_step(self, rewards):
+    def train_step(self):
         '''
         Train both accuracy and time predictors
         '''
-
-        train_cells = self.search_space.children + self.search_space.exploration_front
         acc_predictor = self.get_acc_predictor(self.current_b)
 
-        # train accuracy predictor with new data
-        dataset = list(zip(train_cells, rewards))
-        acc_predictor.train(dataset)
+        # train accuracy predictor with all data available
+        acc_predictor.train(log_service.build_path('csv', 'training_results.csv'))
 
         # train time predictor with new data
         if not self.pnas_mode:

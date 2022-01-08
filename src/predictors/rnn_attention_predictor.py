@@ -1,6 +1,5 @@
 from logging import Logger
 
-import keras_tuner as kt
 from tensorflow.keras import layers, regularizers, Model
 
 from encoder import SearchSpace
@@ -12,12 +11,12 @@ from utils.func_utils import alternative_dict_to_string
 class AttentionRNNPredictor(KerasPredictor):
     def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]',
                  logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 use_previous_data: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
+                 save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         # generate a relevant name if not set
         if name is None:
             name = f'AttentionRNN_{"default" if hp_config is None else alternative_dict_to_string(hp_config)}_{"tune" if hp_tuning else "manual"}'
 
-        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, use_previous_data, save_weights, hp_config, hp_tuning)
+        super().__init__(y_col, y_domain, logger, log_folder, name, override_logs, save_weights, hp_config, hp_tuning)
 
         self.search_space = search_space
         self.supported_rnn_classes = {

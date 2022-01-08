@@ -352,7 +352,7 @@ class Train:
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:
-                controller.train_step(rewards)
+                controller.train_step()
                 controller.update_step()
 
                 # controller new cells have 1 more block
