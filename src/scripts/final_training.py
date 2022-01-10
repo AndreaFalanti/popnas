@@ -85,6 +85,7 @@ def main():
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
+    parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
     args = parser.parse_args()
 
     if args.same and args.j is not None:
@@ -94,6 +95,13 @@ def main():
 
     save_path = create_log_folder(args.p)
     logger = log_service.get_logger(__name__)
+
+    # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
+    if args.debug:
+        tf.debugging.experimental.enable_dump_debug_info(
+            os.path.join(save_path, 'debug'),
+            tensor_debug_mode="FULL_HEALTH",
+            circular_buffer_size=-1)
 
     logger.info('Reading configuration...')
     config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else custom_json_path
