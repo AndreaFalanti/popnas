@@ -79,6 +79,8 @@ class ControllerManager:
 
         # train accuracy predictor with all data available
         acc_predictor.train(log_service.build_path('csv', 'training_results.csv'))
+        # can also train an ensemble, if you wish so
+        # acc_predictor.train_ensemble(log_service.build_path('csv', 'training_results.csv'), splits=5)
 
         # train time predictor with new data
         if not self.pnas_mode:

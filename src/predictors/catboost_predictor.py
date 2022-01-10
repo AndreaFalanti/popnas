@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import catboost
 import numpy as np
 import pandas as pd
-from scipy.stats import randint, loguniform, uniform
+from scipy.stats import randint, uniform
 
 from predictor import Predictor
 from utils.feature_analysis import save_feature_analysis_plots
@@ -49,6 +49,9 @@ class CatBoostPredictor(Predictor):
 
         df = df.drop(columns=self.drop_columns)
         self.feature_names = df.columns.values.tolist()
+
+    def train_ensemble(self, dataset: Union[str, 'list[tuple]'], splits: int = 5, use_data_augmentation=True):
+        raise NotImplementedError("CatBoost predictor doesn't support ensemble")
 
     def train(self, dataset: Union[str, 'list[Tuple]'], use_data_augmentation=True):
         # TODO

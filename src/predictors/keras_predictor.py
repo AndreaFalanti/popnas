@@ -1,6 +1,7 @@
 import os
 from abc import abstractmethod
 from logging import Logger
+from statistics import mean
 from typing import Union, Any
 
 import keras
@@ -8,6 +9,7 @@ import keras_tuner as kt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
@@ -133,13 +135,42 @@ class KerasPredictor(Predictor):
             self.model.load_weights(os.path.join(self.log_folder, 'weights'))
             self._logger.info('Weights restored successfully')
 
+    def train_ensemble(self, dataset: Union[str, 'list[tuple]'], splits: int = 5, use_data_augmentation=True):
+        # get samples for file path string
+        if isinstance(dataset, str):
+            dataset = self._get_training_data_from_file(dataset)
+
+        cells, rewards = zip(*dataset)
+        model_ensemble = []
+
+        # TODO
+        cells = list(cells)
+        rewards = list(rewards)
+
+        # TODO: could use test in some way. PNAS ensemble simply trains on 4/5 of the dataset
+        # train and test are array of indexes
+        for fold_index, (train, test) in enumerate(KFold(n_splits=splits, shuffle=True).split(cells, rewards)):
+            self._logger.info('Training ensemble model %d...', fold_index + 1)
+            fold_cells = [cells[i] for i in train]
+            fold_rewards = [rewards[i] for i in train]
+            train_dataset = list(zip(fold_cells, fold_rewards))
+
+            self.train(train_dataset, use_data_augmentation)
+            model_ensemble.append(self.model)
+            self._logger.info('Model %d training complete', fold_index + 1)
+
+        self.model_ensemble = model_ensemble
+
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # get samples for file path string
         if isinstance(dataset, str):
             dataset = self._get_training_data_from_file(dataset)
 
         cells, rewards = zip(*dataset)
-        actual_b = len(cells[0])
+        actual_b = len(cells[-1])
+        # erase ensemble in case single training is used. If called from train_ensemble, the ensemble is local to the function and written
+        # only at the end
+        self.model_ensemble = None
 
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         train_callbacks = self._get_callbacks()
@@ -176,12 +207,26 @@ class KerasPredictor(Predictor):
 
     def predict(self, x: list) -> float:
         pred_dataset, _ = self._build_tf_dataset([x], validation_split=False, shuffle=False)
-        return self.model.predict(x=pred_dataset)[0, 0]
+
+        # predict using a single model
+        if self.model_ensemble is None:
+            return self.model.predict(x=pred_dataset)[0, 0]
+        # predict using a model ensemble
+        else:
+            return mean([model.predict(x=pred_dataset)[0, 0] for model in self.model_ensemble])
 
     def predict_batch(self, x: 'list[list]') -> 'list[float]':
         pred_dataset, _ = self._build_tf_dataset(x, batch_size=len(x), validation_split=False, shuffle=False)  # preserve order
-        preds = self.model.predict(x=pred_dataset)  # type: np.ndarray
-        return preds.reshape(-1)
+
+        # predict using a single model
+        if self.model_ensemble is None:
+            predictions = self.model.predict(x=pred_dataset)  # type: np.ndarray
+            return predictions.reshape(-1)
+        # predict using a model ensemble
+        else:
+            predictions = np.array(list(zip(*[model.predict(x=pred_dataset) for model in self.model_ensemble]))).squeeze()
+            predictions = predictions.mean(axis=-1)
+            return predictions.reshape(-1)
 
     def prepare_prediction_test_data(self, file_path: str) -> 'tuple[list[Union[str, list[tuple]]], list[list], list[list[float]]]':
         dataset_df = pd.read_csv(file_path)

@@ -1,7 +1,7 @@
 import os
 from abc import ABC, abstractmethod
 from logging import Logger
-from typing import Union
+from typing import Union, Optional
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -30,6 +30,7 @@ class Predictor(ABC):
             os.makedirs(self.log_folder, exist_ok=True)
 
         self.model = None
+        self.model_ensemble = None  # type: Optional[list]
 
         # initialize metrics used for prediction tests
         # x_real and y_pred are list of lists. Each list represents all values for a given B value.
@@ -79,6 +80,18 @@ class Predictor(ABC):
         return self.model
 
     @abstractmethod
+    def train_ensemble(self, dataset: Union[str, 'list[tuple]'], splits: int = 5, use_data_augmentation=True):
+        '''
+        Trains multiple models, one for each split.
+
+        Args:
+            dataset: can be a file path or a list of tuples (sample, label). Some models could work with only one of these two types.
+            splits:
+            use_data_augmentation:
+        '''
+        pass
+
+    @abstractmethod
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         '''
         Trains the model.
@@ -126,7 +139,7 @@ class Predictor(ABC):
         '''
         pass
 
-    def perform_prediction_test(self, file_path: str, plot_label: str):
+    def perform_prediction_test(self, file_path: str, plot_label: str, ensemble_count: Optional[int] = None):
         self._logger.info('Starting prediction testing...')
         datasets, samples_to_predict, self._x_real = self.prepare_prediction_test_data(file_path)
         self._logger.info('Data preprocessed successfully')
@@ -134,7 +147,11 @@ class Predictor(ABC):
         b_max = 1 + len(datasets)
         for b, dataset_b, samples_b in zip(range(1, b_max), datasets, samples_to_predict):
             self._logger.info('Starting test procedure on B=%d', b)
-            self.train(dataset_b)
+            if ensemble_count is not None and ensemble_count > 1:
+                self.train_ensemble(dataset_b, splits=ensemble_count)
+            else:
+                self.train(dataset_b)
+
             # TODO: use predict_batch for more speed, but prediction time here is negligible compared to training time
             self._y_pred.append(list(map(self.predict, samples_b)))
 

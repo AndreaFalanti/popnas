@@ -75,6 +75,9 @@ class AMLLibraryPredictor(Predictor):
 
         return save_path
 
+    def train_ensemble(self, dataset: Union[str, 'list[tuple]'], splits: int = 5, use_data_augmentation=True):
+        raise NotImplementedError("aMLLibrary predictor doesn't support ensemble")
+
     def train(self, dataset: Union[str, 'list[Tuple]'], use_data_augmentation=True):
         # TODO
         if not isinstance(dataset, str):
