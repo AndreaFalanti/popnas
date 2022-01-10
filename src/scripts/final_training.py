@@ -81,16 +81,22 @@ def main():
     # spec argument can be taken from model summary.txt, changing commas between tuples with ;
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     args = parser.parse_args()
 
+    if args.same and args.j is not None:
+        raise AttributeError("Can't specify both 'j' and 'same' arguments, they are mutually exclusive")
+
+    custom_json_path = Path(__file__).parent / '../configs/final_training.json' if args.j is None else args.j
+
     save_path = create_log_folder(args.p)
     logger = log_service.get_logger(__name__)
 
     logger.info('Reading configuration...')
-    config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else Path(__file__).parent / '../configs/final_training.json'
+    config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else custom_json_path
     config = load_run_json(config_path)
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
@@ -177,7 +183,8 @@ def main():
     logger.info('Best epoch index: %d', epoch_index + 1)
     logger.info('Total epochs: %d', len(hist.epoch))   # should work also for early stopping
     logger.info('Best validation accuracy: %0.4f', best_val_accuracy)
-    logger.info('Total training time (without callbacks): %0.4f seconds', training_time)
+    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
+                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
 
     for key in epoch_metrics_per_output:
         log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
@@ -192,8 +199,6 @@ def main():
         logger.info('\tTop3 accuracy: %0.4f', epoch_metrics_per_output[key]['top3'])
 
     logger.info('*' * 80)
-    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
-                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
 
 
 if __name__ == '__main__':
