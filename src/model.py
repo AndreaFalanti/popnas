@@ -309,14 +309,17 @@ class ModelGenerator:
         left_layer = self.__build_layer(filters, op_L, input_L_depth, strides=stride_L, tag='L')(inputs[input_L])
         right_layer = self.__build_layer(filters, op_R, input_R_depth, strides=stride_R, tag='R')(inputs[input_R])
 
+        name_suffix = f'_c{self.cell_index}b{self.block_index}'
+
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
             total_train_steps = self.training_steps_per_epoch * self.epochs
+
             sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
-                                        name=f'sdp_c{self.cell_index}b{self.block_index}')([left_layer, right_layer])
-            return layers.Add()(sdp)
+                                        name=f'sdp{name_suffix}')([left_layer, right_layer])
+            return layers.Add(name=f'add{name_suffix}')(sdp)
         else:
-            return layers.Add()([left_layer, right_layer])
+            return layers.Add(name=f'add{name_suffix}')([left_layer, right_layer])
 
     def __build_layer(self, filters, operator, input_filters, strides=(1, 1), tag='L'):
         '''
@@ -335,37 +338,38 @@ class ModelGenerator:
         '''
 
         adapt_depth = filters != input_filters
+        block_info_suffix = f'_c{self.cell_index}b{self.block_index}{tag}'
 
         # check non parametrized operations first since they don't require a regex and are faster
         if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2) or adapt_depth:
-                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it is disable, reverting to pointwise convolution
-                # model_name = f'identity_R_c{self.cell_index}b{self.block_index}{tag}'
-                # x = ops.IdentityReshaper(filters, input_filters, strides, name=model_name)
-                model_name = f'pointwise_id_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Convolution(filters, (1, 1), strides, weight_reg=self.l2_weight_reg, name=model_name)
+                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it's been disabled, reverting to pointwise convolution
+                # layer_name = f'identity_reshaper{block_info_suffix}'
+                # x = ops.IdentityReshaper(filters, input_filters, strides, name=layer_name)
+                layer_name = f'pointwise_id{block_info_suffix}'
+                x = ops.Convolution(filters, (1, 1), strides, weight_reg=self.l2_weight_reg, name=layer_name)
                 return x
             else:
                 # else just submits a linear layer if shapes match
-                model_name = f'identity_c{self.cell_index}b{self.block_index}{tag}'
-                x = ops.Identity(name=model_name)
+                layer_name = f'identity{block_info_suffix}'
+                x = ops.Identity(name=layer_name)
                 return x
 
         # check for separable conv
         match = self.op_regexes['dconv'].match(operator)  # type: re.Match
         if match:
-            model_name = f'{match.group(1)}x{match.group(2)}_dconv_c{self.cell_index}b{self.block_index}{tag}'
+            layer_name = f'{match.group(1)}x{match.group(2)}_dconv{block_info_suffix}'
             x = ops.SeparableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_reg=self.l2_weight_reg)
+                                         name=layer_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for transpose conv
         match = self.op_regexes['tconv'].match(operator)  # type: re.Match
         if match:
-            model_name = f'{match.group(1)}x{match.group(2)}_tconv_c{self.cell_index}b{self.block_index}{tag}'
+            layer_name = f'{match.group(1)}x{match.group(2)}_tconv{block_info_suffix}'
             x = ops.TransposeConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=model_name, weight_reg=self.l2_weight_reg)
+                                         name=layer_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for stacked conv operation
@@ -375,16 +379,16 @@ class ModelGenerator:
             k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
             s = [strides, (1, 1)]
 
-            model_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.StackedConvolution(f, k, s, name=model_name, weight_reg=self.l2_weight_reg)
+            layer_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv{block_info_suffix}'
+            x = ops.StackedConvolution(f, k, s, name=layer_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for standard conv
         match = self.op_regexes['conv'].match(operator)  # type: re.Match
         if match:
-            model_name = f'{match.group(1)}x{match.group(2)}_conv_c{self.cell_index}b{self.block_index}{tag}'
+            layer_name = f'{match.group(1)}x{match.group(2)}_conv{block_info_suffix}'
             x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                name=model_name, weight_reg=self.l2_weight_reg)
+                                name=layer_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for pooling
@@ -393,9 +397,9 @@ class ModelGenerator:
             size = to_int_tuple(match.group(1, 2))
             pool_type = match.group(3)
 
-            model_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool_c{self.cell_index}b{self.block_index}{tag}'
-            x = ops.PoolingConv(filters, pool_type, size, strides, name=model_name, weight_reg=self.l2_weight_reg) if adapt_depth \
-                else ops.Pooling(pool_type, size, strides, name=model_name)
+            layer_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool{block_info_suffix}'
+            x = ops.PoolingConv(filters, pool_type, size, strides, name=layer_name, weight_reg=self.l2_weight_reg) if adapt_depth \
+                else ops.Pooling(pool_type, size, strides, name=layer_name)
 
             return x
 
