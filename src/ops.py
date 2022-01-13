@@ -1,65 +1,10 @@
 import math
 import operator
 import random
+from abc import abstractmethod, ABC
 
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, BatchNormalization, Layer
-
-
-# TODO: actually not used, delete it?
-def depth_zero_pad_closure(desired_depth, op_layer):
-    '''
-    Pad depth of a Keras layer with zeros, if it has not already the right depth for performing addition at the end of the block.
-
-    Args:
-        desired_depth (int): Depth required for addition with other tensor inside the block (filters value).
-        op_layer (tf.keras.Layer): Keras layer to use. Only layers that don't modify depth can be used, otherwise the closure will fail
-            (as it wouldn't be necessary to adapt the depth).
-
-    Returns:
-        (Callable): call function built by closure
-    '''
-
-    def depth_zero_pad_call(inputs):
-        # directly compute depth on input, because 
-        input_depth = inputs.get_shape().as_list()[3]
-        pad_size = desired_depth - input_depth
-
-        if pad_size > 0:
-            output = op_layer(inputs)
-            paddings = tf.constant([[0, 0], [0, 0], [0, 0], [0, pad_size]])
-            return tf.pad(output, paddings)  # pad output with 0s
-        else:
-            return op_layer(inputs)
-
-    return depth_zero_pad_call
-
-
-# TODO: Convolution is spawned during call, which is not optimal for TF. For now it is abandoned, now pooling
-#  use the check directly in code and pre-instantiate the convolution
-def depth_pointwise_conv_closure(desired_depth, op_layer):
-    '''
-    Generate call for pooling operation. It adds a pointwise convolution to adapt the depth, if necessary.
-
-    Args:
-        desired_depth (int): Depth required for addition with other tensor inside the block (filters value).
-        op_layer (tf.keras.Layer): Keras layer to use. Only layers that don't modify depth can be used, otherwise the closure will fail
-            (as it wouldn't be necessary to adapt the depth).
-
-    Returns:
-        (Callable): call function built by closure
-    '''
-
-    def depth_pointwise_conv_call(inputs):
-        input_depth = inputs.get_shape().as_list()[3]
-
-        if input_depth != desired_depth:
-            output = op_layer(inputs)
-            return Convolution(desired_depth, (1, 1), (1, 1))(output)
-        else:
-            return op_layer(inputs)
-
-    return depth_pointwise_conv_call
 
 
 class Identity(Layer):
@@ -318,13 +263,6 @@ class ScheduledDropPath(Layer):
         self.cell_ratio = cell_ratio  # (self._cell_num + 1) / float(self._total_num_cells)
         self.total_training_steps = total_training_steps  # number of times weights are updated (batches_per_epoch * epochs)
         self.current_step = tf.Variable(0, trainable=False, dtype=tf.float32)
-
-    # def build(self, input_shape):
-    #     noise_shape = [input_shape[0][0], 1, 1, 1]
-    #     self.binary_tensors = []
-    #
-    #     for i in range(len(input_shape)):
-    #         self.binary_tensors.append(tf.zeros(noise_shape))
 
     def call(self, inputs, training=None, mask=None):
         if training and self.keep_probability < 1.0:
