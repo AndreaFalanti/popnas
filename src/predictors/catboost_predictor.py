@@ -87,10 +87,12 @@ class CatBoostPredictor(Predictor):
             }
 
             results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=40, train_size=0.8)
+            self._logger.info('CatBoost random search complete')
             self._logger.info('Best parameters: %s', str(results_dict['params']))
         # else simply train the model with default parameters
         else:
             self.model.fit(train_pool)
+            self._logger.info('CatBoost training complete')
 
         if self.perform_feature_analysis:
             result_pairs = self.model.get_feature_importance(train_pool, prettified=True)  # type: pd.DataFrame
