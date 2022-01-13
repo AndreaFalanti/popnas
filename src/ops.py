@@ -48,71 +48,75 @@ class IdentityReshaper(Layer):
         return config
 
 
-class SeparableConvolution(Layer):
+class OpBatchActivation(Layer, ABC):
+    @abstractmethod
+    def __init__(self, filters, kernel, strides, weight_reg=None, name='abstract', **kwargs):
+        '''
+        Abstract utility class used as baseline for any {Operation - Batch Normalization - Activation} layer.
+        Op attribute must be set to a Keras layer or TF nn operation in all concrete implementations.
+        '''
+        super().__init__(name=name, **kwargs)
+        self.filters = filters
+        self.kernel = kernel
+        self.strides = strides
+        self.weight_reg = weight_reg
+
+        self.bn = BatchNormalization()
+
+        # concrete implementations must use a valid Keras layer / TF operation, assigning it to this variable during __init__
+        self.op = None
+
+    def call(self, inputs, training=None, mask=None):
+        x = self.op(inputs)
+        x = self.bn(x, training=training)
+        return tf.nn.relu(x)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'filters': self.filters,
+            'kernel': self.kernel,
+            'strides': self.strides,
+            'weight_reg': self.weight_reg
+        })
+        return config
+
+
+class SeparableConvolution(OpBatchActivation):
     def __init__(self, filters, kernel, strides, weight_reg=None, name='dconv', **kwargs):
         '''
-        Constructs a Separable Convolution - Batch Normalization - Relu block.
+        Constructs a {Separable Convolution - Batch Normalization - Activation} layer.
         '''
-        super().__init__(name=name, **kwargs)
-        self.filters = filters
-        self.kernel = kernel
-        self.strides = strides
-        self.weight_reg = weight_reg
+        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
 
-        self.conv = SeparableConv2D(filters, kernel, strides=strides, padding='same',
-                                    depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
-                                    depthwise_regularizer=weight_reg, pointwise_regularizer=weight_reg)
-        self.bn = BatchNormalization()
-
-    def call(self, inputs, training=None, mask=None):
-        x = self.conv(inputs)
-        x = self.bn(x, training=training)
-        return tf.nn.relu(x)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'filters': self.filters,
-            'kernel': self.kernel,
-            'strides': self.strides,
-            'weight_reg': self.weight_reg
-        })
-        return config
+        self.op = SeparableConv2D(filters, kernel, strides=strides, padding='same',
+                                  depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
+                                  depthwise_regularizer=weight_reg, pointwise_regularizer=weight_reg)
 
 
-# TODO: remove duplication between layers using (single op - bn - activation) by implementing an abstract Layer subclass
-class Convolution(Layer):
+class Convolution(OpBatchActivation):
     def __init__(self, filters, kernel, strides, weight_reg=None, name='conv', **kwargs):
         '''
-        Constructs a Spatial Convolution - Batch Normalization - Relu block.
+        Constructs a {Spatial Convolution - Batch Normalization - Activation} layer.
         '''
-        super().__init__(name=name, **kwargs)
-        self.filters = filters
-        self.kernel = kernel
-        self.strides = strides
-        self.weight_reg = weight_reg
+        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
 
-        self.conv = Conv2D(filters, kernel, strides=strides, padding='same',
-                           kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
-        self.bn = BatchNormalization()
-
-    def call(self, inputs, training=None, mask=None):
-        x = self.conv(inputs)
-        x = self.bn(x, training=training)
-        return tf.nn.relu(x)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'filters': self.filters,
-            'kernel': self.kernel,
-            'strides': self.strides,
-            'weight_reg': self.weight_reg
-        })
-        return config
+        self.op = Conv2D(filters, kernel, strides=strides, padding='same',
+                         kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
 
 
-class TransposeConvolution(Layer):
+class TransposeConvolution(OpBatchActivation):
+    def __init__(self, filters, kernel, strides, weight_reg=None, name='tconv', **kwargs):
+        '''
+        Constructs a {Transpose Convolution - Batch Normalization - Activation} layer.
+        '''
+        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
+
+        self.op = Conv2DTranspose(filters, kernel, strides, padding='same',
+                                  kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+
+
+class TransposeConvolutionStack(Layer):
     def __init__(self, filters, kernel, strides, weight_reg=None, name='tconv', **kwargs):
         '''
         Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
@@ -126,19 +130,12 @@ class TransposeConvolution(Layer):
         transpose_stride = (2, 2)
         conv_strides = tuple(map(operator.mul, transpose_stride, strides))
 
-        self.transposeConv = Conv2DTranspose(filters, kernel, transpose_stride, padding='same',
-                                             kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
-        self.conv = Conv2D(filters, kernel, conv_strides, padding='same', kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
-        self.bn = BatchNormalization()
-        self.bn2 = BatchNormalization()
+        self.transposeConv = TransposeConvolution(filters, kernel, transpose_stride, weight_reg)
+        self.conv = Convolution(filters, kernel, conv_strides, weight_reg)
 
     def call(self, inputs, training=None, mask=None):
         x = self.transposeConv(inputs)
-        x = self.bn(x, training=training)
-        x = tf.nn.relu(x)
-        x = self.conv(x)
-        x = self.bn2(x, training=training)
-        return tf.nn.relu(x)
+        return self.conv(x)
 
     def get_config(self):
         config = super().get_config()
@@ -164,10 +161,7 @@ class StackedConvolution(Layer):
 
         assert len(filter_list) == len(kernel_list) and len(kernel_list) == len(stride_list), "List lengths must match"
 
-        self.convs = []
-        for (f, k, s) in zip(filter_list, kernel_list, stride_list):
-            conv = Convolution(f, k, s, weight_reg=weight_reg)
-            self.convs.append(conv)
+        self.convs = [Convolution(f, k, s, weight_reg=weight_reg) for (f, k, s) in zip(filter_list, kernel_list, stride_list)]
 
     def call(self, inputs, training=None, mask=None):
         x = inputs

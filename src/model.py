@@ -205,8 +205,8 @@ class ModelGenerator:
 
         # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
         if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict,\
-                         max(self.network_build_info.used_cell_indexes, default=0)
+            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, \
+                   max(self.network_build_info.used_cell_indexes, default=0)
         else:
             output = self.__generate_output(last_output, self.dropout_prob)
             return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
@@ -368,8 +368,8 @@ class ModelGenerator:
         match = self.op_regexes['tconv'].match(operator)  # type: re.Match
         if match:
             layer_name = f'{match.group(1)}x{match.group(2)}_tconv{block_info_suffix}'
-            x = ops.TransposeConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=layer_name, weight_reg=self.l2_weight_reg)
+            x = ops.TransposeConvolutionStack(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
+                                              name=layer_name, weight_reg=self.l2_weight_reg)
             return x
 
         # check for stacked conv operation
