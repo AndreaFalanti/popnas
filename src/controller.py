@@ -44,7 +44,8 @@ class ControllerManager:
     '''
 
     def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 B=5, K=256, ex=16, T=np.inf, current_b: int = 1, predictions_batch_size: int = 16, pnas_mode: bool = False):
+                 acc_predictor_ensemble_units: int, B=5, K=256, ex=16, T=np.inf,
+                 current_b: int = 1, predictions_batch_size: int = 16, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
 
@@ -65,6 +66,7 @@ class ControllerManager:
         self.T = T
         self.current_b = current_b
         self.predictions_batch_size = predictions_batch_size
+        self.acc_ensemble_units = acc_predictor_ensemble_units
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
@@ -78,9 +80,11 @@ class ControllerManager:
         acc_predictor = self.get_acc_predictor(self.current_b)
 
         # train accuracy predictor with all data available
-        acc_predictor.train(log_service.build_path('csv', 'training_results.csv'))
-        # can also train an ensemble, if you wish so
-        # acc_predictor.train_ensemble(log_service.build_path('csv', 'training_results.csv'), splits=5)
+        if self.acc_ensemble_units > 1:
+            acc_predictor.train_ensemble(log_service.build_path('csv', 'training_results.csv'), splits=self.acc_ensemble_units)
+        # train an ensemble
+        else:
+            acc_predictor.train(log_service.build_path('csv', 'training_results.csv'))
 
         # train time predictor with new data
         if not self.pnas_mode:

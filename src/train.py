@@ -55,6 +55,8 @@ class Train:
 
         self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
 
+        self.acc_predictor_ensemble_units = run_config['accuracy_predictor_ensemble_units']
+
         plotter.initialize_logger()
 
         restore_info_save_path = log_service.build_path('restore', 'info.pickle')
@@ -280,7 +282,8 @@ class Train:
         # create the ControllerManager and build the internal policy network
         # for restoring purposes
         controller_b = self.starting_b if self.starting_b > 1 else 1
-        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, current_b=controller_b,
+        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func,
+                                       acc_predictor_ensemble_units=self.acc_predictor_ensemble_units, current_b=controller_b,
                                        B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size,
                                        predictions_batch_size=self.preds_batch_size, pnas_mode=self.pnas_mode)
 
