@@ -1,13 +1,14 @@
+import logging
 import os.path
 import statistics
 from typing import NamedTuple
-import logging
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pandas.io.parsers import TextFileReader
+from sklearn.metrics import r2_score
 
 import log_service
 from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape
@@ -402,6 +403,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     time_errors, avg_time_errors, max_time_errors, min_time_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     acc_errors, avg_acc_errors, max_acc_errors, min_acc_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+    time_r2, acc_r2 = np.zeros(B - 1), np.zeros(B - 1)
 
     # TODO: maybe better to refactor these lists to numpy arrays too.
     # They are used as list of lists for scatter plots.
@@ -416,34 +418,38 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
 
         # compute time prediction errors (regressor)
         if not pnas_mode:
-            time_errors_b = merge_df['training time(seconds)'] - merge_df['time']
-
             pred_times.append(merge_df['time'].to_list())
             real_times.append(merge_df['training time(seconds)'].to_list())
 
+            time_errors_b = merge_df['training time(seconds)'] - merge_df['time']
             time_errors.append(time_errors_b)
+
             avg_time_errors[b - 2] = statistics.mean(time_errors_b)
             max_time_errors[b - 2] = max(time_errors_b)
             min_time_errors[b - 2] = min(time_errors_b)
+
             time_mapes[b - 2] = compute_mape(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
             time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'training time(seconds)', 'time')
+            time_r2[b - 2] = r2_score(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
 
         # always compute accuracy prediction errors (LSTM controller)
-        val_accuracy_errors_b = merge_df['best val accuracy'] - merge_df['val accuracy']
-
         pred_acc.append(merge_df['val accuracy'].to_list())
         real_acc.append(merge_df['best val accuracy'].to_list())
 
+        val_accuracy_errors_b = merge_df['best val accuracy'] - merge_df['val accuracy']
         acc_errors.append(val_accuracy_errors_b)
+
         avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors_b)
         max_acc_errors[b - 2] = max(val_accuracy_errors_b)
         min_acc_errors[b - 2] = min(val_accuracy_errors_b)
+
         acc_mapes[b - 2] = compute_mape(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
         acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'best val accuracy', 'val accuracy')
+        acc_r2[b - 2] = r2_score(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
 
-        # add also MAPE and spearman to legends
-        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
-        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
+        # add MAPE, R^2 and spearman metrics to legends
+        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, R^2: {time_r2[b - 2]:.3f}, ρ: {time_spearman_coeffs[b - 2]:.3f})')
+        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, R^2: {acc_r2[b - 2]:.3f}, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
 
     x = np.arange(2, B + 1)
 
