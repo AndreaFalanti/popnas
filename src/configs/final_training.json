@@ -1,7 +1,7 @@
 {
     "cnn_hp": {
         "epochs": 126,
-        "learning_rate": 0.05,
+        "learning_rate": 0.01,
         "filters": 24,
         "weight_reg": 5e-4,
         "use_adamW": true,
