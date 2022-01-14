@@ -213,10 +213,6 @@ class Train:
         acc_lstm = AttentionRNNPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
                                          save_weights=True, hp_config=self.rnn_config)
 
-        # restore NN weights when restoring a previous run
-        # TODO: it will be a NOP if checkpoint is not present, but is not very intuitive...
-        acc_lstm.restore_weights()
-
         # time predictors to be used
         if not self.pnas_mode:
             # TODO: shap (0.40.0) is bugged, avoid feature analysis for now since the local fixes can't be easily replicated on all servers on which

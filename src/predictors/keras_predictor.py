@@ -2,7 +2,7 @@ import os
 from abc import abstractmethod
 from logging import Logger
 from statistics import mean
-from typing import Union, Any
+from typing import Union, Any, Optional
 
 import keras
 import keras_tuner as kt
@@ -14,7 +14,7 @@ from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
 from predictors import Predictor
-from utils.func_utils import parse_cell_structures
+from utils.func_utils import parse_cell_structures, create_empty_folder
 from utils.rstr import rstr
 
 
@@ -46,6 +46,8 @@ class KerasPredictor(Predictor):
             self.output_activation = 'linear'
 
         self._logger.debug('Using %s as final activation, based on y domain provided', self.output_activation)
+
+        self._model_log_folder = None  # type: Optional[str]
 
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
@@ -98,9 +100,9 @@ class KerasPredictor(Predictor):
 
         return loss, optimizer, train_metrics
 
-    def _get_callbacks(self) -> 'list[callbacks.Callback]':
+    def _get_callbacks(self, log_folder: str) -> 'list[callbacks.Callback]':
         return [
-            callbacks.TensorBoard(log_dir=self.log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
+            callbacks.TensorBoard(log_dir=log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
             callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
         ]
 
@@ -130,6 +132,7 @@ class KerasPredictor(Predictor):
 
         return list(zip(cells, results_df['best val accuracy'].to_list()))
 
+    # TODO: currently not used, need adjustments for ensemble and new folder structure
     def restore_weights(self):
         if os.path.exists(os.path.join(self.log_folder, 'weights.index')):
             self.model.load_weights(os.path.join(self.log_folder, 'weights'))
@@ -142,6 +145,7 @@ class KerasPredictor(Predictor):
 
         cells, rewards = zip(*dataset)
         model_ensemble = []
+        max_b = len(cells[-1])
 
         # TODO
         cells = list(cells)
@@ -155,11 +159,15 @@ class KerasPredictor(Predictor):
             fold_rewards = [rewards[i] for i in train]
             train_dataset = list(zip(fold_cells, fold_rewards))
 
+            self._model_log_folder = os.path.join(self.log_folder, f'B{max_b}', f'model_{fold_index + 1}')
+            create_empty_folder(self._model_log_folder)
+
             self.train(train_dataset, use_data_augmentation)
             model_ensemble.append(self.model)
             self._logger.info('Model %d training complete', fold_index + 1)
 
         self.model_ensemble = model_ensemble
+        self._model_log_folder = None
 
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # get samples for file path string
@@ -173,7 +181,12 @@ class KerasPredictor(Predictor):
         self.model_ensemble = None
 
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
-        train_callbacks = self._get_callbacks()
+        if self._model_log_folder is None:
+            b_max = len(cells[-1])
+            self._model_log_folder = os.path.join(self.log_folder, f'B{b_max}')
+            create_empty_folder(self._model_log_folder)
+
+        train_callbacks = self._get_callbacks(self._model_log_folder)
 
         if self.hp_tuning:
             tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)]
@@ -204,7 +217,7 @@ class KerasPredictor(Predictor):
         self._logger.info('Keras predictor trained successfully')
 
         if self.save_weights:
-            self.model.save_weights(os.path.join(self.log_folder, 'weights'))
+            self.model.save_weights(os.path.join(self._model_log_folder, 'weights'))
 
     def predict(self, x: list) -> float:
         pred_dataset, _ = self._build_tf_dataset([x], validation_split=False, shuffle=False)
