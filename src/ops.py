@@ -69,7 +69,7 @@ class OpBatchActivation(Layer, ABC):
     def call(self, inputs, training=None, mask=None):
         x = self.op(inputs)
         x = self.bn(x, training=training)
-        return tf.nn.relu(x)
+        return tf.nn.silu(x)
 
     def get_config(self):
         config = super().get_config()
