@@ -1,7 +1,7 @@
 import logging
 import os.path
 import statistics
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -117,7 +117,8 @@ def __plot_pie_chart(labels, values, title, save_name):
     __save_and_close_plot(fig, save_name)
 
 
-def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_reference=True, legend_labels=None):
+def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
+                                 plot_reference: bool = True, legend_labels: Optional['list[str]'] = None, value_range: Optional[tuple] = None):
     fig, ax = plt.subplots()
 
     # list of lists with same dimensions are required, or also flat lists with same dimensions
@@ -132,6 +133,10 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name, plot_
             plt.scatter(xs, ys, marker='.', color=color, label=lab)
     else:
         plt.scatter(x, y)
+
+    if value_range is not None:
+        plt.xlim(*value_range)
+        plt.ylim(*value_range)
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -471,7 +476,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     __plot_boxplot(acc_errors, x, 'Blocks', 'Accuracy error',
                    'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot.png')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
-                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels)
+                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels, value_range=(0, 1))
 
     __logger.info("Prediction error overview plots written successfully")
 
