@@ -57,6 +57,7 @@
     },
     "accuracy_predictor_ensemble_units": 5,
     "predictions_batch_size": 32,
+    "save_children_weights": false,
     "pnas_mode": false,
     "use_cpu": false
 }

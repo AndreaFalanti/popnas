@@ -35,7 +35,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict):
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, save_network_weights: bool):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -59,7 +59,8 @@ class NetworkManager:
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
                                         output_classes=self.dataset_classes_count, image_shape=image_shape,
-                                        data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None)
+                                        data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None,
+                                        save_weights=save_network_weights)
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']

@@ -1,3 +1,4 @@
+import os.path
 import re
 
 import tensorflow as tf
@@ -40,7 +41,7 @@ class ModelGenerator:
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
     def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes: int, image_shape: 'tuple[int, int, int]',
-                 data_augmentation_model: Sequential = None):
+                 data_augmentation_model: Sequential = None, save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
 
@@ -60,6 +61,8 @@ class ModelGenerator:
         self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
         self.dropout_prob = cnn_hp['softmax_dropout']  # dropout probability on final softmax
         self.cdr_config = cnn_hp['cosine_decay_restart']  # type: dict
+
+        self.save_weights = save_weights
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
         self.epochs = cnn_hp['epochs']
@@ -413,12 +416,19 @@ class ModelGenerator:
             (list[callbacks.Callback]): Keras callbacks
         '''
         # By default shows losses and metrics for both training and validation
-        tb_callback = callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')
+        model_callbacks = [callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')]
+
+        if self.save_weights:
+            # Save best weights, using as metric the last output in case of multi-output models
+            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_accuracy'\
+                if self.multi_output and self.network_build_info.blocks > 0 else 'val_accuracy'
+            model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.ckpt'),
+                                                             save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
         # TODO: if you want to use early stopping, training time should be rescaled for predictor
         # es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
 
-        return [tb_callback]
+        return model_callbacks
 
     def define_training_hyperparams_and_metrics(self):
         if self.multi_output and len(self.output_layers) > 1:
@@ -434,7 +444,6 @@ class ModelGenerator:
 
         metrics = ['accuracy']
 
-        # TODO: perform more tests on learning rate schedules and optimizers, for now ADAM with cosineDecayRestart seems to do better on 20 epochs
         if self.cdr_config['enabled']:
             decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
             lr_schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config['t_mul'],
