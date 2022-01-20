@@ -6,6 +6,7 @@ from typing import Union, Optional
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.metrics import r2_score
 
 from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coefficient, create_empty_folder
 
@@ -38,17 +39,19 @@ class Predictor(ABC):
         self._y_pred = []
         self._mape = []
         self._spearman = []
+        self._r_squared = []
 
     def _compute_pred_test_metrics(self):
         for x_b, y_b in zip(self._x_real, self._y_pred):
             self._mape.append(compute_mape(x_b, y_b))
             self._spearman.append(compute_spearman_rank_correlation_coefficient(x_b, y_b))
+            self._r_squared.append(r2_score(x_b, y_b))
 
     def save_scatter_plot(self, pred_label: str, save_path: str = None, plot_reference=True):
         fig, ax = plt.subplots()
 
-        legend_labels = [f'B{i + 2} (MAPE: {mape:.3f}%, ρ: {spearman:.3f})'
-                         for i, (mape, spearman) in enumerate(zip(self._mape, self._spearman))]
+        legend_labels = [f'B{i + 2} (MAPE: {mape:.3f}%, R^2: {r2:.3f} ρ: {spearman:.3f})'
+                         for i, (mape, r2, spearman) in enumerate(zip(self._mape, self._r_squared, self._spearman))]
 
         colors = cm.rainbow(np.linspace(0, 1, len(self._x_real)))
         for xs, ys, color, lab in zip(self._x_real, self._y_pred, colors, legend_labels):
