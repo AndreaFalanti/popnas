@@ -1,10 +1,11 @@
 FROM tensorflow/tensorflow:2.7.0-gpu
 
-# Install graphviz
+# Install needed system dependencies
 RUN apt-get update
-RUN apt-get install graphviz nano -y
+RUN apt-get update
+RUN apt-get install graphviz nano git-all -y
 
-# Install extras
+# Install extra python dependencies
 COPY requirements.txt /requirements.txt
 RUN /bin/bash -c "pip install -r requirements.txt"
 

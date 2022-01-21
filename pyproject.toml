@@ -18,7 +18,6 @@ catboost = "1.0.3"
 pydot = "1.4.2"
 numba = "0.53.1"
 psutil = "5.8.0"
-shap = "0.40.0"
 seaborn = "0.11.2"
 tf2onnx = "1.9.3"
 keras-tuner = "1.1.0"
@@ -26,6 +25,9 @@ tensorflow-addons = {extras = ["tensorflow"], version = "0.15.0"}
 tensorflow-probability = "0.15.0"
 tfds-nightly = "4.4.0-alpha.202201030107"
 igraph = "0.9.8"
+# shap 0.40.0 has a trivial variable naming bug
+# it's fixed in my personal fork but when shap will be updated it's better to switch back to the official version
+shap = {git = "https://github.com/AndreaFalanti/shap.git"}
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"

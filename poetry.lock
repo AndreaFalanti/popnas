@@ -1105,6 +1105,7 @@ description = "A unified approach to explain the output of any machine learning 
 category = "main"
 optional = false
 python-versions = "*"
+develop = false
 
 [package.dependencies]
 cloudpickle = "*"
@@ -1118,11 +1119,17 @@ slicer = "0.0.7"
 tqdm = ">4.25.0"
 
 [package.extras]
-all = ["catboost", "nbsphinx", "matplotlib", "sphinx", "pytest-cov", "pyod", "torch", "pytest", "sentencepiece", "xgboost", "opencv-python", "transformers", "lime", "pyspark", "lightgbm", "pytest-mpl", "numpydoc", "ipython", "sphinx-rtd-theme"]
+all = ["sentencepiece", "sphinx-rtd-theme", "pyod", "pytest-cov", "pyspark", "torch", "pytest-mpl", "lightgbm", "numpydoc", "transformers", "ipython", "opencv-python", "catboost", "xgboost", "sphinx", "pytest", "lime", "nbsphinx", "matplotlib"]
 docs = ["matplotlib", "ipython", "numpydoc", "sphinx-rtd-theme", "sphinx", "nbsphinx"]
 others = ["lime"]
 plots = ["matplotlib", "ipython"]
 test = ["pytest", "pytest-mpl", "pytest-cov", "xgboost", "lightgbm", "catboost", "pyspark", "pyod", "transformers", "torch", "sentencepiece", "opencv-python"]
+
+[package.source]
+type = "git"
+url = "https://github.com/AndreaFalanti/shap.git"
+reference = "master"
+resolved_reference = "94a02e5add1c315110e240a4e8ae3cdad3e2c56c"
 
 [[package]]
 name = "six"
@@ -1530,7 +1537,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.0, <3.9.0"
-content-hash = "a14cc4d59a17aeeb535bd87938e0ed043a1a70b186fe0d8d08542d4d97b25f5e"
+content-hash = "03509e34f88b3e14b983201fad52c0a43e1b6fa22192975489b3db3489de6ed5"
 
 [metadata.files]
 absl-py = [
@@ -2437,12 +2444,7 @@ seaborn = [
     {file = "seaborn-0.11.2-py3-none-any.whl", hash = "sha256:85a6baa9b55f81a0623abddc4a26b334653ff4c6b18c418361de19dbba0ef283"},
     {file = "seaborn-0.11.2.tar.gz", hash = "sha256:cf45e9286d40826864be0e3c066f98536982baf701a7caa386511792d61ff4f6"},
 ]
-shap = [
-    {file = "shap-0.40.0-cp36-cp36m-win_amd64.whl", hash = "sha256:bbf0cfa30cd8c51f8830d3f25c3881b9949e062124cd0d0b3d8efdc7e0cf5136"},
-    {file = "shap-0.40.0-cp37-cp37m-win_amd64.whl", hash = "sha256:dbd07e48fc7f4d5916f6cdd9dbb8d29b7711a265cc9beac92e7d4a4d9e738bc7"},
-    {file = "shap-0.40.0-cp38-cp38-win_amd64.whl", hash = "sha256:fb1b325a55fdf58061d332ed3308d44162084d4cb5f53f2c7774ce943d60b0ad"},
-    {file = "shap-0.40.0.tar.gz", hash = "sha256:add0a27bb4eb57f0a363c2c4265b1a1328a8c15b01c14c7d432d9cc387dd8579"},
-]
+shap = []
 six = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
