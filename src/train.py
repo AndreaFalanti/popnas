@@ -215,12 +215,8 @@ class Train:
 
         # time predictors to be used
         if not self.pnas_mode:
-            # TODO: shap (0.40.0) is bugged, avoid feature analysis for now since the local fixes can't be easily replicated on all servers on which
-            #  the algorithm is ran. Hopefully pull requests will be merged in near future.
-            time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True,
-                                              override_logs=False, perform_feature_analysis=False)
-            # time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path,
-            #                                    override_logs=False, perform_feature_analysis=False)
+            time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
+            # time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, override_logs=False)
 
         def get_acc_predictor_for_b(b: int):
             return acc_lstm
