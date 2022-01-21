@@ -1,6 +1,6 @@
 {
     "cnn_hp": {
-        "epochs": 126,
+        "epochs": 254,
         "learning_rate": 0.01,
         "filters": 24,
         "weight_reg": 5e-4,
