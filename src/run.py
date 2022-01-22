@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-r', metavar='RESTORE_FOLDER', type=str, help='path of log folder to restore (timestamp-named folder)', default=None)
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with run parameters', default=None)
+    parser.add_argument('--name', metavar='RUN_NAME', type=str, help='name used for log folder', default=None)
     args = parser.parse_args()
 
     if tf.test.gpu_device_name():
@@ -52,7 +53,7 @@ def main():
 
     # initialize folders after CPU/GPU check, just to avoid making folders when run is faulty
     if args.r is None:
-        log_service.initialize_log_folders()
+        log_service.initialize_log_folders(args.name)
         # copy config (with args override) for possible run restore
         with open(log_service.build_path('restore', 'run.json'), 'w') as f:
             json.dump(run_config, f, indent=4)

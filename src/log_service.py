@@ -16,7 +16,7 @@ def set_log_path(path):
     log_path = path
 
 
-def initialize_log_folders():
+def initialize_log_folders(folder_name: str = None):
     '''
     Used in POPNAS algorithm, initialize logs folder and subfolders.
     '''
@@ -24,10 +24,15 @@ def initialize_log_folders():
         os.mkdir('logs/')
 
     global log_path
-    # create timestamp subfolder and set the global log path variable
-    timestr = time.strftime('%Y-%m-%d-%H-%M-%S')  # get time for logs folder
-    log_path = os.path.join('logs', timestr)
-    os.mkdir(log_path)
+    # create timestamp subfolder if name is None, otherwise use the given name
+    log_folder = time.strftime('%Y-%m-%d-%H-%M-%S') if folder_name is None else folder_name
+    # set the global log path variable
+    log_path = os.path.join('logs', log_folder)
+
+    try:
+        os.mkdir(log_path)
+    except FileExistsError:
+        raise AttributeError('The provided log folder name already exists, use another name to avoid conflicts')
 
     os.mkdir(os.path.join(log_path, 'csv'))  # create .csv path
     os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
