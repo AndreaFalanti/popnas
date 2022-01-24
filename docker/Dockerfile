@@ -1,9 +1,7 @@
 FROM tensorflow/tensorflow:2.7.0-gpu
 
 # Install needed system dependencies
-RUN apt-get update
-RUN apt-get update
-RUN apt-get install graphviz nano git-all -y
+RUN apt update && apt install graphviz nano git-all python3-tk -y
 
 # Install extra python dependencies
 COPY requirements.txt /requirements.txt
@@ -14,5 +12,6 @@ WORKDIR /exp
 COPY . .
 
 ENV PYTHONPATH="${PYTHONPATH}:/exp"
+ENV TFDS_DATA_DIR="tensorflow_datasets"
 
 CMD ["bash"]
