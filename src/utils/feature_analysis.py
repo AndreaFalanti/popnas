@@ -33,7 +33,7 @@ def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: st
         pred_path = os.path.join(log_folder, 'feature_pred_contributions')
         os.makedirs(pred_path, exist_ok=True)
 
-        for i in range((len(shap_values) // save_pred_every) + 1):
+        for i in range(len(shap_values) // save_pred_every):
             shap.plots.waterfall(shap_values[i * save_pred_every], max_display=features_num, show=False)
             plt.savefig(os.path.join(pred_path, f'shap_pred{i * save_pred_every}.png'), bbox_inches='tight')
             plt.close()
