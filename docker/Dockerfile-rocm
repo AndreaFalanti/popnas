@@ -16,5 +16,6 @@ WORKDIR /exp
 COPY . .
 
 ENV PYTHONPATH="${PYTHONPATH}:/exp"
+ENV TFDS_DATA_DIR="tensorflow_datasets"
 
 CMD ["bash"]
