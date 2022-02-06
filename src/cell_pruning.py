@@ -39,8 +39,7 @@ class CellEncoding:
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, CellEncoding) and len(self.blocks) == len(o.blocks):
-            # each block must be equivalent to a not already eqv matched block for
-            # having a complete cell equivalence.
+            # each block must be equivalent to a not already eqv matched block for having a complete cell equivalence.
             # The mask helps filtering already matched blocks.
             blocks_mask = [True for _ in o.blocks]
 

@@ -1,9 +1,9 @@
 # POPNASv2
-New version of POPNAS algorithm, a neural architecture search method developed for a master thesis by Matteo Vantadori
+Second version of POPNAS algorithm, a neural architecture search method developed for a master thesis by Matteo Vantadori
 (Politecnico di Milano, academic year 2018-2019), based on 
 [PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
-This new version fixes many problems and bugs of the original version, also expanding it with ideas and improving the models involved and
-their training procedure. 
+This new version improves the time efficiency of the search algorithm, but also drastically increase the accuracy of the networks found,
+making it competitive with other NAS works. It also fixes problems and bugs of the original version. 
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
@@ -13,12 +13,12 @@ use the provider Docker container and avoid these steps (see Docker section belo
 Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
 for installing it on your machine and learning more about it.
 
-You need to have installed either python version 3.7 or 3.8 for building a valid environment (other python versions >= 3.7 could work,
-but they have not been tested).
+You need to have installed either python version 3.7 or 3.8 for building a valid environment (python versions > 3.8 could work,
+but they have not been officially tested).
 To install and manage the python versions and work with _poetry_ tool, it's advised to use [pyenv](https://github.com/pyenv/pyenv)
 or [pyenv-win](https://github.com/pyenv-win/pyenv-win) based on your system.
 
-Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of keras models.
+Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of Keras models.
 Follow the installation instructions at: https://graphviz.gitlab.io/download/.
 
 ### Installation steps
@@ -210,11 +210,11 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 - Fix blocks not having addition of the two operations output.
 - Fix skip connections (input index -2) not working as expected.
 - Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
-- Add adamW as an alternative optimizer that can be optionally enabled and used instead of Adam + L2 regularization, providing a more
+- Add AdamW as an alternative optimizer that can be optionally enabled and used instead of Adam + L2 regularization, providing a more
   accurate weight decay.
-- Add ScheduledDropPath in local version (see FractalNet), since it was used in both PNAS and NASNet.
+- Add ScheduledDropPath in local version (see FractalNet paper), since it was used in both PNAS and NASNet.
 - Add cosine decay restart learning rate schedule, since also ADAM benefits a lot from it.
-- Allow the usage of flexible kernel sizes for each operator supported by the algorithm.
+- Allow the usage of flexible kernel sizes for each operator supported by the algorithm, thanks to regex parsing.
 - Add support for TransposeConvolution operator.
 - Add the possibility to generate models with multiple outputs, one at the end of each cell. The CNN is then trained with custom loss weights
   for each output, scaling exponentially based on the cell index (last cell loss has weight 1/2, the second-last 1/4, the third-last 1/8, etc...)
@@ -240,6 +240,8 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 - A totally new feature set has been engineered for time predictors, based mainly the dag representation of a cell specification. This new set
   is quite small but very indicative of the main factors that dictates time differences among the networks. It also implicitly generalize on
   equivalent cell specifications, since they have the same DAG representation and so the same features, making futile the data augmentation step.
+- Accuracy predictor is now an ensemble of 5 models, each one trained on 4/5 of the data.
+  This closely follows PNAS work and improved slightly the results.
 
 ### Exploration step
 - Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
@@ -258,6 +260,9 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 ### Software improvements and refactors
 - Migrate code to Tensorflow 2, in particular to the 2.7 version.
+- The algorithm now supports 4 different image classification datasets: CIFAR10, CIFAR100, fashionMNIST and EuroSAT. It should be easy to implement
+  support for other datasets and datasets supported by [Tensorflow-datasets](https://www.tensorflow.org/datasets/catalog/overview?hl=en)
+  could work fine without any code change.
 - Now use JSON configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
   all the various components of the algorithm run. Many parameters and hyperparameters that were hardcoded in POPNAS initial version are now
   tunable from the JSON config.
@@ -291,7 +296,8 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 
 ### Other bug fixes
-- Fix regressor features bug: dynamic reindexing was nullified by an int cast.
+- Fix regressor features bug: dynamic reindexing was inaccurate due to an int cast that was totally unnecessary since the dynamic reindex is
+  designed to be a float value.
 - Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images
   due to how repeat was wrongly used before batching.
 - Fix tqdm bars for model predictions procedure, to visualize better its progress.
@@ -299,9 +305,5 @@ In each tensorboard folder it's also present the model summary as txt file, to h
 
 
 ## TODO
-- Improve and tweak best model training script.
 - Improve the restoring function and investigate potential bugs (especially in prediction and expansion phase it could not work properly, since
   I only wrote the logic to stop it during CNN training, which should be the 90% of the cases).
-- Improve quality of plots generated, adding new relevant metrics if useful.
-- Generalize on other datasets, right now some logic is basically hardcoded for CIFAR-10 usage, but it shouldn't require much work
-  to support other datasets.
