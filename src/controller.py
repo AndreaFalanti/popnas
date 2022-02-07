@@ -6,10 +6,10 @@ from typing import Callable
 import numpy as np
 from tqdm import tqdm
 
-import cell_pruning
 import log_service
 from encoder import SearchSpace
 from predictors import Predictor
+from utils import cell_pruning
 from utils.cell_counter import CellCounter
 from utils.feature_utils import generate_time_features
 from utils.func_utils import get_valid_inputs_for_block_size, to_list_of_tuples
