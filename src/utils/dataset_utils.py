@@ -160,7 +160,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
 
         # resize images
-        resize_dim = (160, 160)
+        resize_dim = (224, 224)
         train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y))
         val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y))
 
