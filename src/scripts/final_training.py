@@ -86,6 +86,7 @@ def main():
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
+    parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
     args = parser.parse_args()
 
     if args.same and args.j is not None:
@@ -145,7 +146,7 @@ def main():
 
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
                                    data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
-        model, _, last_cell_index = model_gen.build_model(cell_spec)
+        model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
         loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
         train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))

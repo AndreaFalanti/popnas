@@ -16,7 +16,7 @@ class NetworkBuildInfo:
     Helper class that extrapolate and store some relevant info from the cell specification, used for building the actual CNN.
     '''
 
-    def __init__(self, cell_spec: 'list[tuple]', total_cells: int, normal_cells_per_motif: int) -> None:
+    def __init__(self, cell_spec: 'list[tuple]', total_cells: int, normal_cells_per_motif: int, use_stem: bool) -> None:
         self.cell_specification = cell_spec
         # it's a list of tuples, so already grouped by 4
         self.blocks = len(cell_spec)
@@ -28,10 +28,16 @@ class NetworkBuildInfo:
         self.unused_block_outputs = [x for x in range(0, self.blocks) if x not in used_block_outputs]
         self.use_skip = self.used_lookbacks.issuperset({-2})
 
-        # additional info regarding the cell stack
-        self.used_cell_indexes = list(range(total_cells - 1, -1, max(self.used_lookbacks, default=total_cells)))
-        self.reduction_cell_indexes = list(range(normal_cells_per_motif, total_cells, normal_cells_per_motif + 1))
-        self.need_input_norm_indexes = [el - min(self.used_lookbacks) - 1 for el in self.reduction_cell_indexes] if self.use_skip else []
+        # additional info regarding the cell stack, with stem the logic is similar but dividing the two cases make the code more clear
+        if use_stem:
+            total_cells = total_cells + 2
+            self.used_cell_indexes = list(range(total_cells - 1, -1, max(self.used_lookbacks, default=total_cells)))
+            self.reduction_cell_indexes = [0, 1] + list(range(2 + normal_cells_per_motif, total_cells, normal_cells_per_motif + 1))
+            self.need_input_norm_indexes = [0] + [el - min(self.used_lookbacks) - 1 for el in self.reduction_cell_indexes] if self.use_skip else []
+        else:
+            self.used_cell_indexes = list(range(total_cells - 1, -1, max(self.used_lookbacks, default=total_cells)))
+            self.reduction_cell_indexes = list(range(normal_cells_per_motif, total_cells, normal_cells_per_motif + 1))
+            self.need_input_norm_indexes = [el - min(self.used_lookbacks) - 1 for el in self.reduction_cell_indexes] if self.use_skip else []
 
 
 class ModelGenerator:
@@ -151,16 +157,17 @@ class ModelGenerator:
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]'):
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False):
         '''
         Build a Keras model from a given cell specification
         Args:
-            cell_spec:
+            cell_spec: cell encoding
+            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS
 
         Returns:
             (Model, dict, int): Keras model, partition dictionary and final cell index
         '''
-        self.network_build_info = NetworkBuildInfo(cell_spec, self.total_cells, self.normal_cells_per_motif)
+        self.network_build_info = NetworkBuildInfo(cell_spec, self.total_cells, self.normal_cells_per_motif, add_imagenet_stem)
         self.output_layers = {}
 
         if len(cell_spec) > 0:
@@ -191,6 +198,15 @@ class ModelGenerator:
         else:
             data_augmentation = self.data_augmentation_model(model_input)
             cell_inputs = [data_augmentation, data_augmentation]  # [skip, last]
+
+        # if stem is used, it will add a conv layer + 2 reduction cells at the start of the network
+        if add_imagenet_stem:
+            stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
+            cell_inputs = [model_input, stem_conv]
+            filters = filters * 2
+            cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+            filters = filters * 2
+            cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
 
         # add (M - 1) times N normal cells and a reduction cell
         for motif_index in range(M):
