@@ -21,7 +21,7 @@ tf2onnx==1.9.3
 keras-tuner==1.1.0
 tensorflow-addons==0.14.0
 tensorflow-probability==0.14.0
-tfds-nightly==4.4.0.dev202201030107
+tensorflow-datasets==4.5.2
 igraph==0.9.8
 # see toml file
 git+https://github.com/AndreaFalanti/shap#egg=shap
