@@ -156,13 +156,15 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         val_ds, info = tfds.load(dataset_name, split='validation', as_supervised=True, shuffle_files=True,
                                  with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
+        # transform labels in one-hot
         classes = info.features._feature_dict['label'].num_classes
         train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
 
         # resize images
         resize_dim = (224, 224)
-        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y))
-        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y))
+        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
 
         val_ds = val_ds.batch(batch_size).cache().prefetch(AUTOTUNE)
         train_ds = train_ds.batch(batch_size).cache()
