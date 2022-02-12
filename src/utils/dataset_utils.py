@@ -174,7 +174,37 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
             else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
 
         image_shape = resize_dim + (3,)
+        train_batches = len(train_ds)
+        val_batches = len(val_ds)
+
+        dataset_folds.append((train_ds, val_ds))
+    # TODO: separate version for fast development, but it's similar to the generic dataset function. Integrate this part when possible.
+    # used only in final tests
+    elif dataset_name.startswith('imagenette'):
+        train_ds, info = tfds.load(dataset_name, split='train', as_supervised=True, shuffle_files=True,
+                                   with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
+        val_ds, info = tfds.load(dataset_name, split='validation', as_supervised=True, shuffle_files=True,
+                                 with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+        # resize images
+        resize_dim = (320, 320)
+        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+
+        # batch, transform labels in one-hot, and cache
         classes = info.features._feature_dict['label'].num_classes
+        train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
+
+        val_ds = val_ds.batch(batch_size).cache().prefetch(AUTOTUNE)
+        train_ds = train_ds.batch(batch_size).cache()
+
+        # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
+        train_ds = train_ds.prefetch(AUTOTUNE) if augment_on_gpu \
+            else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+
+        # image_shape = info.features.shape['image']
+        image_shape = (320, 320, 3)
         train_batches = len(train_ds)
         val_batches = len(val_ds)
 
