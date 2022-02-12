@@ -149,7 +149,7 @@ def main():
         model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
         loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-        train_metrics.append(metrics.TopKCategoricalAccuracy(k=3))
+        train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
 
         model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
 
