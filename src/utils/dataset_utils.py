@@ -187,7 +187,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                                  with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
         # resize images
-        resize_dim = (320, 320)
+        resize_dim = (256, 256)
         train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
         val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
 
@@ -204,7 +204,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
             else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
 
         # image_shape = info.features.shape['image']
-        image_shape = (320, 320, 3)
+        image_shape = resize_dim + (3,)
         train_batches = len(train_ds)
         val_batches = len(val_ds)
 
