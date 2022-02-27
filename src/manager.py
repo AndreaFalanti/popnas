@@ -216,7 +216,7 @@ class NetworkManager:
         self.__write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
 
         # save also an overview diagram of the network
-        plot_model(model, to_file=os.path.join(tb_logdir, 'model.png'), show_shapes=True, show_layer_names=True)
+        plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
