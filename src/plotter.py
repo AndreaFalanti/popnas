@@ -28,9 +28,21 @@ def initialize_logger():
 
 
 def __save_and_close_plot(fig, save_name):
-    save_path = log_service.build_path('plots', save_name)
+    # save as png
+    save_path = log_service.build_path('plots', save_name + '.png')
     plt.savefig(save_path, bbox_inches='tight')
+
     plt.close(fig)
+
+
+def __save_latex_plots(save_name):
+    # save as eps (good format for Latex)
+    save_path = log_service.build_path('plots', 'eps', save_name + '.eps')
+    plt.savefig(save_path, bbox_inches='tight', format='eps')
+
+    # save as pdf
+    save_path = log_service.build_path('plots', 'pdf', save_name + '.pdf')
+    plt.savefig(save_path, bbox_inches='tight')
 
 
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
@@ -38,7 +50,6 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=Fa
     plt.bar(x, y)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.title(title)
 
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
@@ -47,6 +58,8 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=Fa
     if incline_labels:
         plt.gcf().autofmt_xdate()
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -66,13 +79,14 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.set_title(title)
 
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='silver')
 
     ax.legend()
 
+    __save_latex_plots(save_name)
+    ax.set_title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -81,7 +95,6 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_l
     plt.boxplot(values, labels=labels)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.title(title)
 
     # add y grid lines
     plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
@@ -90,6 +103,8 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_l
     if incline_labels:
         plt.gcf().autofmt_xdate()
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -110,10 +125,11 @@ def __plot_pie_chart(labels, values, title, save_name):
     patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None, colors=colors)
     ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
-    plt.title(title)
     plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.03, 0.04))
     plt.subplots_adjust(right=0.7)
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -140,7 +156,6 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.title(title)
     plt.gca().set_aspect('equal', adjustable='box')
 
     plt.legend(fontsize='x-small')
@@ -154,6 +169,8 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
 
         ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -168,8 +185,9 @@ def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, 
 
     plt.xlabel('time')
     plt.ylabel('accuracy')
-    plt.title(title)
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -189,8 +207,9 @@ def __plot_3d_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: lis
     ax.set_xlabel('rank')
     ax.set_ylabel('time')
     ax.set_zlabel('accuracy')
-    plt.title(title)
 
+    __save_latex_plots(save_name)
+    plt.title(title)
     __save_and_close_plot(fig, save_name)
 
 
@@ -237,10 +256,10 @@ def plot_dynamic_reindex_related_blocks_info():
     y_flops = df['flops']
 
     __logger.info("Writing plots...")
-    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time.png', incline_labels=True)
-    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc.png', incline_labels=True)
-    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params.png', incline_labels=True)
-    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops.png', incline_labels=True)
+    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
+    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
+    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
+    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
     __logger.info("SMB plots written successfully")
 
 
@@ -254,8 +273,8 @@ def plot_training_info_per_block():
     time_bars = __generate_avg_max_min_bars(df['avg training time(s)'], df['max time'], df['min time'])
     acc_bars = __generate_avg_max_min_bars(df['avg val acc'], df['max acc'], df['min acc'])
 
-    __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview.png')
-    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview.png')
+    __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview')
+    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview')
 
     __logger.info("Training aggregated overview plots written successfully")
 
@@ -273,8 +292,8 @@ def plot_cnn_train_boxplots_per_block(B: int):
         acc_per_block.append(b_df['best val accuracy'])
         times_per_block.append(b_df['training time(seconds)'])
 
-    __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot.png')
-    __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot.png')
+    __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
+    __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
 
 
 def __initialize_dict_usage_data(keys: list):
@@ -453,8 +472,8 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
         acc_r2[b - 2] = r2_score(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
 
         # add MAPE, R^2 and spearman metrics to legends
-        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, R^2: {time_r2[b - 2]:.3f}, ρ: {time_spearman_coeffs[b - 2]:.3f})')
-        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, R^2: {acc_r2[b - 2]:.3f}, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
+        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
+        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
 
     x = np.arange(2, B + 1)
 
@@ -463,20 +482,20 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
         time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
 
         __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
-                                  'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview.png')
-        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot.png')
+                                  'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview')
+        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot')
         __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
-                                     'time_pred_overview.png', legend_labels=scatter_time_legend_labels)
+                                     'time_pred_overview', legend_labels=scatter_time_legend_labels)
 
     acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
 
     # write plots about accuracy
     __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
-                              'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview.png')
+                              'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview')
     __plot_boxplot(acc_errors, x, 'Blocks', 'Accuracy error',
-                   'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot.png')
+                   'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot')
     __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
-                                 'acc_pred_overview.png', legend_labels=scatter_acc_legend_labels, value_range=(0, 1))
+                                 'acc_pred_overview', legend_labels=scatter_acc_legend_labels)
 
     __logger.info("Prediction error overview plots written successfully")
 
@@ -504,7 +523,7 @@ def plot_pareto_front_curves(B: int, plot3d: bool = False):
     b = 2
     for real_time, real_acc, pred_time, pred_acc in zip(real_front_time, real_front_acc, pred_front_time, pred_front_acc):
         plot_func = __plot_3d_pareto_front if plot3d else __plot_pareto_front
-        plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}.png')
+        plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}')
         b += 1
 
     __logger.info("Pareto front curve plots written successfully")
@@ -529,9 +548,9 @@ def plot_multi_output_boxplot():
     x_labels = [str(label).split('_')[0] for label in x_labels]
     x_labels_na = x_labels[::-2][::-1]
 
-    __plot_boxplot(output_accuracies, x_labels, 'Outputs', 'Val accuracy', 'Best accuracies for output', 'multi_output_boxplot.png')
+    __plot_boxplot(output_accuracies, x_labels, 'Outputs', 'Val accuracy', 'Best accuracies for output', 'multi_output_boxplot')
     __plot_boxplot(output_accuracies_na, x_labels_na, 'Outputs', 'Val accuracy',
-                   'Best accuracies for output (-2 lookback)', 'multi_output_boxplot_na.png')
+                   'Best accuracies for output (-2 lookback)', 'multi_output_boxplot_na')
 
     __logger.info("Multi output overview plot written successfully")
 
