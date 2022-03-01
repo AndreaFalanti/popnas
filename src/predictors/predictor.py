@@ -59,7 +59,6 @@ class Predictor(ABC):
 
         plt.xlabel(f'Real {pred_label}')
         plt.ylabel(f'Predicted {pred_label}')
-        plt.title(self.name)
         plt.gca().set_aspect('equal', adjustable='box')
 
         plt.legend(fontsize='x-small')
@@ -74,9 +73,14 @@ class Predictor(ABC):
             ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
         if save_path is None:
-            save_path = os.path.join(self.log_folder, 'results.png')
+            save_path = os.path.join(self.log_folder, 'results')
 
-        plt.savefig(save_path, bbox_inches='tight')
+        # Latex formats
+        plt.savefig(save_path + '.eps', bbox_inches='tight')
+        plt.savefig(save_path + '.pdf', bbox_inches='tight')
+
+        plt.title(self.name)
+        plt.savefig(save_path + '.png', bbox_inches='tight')
         plt.close(fig)
 
     def get_model(self):
