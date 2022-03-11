@@ -1,5 +1,5 @@
-import importlib
 import math
+import os.path
 from logging import Logger
 from typing import Union
 
@@ -8,9 +8,38 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, layers, Sequential
-from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical, image_dataset_from_directory
 
 AUTOTUNE = tf.data.AUTOTUNE
+
+
+def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: int,
+                        data_augmentation: Sequential, augment_on_gpu: bool, cache: bool):
+    '''
+    Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
+    Basically apply batch, cache, data augmentation (only to training set) and prefetch.
+
+    Returns:
+        train dataset, validation dataset, train batches count, validation batches count
+    '''
+
+    # create a batched dataset
+    train_ds = train_ds.batch(batch_size)
+    val_ds = val_ds.batch(batch_size)
+
+    # cache in memory for better performance, if enabled
+    if cache:
+        train_ds = train_ds.cache()
+        val_ds = val_ds.cache()
+
+    # if data augmentation is performed on CPU, map it before prefetch
+    if data_augmentation is not None and not augment_on_gpu:
+        train_ds = train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+
+    train_batches = len(train_ds)
+    val_batches = len(val_ds)
+
+    return train_ds.prefetch(AUTOTUNE), val_ds.prefetch(AUTOTUNE), train_batches, val_batches
 
 
 def __load_dataset_images(dataset_source: str):
@@ -34,13 +63,8 @@ def __load_dataset_images(dataset_source: str):
         # add dimension since the images are in grayscale (dimension 1 is omitted)
         x_train = np.expand_dims(x_train, axis=-1)
         x_test = np.expand_dims(x_test, axis=-1)
-    # TODO: untested legacy code, not sure this is working
     else:
-        spec = importlib.util.spec_from_file_location(dataset_source)
-        dataset_source = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(dataset_source)
-        (x_train, y_train), (x_test, y_test) = dataset_source.load_data()
-        classes_count = None
+        raise ValueError('unsupported dataset name')
 
     image_shape = x_train.shape[1:]
 
@@ -65,44 +89,46 @@ def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_l
     return (x_train, y_train), (x_test, y_test)
 
 
-def __build_tf_datasets(samples_fold: 'tuple[list, list, list, list]', batch_size: int, data_augmentation: Sequential, augment_on_gpu: bool):
+def __build_tf_datasets(samples_fold: 'tuple[list, list, list, list]'):
     '''
     Build the training and validation datasets to be used in model.fit().
     '''
 
     x_train, y_train, x_val, y_val = samples_fold
 
-    # create a batched dataset, cached in memory for better performance
-    train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(batch_size).cache()
-    validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size).cache().prefetch(AUTOTUNE)
-
-    # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
-    train_dataset = train_dataset.prefetch(AUTOTUNE) if augment_on_gpu \
-        else train_dataset.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+    # create the tf datasets from numpy arrays
+    train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+    validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
 
     return train_dataset, validation_dataset
 
 
-def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, None], batch_size: int, validation_size: float,
-                                  data_augmentation: Sequential, augment_on_gpu: bool):
+def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, None], validation_size: float, resize_dim: 'tuple[int, int]'):
     split_spec = 'train' if samples_limit is None else f'train[:{samples_limit}]'
-    train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=True,
-                               with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
+    train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=True, with_info=True,
+                               read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
-    samples_count = samples_limit or info.splits['train'].num_examples
-    train_samples = math.ceil(samples_count * (1 - validation_size))
-
-    classes = info.features._feature_dict['label'].num_classes
+    # convert to one-hot encoding
+    classes = info.features['label'].num_classes
     train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
 
-    val_ds = train_ds.skip(train_samples).batch(batch_size).cache().prefetch(AUTOTUNE)
-    train_ds = train_ds.take(train_samples).batch(batch_size).cache()
+    if validation_size is None:
+        val_split_spec = 'validation' if samples_limit is None else f'validation[:{samples_limit}]'
+        val_ds = tfds.load(dataset_name, split=val_split_spec, as_supervised=True, shuffle_files=True,
+                           read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
+        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
+    else:
+        samples_count = samples_limit or info.splits['train'].num_examples
+        train_samples = math.ceil(samples_count * (1 - validation_size))
 
-    # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
-    train_dataset = train_ds.prefetch(AUTOTUNE) if augment_on_gpu \
-        else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+        val_ds = train_ds.skip(train_samples)
+        train_ds = train_ds.take(train_samples)
 
-    return train_dataset, val_ds, info
+    if resize_dim is not None:
+        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+
+    return train_ds, val_ds, info
 
 
 def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
@@ -123,6 +149,10 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     dataset_classes_count = dataset_config['classes_count']
     batch_size = dataset_config['batch_size']
     val_size = dataset_config['validation_size']
+    cache = dataset_config['cache']
+
+    resize_config = dataset_config['resize']
+    resize_dim = (resize_config['width'], resize_config['height']) if resize_config['enabled'] else None
 
     data_augmentation_config = dataset_config['data_augmentation']
     use_data_augmentation = data_augmentation_config['enabled']
@@ -131,7 +161,45 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
     data_augmentation = get_data_augmentation_model() if use_data_augmentation else None
 
-    if dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
+    # TODO: folds are actually implemented only in Keras datasets, but since this functionality is not used maybe is better to deprecate it...
+    # Custom dataset, loaded with Keras
+    if dataset_path is not None:
+        if resize_dim is None:
+            raise ValueError('Image must have a set resize dimension to use a custom dataset')
+
+        train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
+                                                image_size=resize_dim, batch_size=batch_size)
+        val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_validation'), label_mode='categorical',
+                                              image_size=resize_dim, batch_size=batch_size)
+
+        # normalize into [0, 1] domain
+        normalization_layer = tf.keras.layers.Rescaling(1. / 255)
+        train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
+
+        # TODO: repetition of __finalize_datasets function, because batch_size=None is not supported for image_dataset_from_directory in tf 2.7.
+        #  An update or refactor of the function can avoid the duplication
+        # cache in memory for better performance, if enabled
+        if cache:
+            train_ds = train_ds.cache()
+            val_ds = val_ds.cache()
+
+        # if data augmentation is performed on CPU, map it before prefetch
+        if data_augmentation is not None and not augment_on_gpu:
+            train_ds = train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+
+        train_ds = train_ds.prefetch(AUTOTUNE)
+        val_ds = val_ds.prefetch(AUTOTUNE)
+
+        train_batches = len(train_ds)
+        val_batches = len(val_ds)
+
+        dataset_folds.append((train_ds, val_ds))
+
+        classes = dataset_classes_count
+        image_shape = resize_dim + (3,)
+    # Keras dataset case
+    elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
         train, test, classes, image_shape = __load_dataset_images(dataset_name)
         dataset_classes_count = classes or dataset_classes_count    # like || in javascript
         # TODO: produce also the test dataset
@@ -142,80 +210,19 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
             logger.info('Preprocessing and building dataset fold #%d...', i + 1)
 
             # create a validation set for evaluation of the child models
-            x_train, x_validation, y_train, y_validation = train_test_split(x_train_init, y_train_init, test_size=val_size, stratify=y_train_init)
+            x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, test_size=val_size, stratify=y_train_init)
+            train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+            val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
+            train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu, cache)
 
-            dataset_folds.append(__build_tf_datasets((x_train, y_train, x_validation, y_validation), batch_size, data_augmentation, augment_on_gpu))
-
-        train_batches = int(np.ceil(len(x_train) / batch_size))
-        val_batches = int(np.ceil(len(x_validation) / batch_size))
-    # TODO: separate version for fast development, but it's similar to the generic dataset function. Integrate this part when possible.
-    # used only in final tests
-    elif dataset_name.startswith('imagenet2012'):
-        train_ds, info = tfds.load(dataset_name, split='train', as_supervised=True, shuffle_files=True,
-                                   with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
-        val_ds, info = tfds.load(dataset_name, split='validation', as_supervised=True, shuffle_files=True,
-                                 with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
-
-        # transform labels in one-hot
-        classes = info.features._feature_dict['label'].num_classes
-        train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
-
-        # resize images
-        resize_dim = (224, 224)
-        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
-
-        val_ds = val_ds.batch(batch_size).cache().prefetch(AUTOTUNE)
-        train_ds = train_ds.batch(batch_size).cache()
-
-        # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
-        train_ds = train_ds.prefetch(AUTOTUNE) if augment_on_gpu \
-            else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
-
-        image_shape = resize_dim + (3,)
-        train_batches = len(train_ds)
-        val_batches = len(val_ds)
-
-        dataset_folds.append((train_ds, val_ds))
-    # TODO: separate version for fast development, but it's similar to the generic dataset function. Integrate this part when possible.
-    # used only in final tests
-    elif dataset_name.startswith('imagenette'):
-        train_ds, info = tfds.load(dataset_name, split='train', as_supervised=True, shuffle_files=True,
-                                   with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
-        val_ds, info = tfds.load(dataset_name, split='validation', as_supervised=True, shuffle_files=True,
-                                 with_info=True)  # type: tf.data.Dataset, tfds.core.DatasetInfo
-
-        # resize images
-        resize_dim = (256, 256)
-        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
-
-        # batch, transform labels in one-hot, and cache
-        classes = info.features._feature_dict['label'].num_classes
-        train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
-
-        val_ds = val_ds.batch(batch_size).cache().prefetch(AUTOTUNE)
-        train_ds = train_ds.batch(batch_size).cache()
-
-        # if data augmentation is performed on CPU, map it before prefetch, otherwise just prefetch
-        train_ds = train_ds.prefetch(AUTOTUNE) if augment_on_gpu \
-            else train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
-
-        # image_shape = info.features.shape['image']
-        image_shape = resize_dim + (3,)
-        train_batches = len(train_ds)
-        val_batches = len(val_ds)
-
-        dataset_folds.append((train_ds, val_ds))
+            dataset_folds.append((train_ds, val_ds))
+    # TFDS case
     else:
-        train_ds, val_ds, info = __generate_datasets_from_tfds(dataset_name, samples_limit, batch_size, val_size, data_augmentation, augment_on_gpu)
+        train_ds, val_ds, info = __generate_datasets_from_tfds(dataset_name, samples_limit, val_size, resize_dim)
+        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu, cache)
 
-        image_shape = info.features.shape['image']
-        classes = info.features._feature_dict['label'].num_classes
-        train_batches = len(train_ds)
-        val_batches = len(val_ds)
+        image_shape = info.features['image'].shape if resize_dim is None else resize_dim + (info.features['image'].shape[2],)
+        classes = info.features['label'].num_classes
 
         dataset_folds.append((train_ds, val_ds))
 
@@ -228,7 +235,6 @@ def get_data_augmentation_model():
     '''
     Keras model that can be used in both CPU or GPU for data augmentation.
     Follow similar augmentation techniques used in other papers, which usually are:
-
     - horizontal flip
     - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
     - whitening (not always used, here it's not performed)

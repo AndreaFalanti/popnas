@@ -48,8 +48,14 @@
         "classes_count": 10,
         "batch_size": 128,
         "validation_size": 0.1,
+        "cache": true,
         "folds": 1,
         "samples": null,
+        "resize": {
+            "enabled": false,
+            "width": 224,
+            "height": 224
+        },
         "data_augmentation": {
             "enabled": true,
             "perform_on_gpu": false
