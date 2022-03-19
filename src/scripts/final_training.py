@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pandas as pd
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras import callbacks, models, metrics
+from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from model import ModelGenerator
@@ -41,13 +43,6 @@ def get_best_cell_spec(log_folder_path: str):
 
     cell_spec = parse_cell_structures([best_acc_row['cell structure']])[0]
     return cell_spec, best_acc_row['best val accuracy']
-
-
-def load_run_json(json_path: str):
-    with open(json_path, 'r') as f:
-        run_config = json.load(f)
-
-    return run_config
 
 
 def define_callbacks(cdr_enabled: bool, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
@@ -106,7 +101,9 @@ def main():
 
     logger.info('Reading configuration...')
     config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else custom_json_path
-    config = load_run_json(config_path)
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
 
@@ -150,6 +147,8 @@ def main():
 
         loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
         train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+        # TODO: using average=None would return f1 scores for each class, but conflicts with tensorboard callback which require scalars
+        train_metrics.append(tfa.metrics.F1Score(num_classes=classes_count, average='macro'))
 
         model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
 
@@ -164,6 +163,8 @@ def main():
     train_callbacks = define_callbacks(cdr_enabled, multi_output, last_cell_index)
     time_cb = TimingCallback()
     train_callbacks.append(time_cb)
+
+    plot_model(model, to_file=os.path.join(save_path, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
     hist = model.fit(x=train_dataset,
                      epochs=epochs,
@@ -183,10 +184,12 @@ def main():
         epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
         epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
         epoch_metrics_per_output['best']['val_top3'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
 
         epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
         epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
         epoch_metrics_per_output['best']['top3'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['f1'] = hist.history[f'f1_score'][epoch_index]
 
     logger.info('*' * 31 + ' TRAINING SUMMARY ' + '*' * 31)
     logger.info('Best epoch index: %d', epoch_index + 1)
@@ -198,14 +201,18 @@ def main():
     for key in epoch_metrics_per_output:
         log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
         logger.info('*' * 36 + log_title + '*' * 36)
+
         logger.info('Validation')
         logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
         logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
         logger.info('\tValidation top3 accuracy: %0.4f', epoch_metrics_per_output[key]['val_top3'])
+        logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
+
         logger.info('Training')
         logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
         logger.info('\tLoss: %0.4f', epoch_metrics_per_output[key]['loss'])
         logger.info('\tTop3 accuracy: %0.4f', epoch_metrics_per_output[key]['top3'])
+        logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
 
     logger.info('*' * 80)
 
