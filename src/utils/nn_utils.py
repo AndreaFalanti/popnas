@@ -50,12 +50,12 @@ def get_multi_output_best_epoch_stats(hist: History):
         epoch_metrics_per_output[output_index] = {}
         epoch_metrics_per_output[output_index]['val_loss'] = hist.history[f'val_Softmax_c{output_index}_loss'][best_epoch]
         epoch_metrics_per_output[output_index]['val_acc'] = hist.history[f'val_Softmax_c{output_index}_accuracy'][best_epoch]
-        epoch_metrics_per_output[output_index]['val_top3'] = hist.history[f'val_Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
+        epoch_metrics_per_output[output_index]['val_top_k'] = hist.history[f'val_Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
         epoch_metrics_per_output[output_index]['val_f1'] = hist.history[f'val_Softmax_c{output_index}_f1_score'][best_epoch]
 
         epoch_metrics_per_output[output_index]['loss'] = hist.history[f'Softmax_c{output_index}_loss'][best_epoch]
         epoch_metrics_per_output[output_index]['acc'] = hist.history[f'Softmax_c{output_index}_accuracy'][best_epoch]
-        epoch_metrics_per_output[output_index]['top3'] = hist.history[f'Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
+        epoch_metrics_per_output[output_index]['top_k'] = hist.history[f'Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
         epoch_metrics_per_output[output_index]['f1'] = hist.history[f'Softmax_c{output_index}_f1_score'][best_epoch]
 
     return best_epoch, best_val_acc, epoch_metrics_per_output

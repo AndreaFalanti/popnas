@@ -183,12 +183,12 @@ def main():
         epoch_metrics_per_output = {'best': {}}
         epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
         epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['val_top3'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
         epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
 
         epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
         epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['top3'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['top_k'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
         epoch_metrics_per_output['best']['f1'] = hist.history[f'f1_score'][epoch_index]
 
     logger.info('*' * 31 + ' TRAINING SUMMARY ' + '*' * 31)
@@ -205,13 +205,13 @@ def main():
         logger.info('Validation')
         logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
         logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
-        logger.info('\tValidation top3 accuracy: %0.4f', epoch_metrics_per_output[key]['val_top3'])
+        logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
         logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
 
         logger.info('Training')
         logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
         logger.info('\tLoss: %0.4f', epoch_metrics_per_output[key]['loss'])
-        logger.info('\tTop3 accuracy: %0.4f', epoch_metrics_per_output[key]['top3'])
+        logger.info('\tTop_k accuracy: %0.4f', epoch_metrics_per_output[key]['top_k'])
         logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
 
     logger.info('*' * 80)
