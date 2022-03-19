@@ -4,7 +4,7 @@ import sys
 import time
 
 # Must be set using initialize_log_folders, check_log_folder or set_log_path
-log_path = None
+log_path = None  # type: str
 
 
 def set_log_path(path):
@@ -54,11 +54,11 @@ def check_log_folder(folder_path: str):
     log_path = folder_path
 
 
-def get_logger(name):
+def get_logger(name, filename='debug.log'):
     logger = logging.getLogger(name)
 
     # Create handlers
-    file_handler = logging.FileHandler(os.path.join(log_path, 'debug.log'))
+    file_handler = logging.FileHandler(os.path.join(log_path, filename))
     file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
