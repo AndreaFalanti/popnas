@@ -167,10 +167,17 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         if resize_dim is None:
             raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-        train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
-                                                image_size=resize_dim, batch_size=batch_size)
-        val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_validation'), label_mode='categorical',
-                                              image_size=resize_dim, batch_size=batch_size)
+        if val_size is None:
+            train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
+                                                    image_size=resize_dim, batch_size=batch_size)
+            val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_validation'), label_mode='categorical',
+                                                  image_size=resize_dim, batch_size=batch_size)
+        else:
+            # TODO: find a way to make the split stratified.
+            train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
+                                                    subset='training', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
+            val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
+                                                  subset='validation', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
 
         # normalize into [0, 1] domain
         normalization_layer = tf.keras.layers.Rescaling(1. / 255)
