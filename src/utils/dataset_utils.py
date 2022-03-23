@@ -1,5 +1,6 @@
 import math
 import os.path
+from collections import Counter
 from logging import Logger
 from typing import Union
 
@@ -179,6 +180,12 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
                                                   subset='validation', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
 
+        # debug
+        # train_labels_perc = get_dataset_stratification(train_ds)
+        # val_labels_perc = get_dataset_stratification(val_ds)
+        # print('Train labels distribution: ' + str(train_labels_perc))
+        # print('Validation labels distribution: ' + str(val_labels_perc))
+
         # normalize into [0, 1] domain
         normalization_layer = tf.keras.layers.Rescaling(1. / 255)
         train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
@@ -252,3 +259,17 @@ def get_data_augmentation_model():
         # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
         layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
     ], name='data_augmentation')
+
+
+def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
+    ''' Returns the percentage of samples associated to each label of the dataset. '''
+    label_counter = Counter()
+
+    for (x, y) in ds:
+        label_counter.update(np.argmax(y, axis=-1))
+
+    percentages_dict = {}
+    for (k, v) in label_counter.items():
+        percentages_dict[k] = v / sum(label_counter.values())
+
+    return percentages_dict
