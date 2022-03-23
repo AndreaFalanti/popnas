@@ -48,7 +48,8 @@ class Train:
                                         input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
 
         # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, run_config['save_children_weights'])
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config,
+                                          run_config['save_children_weights'], run_config['save_children_as_onnx'])
 
         self.pnas_mode = run_config['pnas_mode']
         self.preds_batch_size = run_config['predictions_batch_size']

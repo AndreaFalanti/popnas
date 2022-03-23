@@ -35,7 +35,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, save_network_weights: bool):
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, save_network_weights: bool, save_as_onnx: bool):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -64,6 +64,8 @@ class NetworkManager:
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']
+
+        self.save_onnx = save_as_onnx
 
         # DEBUG ONLY
         # self.__test_data_augmentation(self.dataset_folds[0][0])
@@ -138,10 +140,11 @@ class NetworkManager:
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
 
-        onnx_model = tf2onnx.convert.from_keras(model, opset=10)
-        with open(os.path.join(tb_logdir, 'model.onnx'), 'wb') as f:
-            f.write(onnx_model[0].SerializeToString())
-        self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
+        if self.save_onnx:
+            onnx_model = tf2onnx.convert.from_keras(model, opset=10)
+            with open(os.path.join(tb_logdir, 'model.onnx'), 'wb') as f:
+                f.write(onnx_model[0].SerializeToString())
+            self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 
