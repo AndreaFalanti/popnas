@@ -51,6 +51,7 @@
         "cache": true,
         "folds": 1,
         "samples": null,
+        "balance_class_losses": false,
         "resize": {
             "enabled": false,
             "width": 224,

@@ -273,3 +273,15 @@ def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
         percentages_dict[k] = v / sum(label_counter.values())
 
     return percentages_dict
+
+
+def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, float]':
+    ''' Compute weights to balance the importance during training of classes with unbalanced amounts of samples. '''
+    class_percentages_dict = get_dataset_labels_distribution(ds)
+    num_classes = len(class_percentages_dict.keys())
+
+    class_weights_dict = {}
+    for cl, perc in class_percentages_dict.items():
+        class_weights_dict[cl] = 1 / (num_classes * perc)
+
+    return class_weights_dict

@@ -13,7 +13,7 @@ from tensorflow.keras.utils import plot_model
 
 import log_service
 from model import ModelGenerator
-from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
+from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
 from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops
 from utils.timing_callback import TimingCallback
@@ -45,6 +45,7 @@ class NetworkManager:
 
         self.dataset_folds_count = dataset_config['folds']
         self.dataset_classes_count = dataset_config['classes_count']
+        self.balance_class_losses = dataset_config['balance_class_losses']
         self.augment_on_gpu = dataset_config['data_augmentation']['enabled'] and dataset_config['data_augmentation']['perform_on_gpu']
 
         self.epochs = cnn_config['epochs']
@@ -56,6 +57,8 @@ class NetworkManager:
         self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = \
             generate_tensorflow_datasets(dataset_config, self._logger)
         self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
+        self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
+            if self.balance_class_losses else None
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
                                         output_classes=self.dataset_classes_count, image_shape=image_shape,
@@ -190,7 +193,8 @@ class NetworkManager:
                              steps_per_epoch=self.train_batches,
                              validation_data=val_ds,
                              validation_steps=self.validation_batches,
-                             callbacks=callbacks)
+                             callbacks=callbacks,
+                             class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)
 
             times[i] = sum(time_cb.logs)
             # compute the reward (best validation accuracy)
