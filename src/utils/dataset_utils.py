@@ -168,6 +168,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         if resize_dim is None:
             raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
+        # TODO: samples limit not used in this case, implement it later
         if val_size is None:
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
                                                     image_size=resize_dim, batch_size=batch_size)

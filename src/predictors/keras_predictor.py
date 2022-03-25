@@ -213,7 +213,7 @@ class KerasPredictor(Predictor):
                            epochs=self.hp_config['epochs'],
                            callbacks=train_callbacks)
 
-        plot_model(self.model, to_file=os.path.join(self.log_folder, 'model.png'), show_shapes=True, show_layer_names=True)
+        plot_model(self.model, to_file=os.path.join(self.log_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
         self._logger.info('Keras predictor trained successfully')
 
         if self.save_weights:
