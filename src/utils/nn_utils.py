@@ -35,7 +35,7 @@ def get_multi_output_best_epoch_stats(hist: History):
         hist: train history
 
     Returns:
-        (int, flaot, dict[int, dict[str, float]]): best epoch index, best validation accuracy and dictionary with epoch metrics for each output.
+        (int, float, dict[int, dict[str, float]]): best epoch index, best validation accuracy and dictionary with epoch metrics for each output.
     '''
     r = re.compile(r'val_Softmax_c(\d+)_accuracy')
     output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]

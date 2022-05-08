@@ -16,7 +16,7 @@ def generate_legacy_dynamic_reindex_function(operators: 'list[str]', op_timers: 
     t_max = max(op_timers.values())
 
     def apply_dynamic_reindex(op_value: str):
-        # TODO: remove len(operators) to normalize in 0-1?
+        # in POPNASv1 dynamic reindex outputs in [0, len(operators)], so it is not normalized.
         return len(operators) * op_timers[op_value] / t_max
 
     return apply_dynamic_reindex

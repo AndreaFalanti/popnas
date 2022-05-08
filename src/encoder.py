@@ -8,7 +8,7 @@ from utils.rstr import rstr
 
 class SearchSpace:
     '''
-    Search space manager, targeted for progressive NAS methods.
+    Search space manager for cell-based approaches.
 
     Provides utility functions for holding cell specifications for each step, that the network manager then use
     for building the actual CNNs.
@@ -19,24 +19,18 @@ class SearchSpace:
     def __init__(self, B: int, operators: 'list[str]', cell_stack_depth: int,
                  input_lookback_depth: int = -1, input_lookforward_depth: int = None):
         '''
-        Constructs a search space which models the NAS and PNAS papers
+        Constructs a search space which models the NASNet and PNAS papers, producing encodings for blocks and cells.
+        The encodings are useful to store architecture information, from which the models can be generated.
 
-        A single block consists of the 4-tuple:
-        (input 1, operation 1, input 2, operation 2)
+        A single block encoding consists of the 4-tuple: (input 1, operation 1, input 2, operation 2).
+        A cell encoding is instead a list of block encodings.
 
-        The merge operation can be a sum or a concat as required.
-
-        The input operations are used for adding up intermediate values
-        inside the same cell. See the NASNet and P-NASNet models to see
+        The operators are used for adding up intermediate values
+        inside the same cell. See the NASNet and PNASNet models to see
         how intermediate blocks connect based on input values.
 
-        The default operation values are based on the P-NAS paper. They
+        The default operator values are based on the PNAS paper. They
         should be changed as needed.
-
-        # Note:
-        This only provides a convenient mechanism to train the networks.
-        It is upto the model designer to interpret this block tuple
-        information and construct the final model.
 
         Args:
             B: Maximum number of blocks
@@ -50,7 +44,7 @@ class SearchSpace:
                 The negative number describes how many cells to look back.
                 -1 indicates the last cell (or input image at start), and so on.          
 
-            input_lookforward_depth: sets a limit on input depth that can be looked forward.
+            input_lookforward_depth: (TODO: not supported) sets a limit on input depth that can be looked forward.
                 This is useful for scenarios where "flat" models are preferred,
                 wherein each cell is flat, though it may take input from deeper
                 layers (if the designer so chooses)

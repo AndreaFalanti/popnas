@@ -107,7 +107,7 @@ class NetworkManager:
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
 
         with open(save_dir, 'w') as f:
-            # GG python devs for this crap, a writelines function that works like a write, not adding \n automatically...
+            # writelines function usually add \n automatically, but not in python...
             f.writelines(line + '\n' for line in lines)
 
     def __write_multi_output_file(self, cell_spec: list, outputs_dict: dict):
@@ -164,7 +164,8 @@ class NetworkManager:
             (tuple): (reward, timer, total_params, flops) of trained network
         '''
 
-        # TODO: don't know why it was called. Try to remove it and check if something is wrong.
+        # TODO: legacy function, don't know why it was called. Doesn't seem to harm the execution, if you feel brave
+        #  try to remove it and check if something is wrong.
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard

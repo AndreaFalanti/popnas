@@ -363,7 +363,7 @@ class ModelGenerator:
         if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2) or adapt_depth:
-                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it's been disabled, reverting to pointwise convolution
+                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it has been disabled, reverting to pointwise convolution
                 # layer_name = f'identity_reshaper{block_info_suffix}'
                 # x = ops.IdentityReshaper(filters, input_filters, strides, name=layer_name)
                 layer_name = f'pointwise_id{block_info_suffix}'

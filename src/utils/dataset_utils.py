@@ -174,6 +174,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                                                     image_size=resize_dim, batch_size=batch_size)
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_validation'), label_mode='categorical',
                                                   image_size=resize_dim, batch_size=batch_size)
+        # extract a validation split from training samples
         else:
             # TODO: find a way to make the split stratified.
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
