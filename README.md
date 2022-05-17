@@ -104,16 +104,6 @@ Here it's presented a list of the configuration sections and fields, with a brie
   following PNAS and NASNet. If set to _false_, all blocks' output will be concatenated in final cell output.
 - **multi_output**: if true, each CNN generated will have an output (GAP + Softmax) at the end of each cell.
 
-**RNN hyperparameters (controller, optional)**:\
-If the parameters are not provided or the object is omitted in JSON config, default parameters will be applied.
-They depend on the model type chosen for the controller. See model class to have a better idea (TODO).
-- **epochs**: how many epochs the LSTM is trained on, at each expansion step.
-- **lr**: LSTM learning rate.
-- **wr**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
-- **er**: LSTM L2 weight regularization factor applied on embeddings only. If _null_, regularization is not applied.
-- **embedding_dim**: LSTM embedding dimension, used for both inputs and operator embeddings.
-- **cells**: total LSTM cells of the model.
-
 **Dataset**:
 - **name**: used to identify and load a Keras dataset. Can be _null_ if the path of a custom dataset is provided.
 - **path**: path to a folder containing a custom dataset. Can be _null_ if you want to use a dataset already present in Keras.
@@ -136,44 +126,11 @@ They depend on the model type chosen for the controller. See model class to have
 - **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs.
 
 
-## Additional scripts and utils
-### Time prediction testing script
-An additional script is also provided to analyze the results of multiple predictors on time target, on the data gathered in a POPNAS run.
-The script creates an additional folder (*pred_time_test*) inside the log folder given as argument.
-
-The script can be launched with the following command:
+## Tensorboard
+Trained CNNs have a callback for saving info to tensorboard log files. You can access the data of all the networks
+trained by running the command:
 ```
-python scripts/predictors_time_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
+tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{folder_name}/tensorboard_cnn
 ```
-
-### Controller testing script
-Another additional script is provided to analyze the results of multiple controller configurations on the data gathered in a POPNAS run.
-The script creates an additional folder (*pred_acc_test*) inside the log folder given as argument.
-
-The script can be launched with the following command:
-```
-python scripts/predictors_acc_testing.py -p {absolute_path_to_logs}/{target_folder(date)}
-```
-
-### Plot slideshow script
-The plot_slideshow.py script is provided to facilitate visualizing related plots in an easier and faster way.
-To use it, only the log folder must be provided.
-
-An example of the command usage (from src folder):
-```
-python ./scripts/plot_slideshow.py -p {absolute_path_to_logs}/{target_folder(date)}
-```
-Close a plot overview to visualize the next one, the program terminates after showing all plots.
-
-If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
-
-If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder,
-their plots will be visualized in additional slides at the end.
-
-
-### Tensorboard
-Trained CNNs have a callback for saving info to tensorboard log files. To access all the runs, run the command:
-```
-tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{date}/tensorboard_cnn --port 6096
-```
-In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
+In each tensorboard folder it's also present the model summary as txt file and the model graph as a pdf file.
+Note that graphs of large networks are very difficult to read, analyzing the summary is advised in these cases.
