@@ -1,63 +1,16 @@
 # POPNASv2
-Second version of POPNAS algorithm, a neural architecture search method developed for a master thesis by Matteo Vantadori
-(Politecnico di Milano, academic year 2018-2019), based on 
-[PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
-This new version improves the time efficiency of the search algorithm, but also drastically increase the accuracy of the networks found,
-making it competitive with other NAS works. It also fixes problems and bugs of the original version. 
+Second version of Pareto-Optimal Progressive Neural Architecture Search (POPNAS) algorithm, which expands
+[PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf)
+workflow to address a multi-objective optimization problem.
+This new version further improves the time efficiency of the search algorithm compared to PNAS and the first version,
+while preserving the architecture quality in terms of accuracy.
 
 ## Installation
-This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
-use the provider Docker container and avoid these steps (see Docker section below).
+This section provides information for installing all needed software and packages for properly run POPNASv2 on your system.
+The easiest way is to use a Docker container, but you can also set up a local environment with _Poetry_ tool.
 
-### Required additional software and tools
-Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
-for installing it on your machine and learning more about it.
-
-You need to have installed either python version 3.7 or 3.8 for building a valid environment (python versions > 3.8 could work,
-but they have not been officially tested).
-To install and manage the python versions and work with _poetry_ tool, it's advised to use [pyenv](https://github.com/pyenv/pyenv)
-or [pyenv-win](https://github.com/pyenv-win/pyenv-win) based on your system.
-
-Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of Keras models.
-Follow the installation instructions at: https://graphviz.gitlab.io/download/.
-
-### Installation steps
-After installing poetry, optionally run on your terminal:
-```
-poetry config virtualenvs.in-project true
-```
-to change the virtual environment generation position directly in the project folder, if you prefer so.
-
-To generate the environment, open your terminal inside the repository folder and make sure that the python in use is a compatible version.
-If not, you can install it and activate it through pyenv with these commands:
-```
-pyenv install 3.7.4 # or any valid version
-pyenv shell 3.7.4
-```
-
-To install the dependencies, simply run:
-```
-poetry install
-```
-Poetry will generate a virtual env based on the active python version and install all the packages there.
-
-You can activate the new environment with command:
-```
-poetry shell
-```
-
-After that you should be able to run POPNASv2 with this command:
-```
-python run.py
-```
-
-### GPU support
-To use a GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
-Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
-to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
-
-## Build Docker container
-In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
+### Docker container
+In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project dependencies
 and mount POPNAS source code.
 
 To build the image, open the terminal into the _src_ folder and execute this command:
@@ -67,8 +20,32 @@ docker build -f ../docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python run.py -j configs/run_debug.json --cpu
+docker run -it --rm --name popnas falanti/popnas:tf2.7.0gpu python run.py
 ```
+
+### Local installation
+Make sure your active python version is either 3.7 or 3.8. If you have installed [poetry](https://github.com/python-poetry/poetry),
+you can set up the environment by running this command in the project folder:
+```
+poetry install
+```
+
+You can activate the new environment with command:
+```
+poetry shell
+```
+
+Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of Keras models.
+Follow the installation instructions at: https://graphviz.gitlab.io/download/.
+
+After that you should be able to run POPNASv2 with this command:
+```
+python run.py
+```
+
+To use a GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
+Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
+to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
 
 ## Run configuration
 ### Command line arguments
@@ -191,7 +168,7 @@ Close a plot overview to visualize the next one, the program terminates after sh
 If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
 
 If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder,
-also their output plots will be visualized in additional slides at the end.
+their plots will be visualized in additional slides at the end.
 
 
 ### Tensorboard
@@ -200,110 +177,3 @@ Trained CNNs have a callback for saving info to tensorboard log files. To access
 tensorboard --logdir {absolute_path_to_POPNAS_src}/logs/{date}/tensorboard_cnn --port 6096
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
-
-
-## Changelog from original version
-
-### Generated CNN structure changes
-- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output
-  as input of another block).
-- Fix blocks not having addition of the two operations output.
-- Fix skip connections (input index -2) not working as expected.
-- Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
-- Add AdamW as an alternative optimizer that can be optionally enabled and used instead of Adam + L2 regularization, providing a more
-  accurate weight decay.
-- Add ScheduledDropPath in local version (see FractalNet paper), since it was used in both PNAS and NASNet.
-- Add cosine decay restart learning rate schedule, since also ADAM benefits a lot from it.
-- Allow the usage of flexible kernel sizes for each operator supported by the algorithm, thanks to regex parsing.
-- Add support for TransposeConvolution operator.
-- Add the possibility to generate models with multiple outputs, one at the end of each cell. The CNN is then trained with custom loss weights
-  for each output, scaling exponentially based on the cell index (last cell loss has weight 1/2, the second-last 1/4, the third-last 1/8, etc...)
-
-
-### Equivalent networks detection
-- Equivalent blocks are now excluded from the search space, like in PNAS.
-- Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality.
-  Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
-
-
-### Predictors changes
-- CatBoost can now be used as time regressor, instead or together with aMLLibrary supported regressors. By default, CatBoost is now used in time
-  predictions of each expansion step, with automatic hyperparameters tuning based on random search.
-- Add back the input columns features to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
-  Therefore, input values have a great influence on actual training time and must be used by regressor for accurate estimations.
-- Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
-  train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
-- Keras predictors support hyperparameters tuning via Keras Tuner library. The search space for the parameters is
-  defined in each class and can be overridden by each model to adapt it for each specific model structure.
-- Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
-  These scripts are useful to tune the predictors in case their results are far from optimal on the given dataset.
-- A totally new feature set has been engineered for time predictors, based mainly the dag representation of a cell specification. This new set
-  is quite small but very indicative of the main factors that dictates time differences among the networks. It also implicitly generalize on
-  equivalent cell specifications, since they have the same DAG representation and so the same features, making futile the data augmentation step.
-- Accuracy predictor is now an ensemble of 5 models, each one trained on 4/5 of the data.
-  This closely follows PNAS work and improved slightly the results.
-
-### Exploration step
-- Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
-  networks (or appear very rarely) due to their early performance, making the predictors penalizing them heavily also
-  in future steps. Since these inputs and operators could be actually quite effective in later cell expansions,
-  the exploration step now trains a small set of networks that contains these underused values. It also helps to
-  discover faster the value of input values >= 0, since they are unknown in B=1 step and progressively added in future steps.
-
-
-### Data extrapolation and data analysis
-- Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
-- Add the plot slideshow script to visualize all produced plots easily in aggregated views.
-- Add _avg_training_time.csv_ to automatically extrapolate the average CNN training time for each considered block size.
-- Add _multi_output.csv_ to extrapolate the best accuracy reached for each cell output, when _multi_output_ is enabled in JSON config.
-
-
-### Software improvements and refactors
-- Migrate code to Tensorflow 2, in particular to the 2.7 version.
-- The algorithm now supports 4 different image classification datasets: CIFAR10, CIFAR100, fashionMNIST and EuroSAT. It should be easy to implement
-  support for other datasets and datasets supported by [Tensorflow-datasets](https://www.tensorflow.org/datasets/catalog/overview?hl=en)
-  could work fine without any code change.
-- Now use JSON configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
-  all the various components of the algorithm run. Many parameters and hyperparameters that were hardcoded in POPNAS initial version are now
-  tunable from the JSON config.
-- Implement an actually working run restoring functionality. This allows to resume a previously interrupted run.
-- CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
-  New training method supports data augmentation and allows the usage of weight regularization if parameter is provided.
-- LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
-  This make the whole procedure easier to interpret and also more flexible to further changes and additions.
-- Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
-  tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
-  algorithm and the additional scripts.
-- Encoder has been totally refactored since it was a total mess, causing also a lot of confusion inside the other modules.
-  Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2).
-  The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders
-  at runtime and using them easily when needed. The default encoders are now 1-indexed categorical integers, instead of the 0-indexed used before. 
-- Improve immensely virtual environment creation, by using _Poetry_ tool to easily install all dependencies.
-- Improve logging (see log_service.py), using standard python log to print on both console and file. Before, text logs were printed only on console.
-- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments.
-- A script is provided to train the best model from checkpoint saved during the POPNAS run. It can also recreate the best network from scratch or
-  train a custom cell specification, provided as argument.
-- Format code with pep8 and flake, to follow standard python formatting conventions.
-- General code fixes and improvements, especially improve readability of various code parts for better future maintainability.
-  Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented and typed.
-  Right now almost the total codebase of original POPNAS version have been refactored, either due to structural or quality changes.
-
-
-### Command line arguments changes
-- Add --cpu option to easily choose between running on CPU or GPU.
-- Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add a lot of new configuration parameters, which can be set in the new JSON configuration file.
-
-
-### Other bug fixes
-- Fix regressor features bug: dynamic reindexing was inaccurate due to an int cast that was totally unnecessary since the dynamic reindex is
-  designed to be a float value.
-- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images
-  due to how repeat was wrongly used before batching.
-- Fix tqdm bars for model predictions procedure, to visualize better its progress.
-
-
-
-## TODO
-- Improve the restoring function and investigate potential bugs (especially in prediction and expansion phase it could not work properly, since
-  I only wrote the logic to stop it during CNN training, which should be the 90% of the cases).
