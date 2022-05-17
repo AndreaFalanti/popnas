@@ -38,7 +38,7 @@ poetry shell
 Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of Keras models.
 Follow the installation instructions at: https://graphviz.gitlab.io/download/.
 
-After that you should be able to run POPNASv2 with this command:
+After that you should be able to run POPNASv2 with this command (in _src_ folder):
 ```
 python run.py
 ```
@@ -52,10 +52,7 @@ to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https:
 All command line arguments are optional.
 - **-j**: specifies the path of the json configuration to use. If non provided, _configs/run.json_ will be used.
 - **-r**: used to restore a previous interrupted run. Specifies the path of the log folder of the run to resume.
-- **--cpu**: if specified, the algorithm will use only the CPU, even if a GPU is actually available.
-  It must be specified if the host machine has no gpu.
-- **--pnas**: if specified, the algorithm will not use a time predictor, disabling time estimation and pareto front generation.
-  This will make the computation extremely similar to PNAS algorithm.
+- **--name**: used to set a custom folder name for log outputs.
 
 ### Json configuration file
 The run behaviour can be customized through the usage of custom json files. By default, the _run.json_ file inside the _configs_ folder
