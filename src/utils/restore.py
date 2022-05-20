@@ -10,7 +10,6 @@ from utils.func_utils import parse_cell_structures
 
 class RestoreInfo:
     def __init__(self, save_path: str) -> None:
-        # TODO: shouldn't be in class but log_service must be initialized...
         self.save_path = save_path
 
         self._current_b = 0
@@ -18,7 +17,6 @@ class RestoreInfo:
         self._exploration_training_index = 0
         self._total_time = 0
 
-    # TODO: using **kwargs can be useful here, but names become error prone in that case. Instead use same names of actual arguments.
     def update(self, current_b: int = None, pareto_training_index: int = None, exploration_training_index: int = None, total_time: float = None):
         # get dictionary of parameters-values passed to the function, with also the defaults
         args = locals().copy()

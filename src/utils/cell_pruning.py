@@ -1,6 +1,5 @@
 # These classes are used for representing models in a more structured way, so that it's possible to compare
 # them more easily (trim specular cells and equivalent models in general).
-# TODO: name could be misleading, they are not actual encodings used by algorithm.
 
 class OpEncoding:
     def __init__(self, input, op) -> None:

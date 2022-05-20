@@ -108,7 +108,7 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
             ds_label = tf.data.Dataset.from_tensor_slices(y_rewards)
             ds = tf.data.Dataset.zip((ds, ds_label))
         else:
-            # TODO: add fake y, otherwise the input will be separated instead of using a pair of tensors... Better ideas to address this bug?
+            # add fake y, otherwise the input will be separated instead of using a pair of tensors for unknown reasons
             fake_y = np.ones(shape=(len(x_cell_specs), 1))
             ds_label = tf.data.Dataset.from_tensor_slices(fake_y)
             ds = tf.data.Dataset.zip((ds, ds_label))

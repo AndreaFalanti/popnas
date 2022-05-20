@@ -8,7 +8,6 @@ from matplotlib import pyplot as plt
 
 
 def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: str, save_pred_every: int = None, model_type: str = 'auto'):
-    # TODO: shap automatic explainer selection doesn't work well, better use custom class directly if the model is not recognized
     if model_type == 'auto':
         explainer = shap.Explainer(model)
     elif model_type == 'linear':

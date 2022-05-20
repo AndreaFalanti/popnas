@@ -54,7 +54,6 @@ class CatBoostPredictor(Predictor):
         raise NotImplementedError("CatBoost predictor doesn't support ensemble")
 
     def train(self, dataset: Union[str, 'list[Tuple]'], use_data_augmentation=True):
-        # TODO
         if not isinstance(dataset, str):
             raise TypeError('CatBoost supports only files, conversion to file is a TODO...')
 

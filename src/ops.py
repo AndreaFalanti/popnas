@@ -34,7 +34,6 @@ class IdentityReshaper(Layer):
         self.replication_factor = math.ceil(filters / input_filters)
 
     def call(self, inputs, training=None, mask=None):
-        # TODO: it seems that ::1 slice is bugged, if stride is used when not needed the model has random output. TF bug?
         input_stride = inputs if self.no_stride else inputs[:, ::self.strides[0], ::self.strides[1], :]
         return tf.tile(input_stride, [1, 1, 1, self.replication_factor])[:, :, :, :self.filters]
 
@@ -242,7 +241,7 @@ class PoolingConv(Layer):
         return config
 
 
-# TODO: this scheduled drop path implementation is inspired by the one implemented in Tensorflow for PNASNetV5 in these links:
+# This scheduled drop path implementation is inspired by the one implemented in Tensorflow for PNASNetV5 in these links:
 #  https://github.com/chenxi116/PNASNet.TF/blob/338371ffc3122498dc71aff9d59001f40ef22e6c/cell.py#L136
 #  https://github.com/tensorflow/models/blob/30e6e03f66efad4e43f1b98ec8680451f5a86a72/research/slim/nets/nasnet/nasnet_utils.py#L432
 #  but these versions actually differs from the one used in FractalNet, since they don't check that at least one path survives!

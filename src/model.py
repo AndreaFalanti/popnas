@@ -136,7 +136,7 @@ class ModelGenerator:
             self.prev_cell_index = self.cell_index
 
             if self.multi_output:
-                self.__generate_output(cell_output)  # TODO: use dropout also here? maybe scheduled?
+                self.__generate_output(cell_output)
         # skip cell creation, since it will not be used
         else:
             cell_output = None
@@ -363,7 +363,6 @@ class ModelGenerator:
         if operator == 'identity':
             # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
             if strides == (2, 2) or adapt_depth:
-                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it has been disabled, reverting to pointwise convolution
                 # layer_name = f'identity_reshaper{block_info_suffix}'
                 # x = ops.IdentityReshaper(filters, input_filters, strides, name=layer_name)
                 layer_name = f'pointwise_id{block_info_suffix}'
@@ -441,7 +440,7 @@ class ModelGenerator:
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.ckpt'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
-        # TODO: if you want to use early stopping, training time should be rescaled for predictor
+        # if you want to use early stopping, training time should be rescaled for predictor
         # es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
 
         return model_callbacks

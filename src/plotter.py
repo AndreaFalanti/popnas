@@ -21,7 +21,6 @@ __logger = None  # type: logging.Logger
 plt.set_loglevel('WARNING')
 
 
-# TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
@@ -356,7 +355,6 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
     __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
 
-# TODO: remove duplication with function above
 def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]'):
     op_counters = __initialize_dict_usage_data(operators)
     input_counters = __initialize_dict_usage_data(inputs)
@@ -429,13 +427,11 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     time_r2, acc_r2 = np.zeros(B - 1), np.zeros(B - 1)
 
-    # TODO: maybe better to refactor these lists to numpy arrays too.
     # They are used as list of lists for scatter plots.
     pred_times, real_times = [], []
     pred_acc, real_acc = [], []
     scatter_time_legend_labels, scatter_acc_legend_labels = [], []
 
-    # TODO: find a good way to remove duplication
     for b in range(2, B + 1):
         __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
         merge_df = __build_prediction_dataframe(b, K, pnas_mode)
@@ -542,7 +538,7 @@ def plot_multi_output_boxplot():
 
     # get the entries with less cells
     na_df = outputs_df[outputs_df[x_labels[-2]].isnull()]
-    x_labels_na = x_labels[::-2][::-1]  # TODO: -2 because it's the lookback used, expand the logic to other lookbacks if needed
+    x_labels_na = x_labels[::-2][::-1]
     output_accuracies_na = [na_df[output_key] for output_key in x_labels_na]
 
     x_labels = [str(label).split('_')[0] for label in x_labels]

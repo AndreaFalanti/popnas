@@ -7,7 +7,6 @@ from tensorflow.python.keras.utils import losses_utils
 
 @tf.function
 def get_rank(y_pred):
-    # TODO: argsort actually give different values to ties, this is not what we want! How to fix this?
     rank = tf.argsort(y_pred)
     rank = tf.argsort(rank) + 1  # +1 to get the rank starting in 1 instead of 0
     return rank
@@ -19,13 +18,11 @@ def spearman_correlation_coeff(x, y):
     sd_x = tfp.stats.stddev(x, sample_axis=0, keepdims=False, name=None)
     sd_y = tfp.stats.stddev(y, sample_axis=0, keepdims=False, name=None)
     # 1- because we want to minimize loss
-    # TODO: 1e-16 is an epsilon to avoid division by 0 if either x or y are constant (stddev = 0) [impossible right now, see argsort]
     return 1 - cov / (sd_x * sd_y)  # + 1e-16)
 
 
 @tf.function
 def spearman_correlation_loss(y_true, y_pred):
-    # TODO: map_fn is probably ok in case predictions are not a single value, here instead we work on batches of single predictions
     # First we obtain the ranking of the predicted values
     # y_pred_rank = tf.map_fn(lambda x: get_rank(x), y_pred, fn_output_signature=tf.int32)
     if len(y_true) == 1:

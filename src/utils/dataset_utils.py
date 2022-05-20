@@ -162,13 +162,11 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
     data_augmentation = get_data_augmentation_model() if use_data_augmentation else None
 
-    # TODO: folds are actually implemented only in Keras datasets, but since this functionality is not used maybe is better to deprecate it...
     # Custom dataset, loaded with Keras
     if dataset_path is not None:
         if resize_dim is None:
             raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-        # TODO: samples limit not used in this case, implement it later
         if val_size is None:
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
                                                     image_size=resize_dim, batch_size=batch_size)
@@ -176,7 +174,6 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                                                   image_size=resize_dim, batch_size=batch_size)
         # extract a validation split from training samples
         else:
-            # TODO: find a way to make the split stratified.
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
                                                     subset='training', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
@@ -193,8 +190,6 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
         val_ds = val_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
-        # TODO: repetition of __finalize_datasets function, because batch_size=None is not supported for image_dataset_from_directory in tf 2.7.
-        #  An update or refactor of the function can avoid the duplication
         # cache in memory for better performance, if enabled
         if cache:
             train_ds = train_ds.cache()
@@ -218,10 +213,8 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
         train, test, classes, image_shape = __load_dataset_images(dataset_name)
         dataset_classes_count = classes or dataset_classes_count    # like || in javascript
-        # TODO: produce also the test dataset
         (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
 
-        # TODO: is it ok to generate the splits by shuffling randomly?
         for i in range(dataset_folds_count):
             logger.info('Preprocessing and building dataset fold #%d...', i + 1)
 

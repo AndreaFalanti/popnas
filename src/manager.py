@@ -164,8 +164,6 @@ class NetworkManager:
             (tuple): (reward, timer, total_params, flops) of trained network
         '''
 
-        # TODO: legacy function, don't know why it was called. Doesn't seem to harm the execution, if you feel brave
-        #  try to remove it and check if something is wrong.
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard
@@ -183,7 +181,6 @@ class NetworkManager:
                 self._logger.info("Training on dataset #%d / #%d", i + 1, self.dataset_folds_count)
 
             # generate a CNN model given the cell specification
-            # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
             model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
             # add callback to register as accurate as possible the training time
             time_cb = TimingCallback()

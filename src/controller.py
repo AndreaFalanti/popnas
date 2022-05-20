@@ -121,9 +121,6 @@ class ControllerManager:
         # closure that returns a function that returns the model generator for current generation step
         generate_models = self.search_space.prepare_intermediate_children(self.current_b)
 
-        # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
-        #  necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,
-        #  if you can make it more performant prune them before the evaluations again.
         next_models = list(generate_models())
 
         # process the models to predict in batches, to vastly optimize the time needed to process them all
@@ -136,8 +133,6 @@ class ControllerManager:
         # iterate through all the possible cells for next B step and predict their score and time
         with pbar:
             for cells_batch in batched_models:
-                # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
-                #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
                 batch_time_features = None if self.pnas_mode else [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
 
                 estimated_times = [None] * len(cells_batch) if self.pnas_mode else time_predictor.predict_batch(batch_time_features)

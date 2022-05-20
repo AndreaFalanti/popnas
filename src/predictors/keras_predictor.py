@@ -132,7 +132,6 @@ class KerasPredictor(Predictor):
 
         return list(zip(cells, results_df['best val accuracy'].to_list()))
 
-    # TODO: currently not used, need adjustments for ensemble and new folder structure
     def restore_weights(self):
         if os.path.exists(os.path.join(self.log_folder, 'weights.index')):
             self.model.load_weights(os.path.join(self.log_folder, 'weights'))
@@ -147,11 +146,9 @@ class KerasPredictor(Predictor):
         model_ensemble = []
         max_b = len(cells[-1])
 
-        # TODO
         cells = list(cells)
         rewards = list(rewards)
 
-        # TODO: could use test in some way. PNAS ensemble simply trains on 4/5 of the dataset
         # train and test are array of indexes
         for fold_index, (train, test) in enumerate(KFold(n_splits=splits, shuffle=True).split(cells, rewards)):
             self._logger.info('Training ensemble model %d...', fold_index + 1)

@@ -61,7 +61,6 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
-    # TODO: useless right now since all arguments are in the JSON config
     # print info about the command line arguments provided. Optional ones will list their default value.
     # logger = log_service.get_logger(__name__)
     # logger.info('%s', '*' * 31 + ' COMMAND LINE ARGUMENTS (WITH DEFAULTS) ' + '*' * 31)
