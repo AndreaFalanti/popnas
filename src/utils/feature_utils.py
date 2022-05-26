@@ -4,6 +4,7 @@ import math
 import os.path
 
 import igraph
+
 from encoder import SearchSpace
 from utils.func_utils import list_flatten, to_list_of_tuples
 
@@ -118,13 +119,14 @@ def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int,
     blocks = len(op_features)
     flat_ops = list_flatten(op_features)
 
+    # internal edges of each block, without connections with the inputs
     basic_edges = list_flatten([[(i*3, i*3 + 2), (i*3 + 1, i*3 + 2)] for i in range(blocks)])
     block_dep_edges = [(2 + 3 * inp, i + (i // 2)) for i, inp in enumerate(inputs) if inp >= 0]
 
     # for each block the 2 operations plus the add (3 vertices)
     g = igraph.Graph(n=3 * blocks, edges=basic_edges + block_dep_edges, directed=True)
 
-    # add op weight to each graph vertex
+    # add op weight to each graph vertex (0 for add)
     g.vs['op_time'] = list_flatten([(op1, op2, 0) for op1, op2 in op_features])
 
     # add nodes should not be considered
