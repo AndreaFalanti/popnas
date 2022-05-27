@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import Iterable
 
 from utils.func_utils import list_flatten
 
@@ -7,7 +8,7 @@ def _get_counter_total(counter: Counter):
     return sum(counter.values())
 
 
-def _remove_unwanted_keys(counter: Counter, key_list: list):
+def _remove_unwanted_keys(counter: Counter, key_list: Iterable):
     # deep copy keys to avoid changes during iteration (that would lead to RuntimeError)
     keys = [key for key in counter.keys()]
     for key in keys:
@@ -15,13 +16,13 @@ def _remove_unwanted_keys(counter: Counter, key_list: list):
             del counter[key]
 
 
-def _initialize_counter_values(counter: Counter, key_list: list):
+def _initialize_counter_values(counter: Counter, key_list: Iterable):
     for key in key_list:
         counter[key] = 0
 
 
 class CellCounter:
-    def __init__(self, input_keys: list = None, op_keys: list = None) -> None:
+    def __init__(self, input_keys: Iterable = None, op_keys: Iterable = None) -> None:
         '''
         Wrapper for python Counters, designed specifically for operating on cell specifications.
         input_keys and op_keys allow to count only some specific values, making the total and key_count functions return
