@@ -169,7 +169,7 @@ class ControllerManager:
             pareto_front = [model_estimations[0]]
 
             # for eqv check purposes
-            existing_model_reprs = []
+            existing_model_reprs = [cell_pruning.CellEncoding(model_estimations[0].cell_spec)]
             pruned_count = 0
 
             for model_est in model_estimations[1:]:
