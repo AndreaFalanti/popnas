@@ -9,7 +9,7 @@ class OpEncoding:
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, OpEncoding):
-            return self.input == o.input and self.op == o.op
+            return self.op == o.op and self.input == o.input
         return False
 
 
@@ -40,16 +40,15 @@ class CellEncoding:
     def __eq__(self, o: object) -> bool:
         if isinstance(o, CellEncoding) and len(self.blocks) == len(o.blocks):
             # each block must be equivalent to a not already eqv matched block for having a complete cell equivalence.
-            # The mask helps filtering already matched blocks.
-            blocks_mask = [True for _ in o.blocks]
+            valid_blocks = o.blocks.copy()  # shallow copy, references of blocks no more valid will be removed
 
             for block_enc in self.blocks:
                 eqv_to_other_cell_block = False
                 # index produced by enumerate is required to update the boolean mask
-                for i, viable_block_enc in filter(lambda tuple_el: blocks_mask[tuple_el[0]], enumerate(o.blocks)):
-                    if block_enc == viable_block_enc:
+                for valid_block in valid_blocks:
+                    if block_enc == valid_block:
                         # this block is no more viable for further equalities
-                        blocks_mask[i] = False
+                        valid_blocks.remove(valid_block)
                         eqv_to_other_cell_block = True
                         break
 
