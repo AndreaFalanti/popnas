@@ -45,6 +45,12 @@ def __save_latex_plots(save_name):
     plt.savefig(save_path, bbox_inches='tight')
 
 
+def save_and_finalize_plot(fig: plt.Figure, title: str, save_name: str):
+    __save_latex_plots(save_name)
+    plt.title(title)
+    __save_and_close_plot(fig, save_name)
+
+
 def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
     fig = plt.figure()
     plt.bar(x, y)
@@ -58,9 +64,7 @@ def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=Fa
     if incline_labels:
         plt.gcf().autofmt_xdate()
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y_label, title, save_name):
@@ -85,9 +89,7 @@ def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y
 
     ax.legend()
 
-    __save_latex_plots(save_name)
-    ax.set_title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_labels=False):
@@ -103,9 +105,7 @@ def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_l
     if incline_labels:
         plt.gcf().autofmt_xdate()
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_pie_chart(labels, values, title, save_name):
@@ -128,9 +128,7 @@ def __plot_pie_chart(labels, values, title, save_name):
     plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.03, 0.04))
     plt.subplots_adjust(right=0.7)
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
@@ -169,9 +167,7 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
 
         ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
@@ -187,9 +183,7 @@ def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, 
     plt.xlabel('time')
     plt.ylabel('accuracy')
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_rank_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
@@ -210,9 +204,7 @@ def __plot_rank_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: l
     ax.set_ylabel('time')
     ax.set_zlabel('accuracy')
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __plot_3d_pareto_front(x_real: list, y_real: list, z_real: list, x_pred: list, y_pred: list, z_pred: list, title: str, save_name: str):
@@ -228,9 +220,7 @@ def __plot_3d_pareto_front(x_real: list, y_real: list, z_real: list, x_pred: lis
     ax.set_ylabel('accuracy')
     ax.set_zlabel('params')
 
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
+    save_and_finalize_plot(fig, title, save_name)
 
 
 def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
