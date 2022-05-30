@@ -15,6 +15,7 @@ import log_service
 from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
+from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops
 from utils.timing_callback import TimingCallback
 
@@ -64,6 +65,9 @@ class NetworkManager:
                                         output_classes=self.dataset_classes_count, image_shape=image_shape,
                                         data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None,
                                         save_weights=save_network_weights)
+
+        # TODO: if not needed here, just generate it in train to pass it in controller
+        self.graph_gen = GraphGenerator(cnn_config, arc_config, image_shape, self.dataset_classes_count)
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']

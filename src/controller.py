@@ -1,5 +1,4 @@
 import csv
-import math
 from typing import Callable
 
 import numpy as np
@@ -14,6 +13,7 @@ from utils.cell_counter import CellCounter
 from utils.cell_pruning import CellEncoding
 from utils.feature_utils import generate_time_features
 from utils.func_utils import to_list_of_tuples
+from utils.graph_generator import GraphGenerator
 from utils.model_estimate import ModelEstimate
 from utils.rstr import rstr
 
@@ -54,7 +54,7 @@ class ControllerManager:
     '''
 
     def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 acc_predictor_ensemble_units: int, B=5, K=256, ex=16, T=np.inf,
+                 acc_predictor_ensemble_units: int, graph_generator: GraphGenerator, B=5, K=256, ex=16, T=np.inf,
                  current_b: int = 1, predictions_batch_size: int = 16, pnas_mode: bool = False):
         '''
         Manages the Controller network training and prediction process.
@@ -69,6 +69,7 @@ class ControllerManager:
         '''
         self._logger = log_service.get_logger(__name__)
         self.search_space = search_space
+        self.graph_generator = graph_generator
 
         self.B = B
         self.K = K
