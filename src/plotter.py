@@ -370,6 +370,10 @@ def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', 
         __logger.info('No exploration data found, skip plot generation')
         return
 
+    if len(df) == 0:
+        __logger.info('Exploration Pareto front was empty, skipping plot generation')
+        return
+
     cells = parse_cell_structures(df['cell structure'])
 
     op_counters, input_counters = __update_counters(cells, op_counters, input_counters)
