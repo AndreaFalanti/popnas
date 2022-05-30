@@ -376,6 +376,7 @@ class Train:
         plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode)
         if not self.pnas_mode:
             plotter.plot_pareto_front_curves(self.blocks, plot3d=True)
+            plotter.plot_predictions_with_pareto_analysis(self.blocks)
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 

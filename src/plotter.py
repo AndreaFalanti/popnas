@@ -216,8 +216,24 @@ def __plot_3d_pareto_front(x_real: list, y_real: list, z_real: list, x_pred: lis
     ax.plot(x_real, y_real, z_real, '--.b', alpha=0.6)
     ax.plot(x_pred, y_pred, z_pred, '--.g', alpha=0.6)
 
-    ax.set_xlabel('time')
-    ax.set_ylabel('accuracy')
+    ax.set_xlabel('accuracy')
+    ax.set_ylabel('time')
+    ax.set_zlabel('params')
+
+    save_and_finalize_plot(fig, title, save_name)
+
+
+def __plot_predictions_pareto_scatter_chart(predictions: 'tuple[list, list, list]', pareto_points: 'tuple[list, list, list]', title: str, save_name: str):
+    ''' Plot all predictions made, with the Pareto selected as highlight. '''
+    # fig, ax = plt.subplots()
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')  # type: plt.Axes
+
+    ax.scatter(*predictions, marker='.', alpha=0.6)
+    ax.scatter(*pareto_points, marker='^', alpha=1.0)
+
+    ax.set_xlabel('accuracy')
+    ax.set_ylabel('time')
     ax.set_zlabel('params')
 
     save_and_finalize_plot(fig, title, save_name)
@@ -542,11 +558,30 @@ def plot_pareto_front_curves(B: int, plot3d: bool = False):
                                                                                   pred_front_time, pred_front_acc, pred_front_params):
         plot_func = __plot_rank_pareto_front if plot3d else __plot_pareto_front
         plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}')
-        __plot_3d_pareto_front(real_time, real_acc, real_params, pred_time, pred_acc, pred_params,
+        __plot_3d_pareto_front(real_acc, real_time, real_params, pred_acc, pred_time, pred_params,
                                title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
         b += 1
 
     __logger.info("Pareto front curve plots written successfully")
+
+
+def plot_predictions_with_pareto_analysis(B: int):
+    for b in range(2, B + 1):
+        predictions_df = pd.read_csv(log_service.build_path('csv', f'predictions_B{b}.csv'))
+        pareto_df = pd.read_csv(log_service.build_path('csv', f'pareto_front_B{b}.csv'))
+
+        pred_acc = predictions_df['val accuracy'].to_list()
+        pred_times = predictions_df['time'].to_list()
+        pred_params = predictions_df['params'].to_list()
+
+        pareto_acc = pareto_df['val accuracy'].to_list()
+        pareto_times = pareto_df['time'].to_list()
+        pareto_params = pareto_df['params'].to_list()
+
+        __plot_predictions_pareto_scatter_chart((pred_acc, pred_times, pred_params), (pareto_acc, pareto_times, pareto_params),
+                                                f'Predictions with Pareto points B{b}', f'predictions_with_pareto_B{b}')
+
+    __logger.info("Predictions-Pareto analysis plots written successfully")
 
 
 def plot_multi_output_boxplot():
