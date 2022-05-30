@@ -44,6 +44,19 @@ def _save_pareto_front_to_file(pareto_front: 'list[ModelEstimate]', current_b: i
         writer.writerow(ModelEstimate.get_csv_headers())
         writer.writerows(map(lambda est: est.to_csv_array(), pareto_front))
 
+        
+def __save_predictions_to_file(model_estimates: 'list[ModelEstimate]', current_b: int):
+    '''
+    Write predictions on csv for further data analysis.
+
+    Args:
+        model_estimates: [description]
+    '''
+    with open(log_service.build_path('csv', f'predictions_B{current_b}.csv'), mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(ModelEstimate.get_csv_headers())
+        writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
+
 
 class ControllerManager:
     '''
@@ -103,18 +116,6 @@ class ControllerManager:
             time_predictor = self.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
 
-    def __write_predictions_on_csv(self, model_estimates):
-        '''
-        Write predictions on csv for further data analysis.
-
-        Args:
-            model_estimates (list[ModelEstimate]): [description]
-        '''
-        with open(log_service.build_path('csv', f'predictions_B{self.current_b}.csv'), mode='w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['time', 'val accuracy', 'cell structure'])
-            writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
-
     def __generate_model_estimations(self, batched_models: 'list[tuple]', models_count: int, time_predictor: Predictor, acc_predictor: Predictor):
         model_estimations = []  # type: list[ModelEstimate]
 
@@ -132,16 +133,17 @@ class ControllerManager:
 
                 estimated_times = [None] * len(cells_batch) if self.pnas_mode else time_predictor.predict_batch(batch_time_features)
                 estimated_scores = acc_predictor.predict_batch(cells_batch)
-                # params_count = [NetworkGraph(cell_spec).get_total_params() for cell_spec in cells_batch]
+                params_count = [None] * len(cells_batch) if self.pnas_mode \
+                    else [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch]
 
                 # always preserve the child and its score in pnas mode
                 if self.pnas_mode:
-                    model_estimations.extend([ModelEstimate(cell_spec, score, time) for cell_spec, score, time
-                                              in zip(cells_batch, estimated_scores, estimated_times)])
+                    model_estimations.extend([ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params
+                                              in zip(cells_batch, estimated_scores, estimated_times, params_count)])
                 # in popnas mode instead check that time estimation is < T (time threshold)
                 else:
-                    ests_in_time_limit = [ModelEstimate(cell_spec, score, time) for cell_spec, score, time
-                                          in zip(cells_batch, estimated_scores, estimated_times) if time <= self.T]
+                    ests_in_time_limit = [ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params
+                                          in zip(cells_batch, estimated_scores, estimated_times, params_count) if time <= self.T]
                     model_estimations.extend(ests_in_time_limit)
 
                 pbar.update(len(cells_batch))
@@ -150,8 +152,10 @@ class ControllerManager:
 
     def __build_pareto_front(self, model_estimations: 'list[ModelEstimate]'):
         '''
-        Build the Pareto front from the predictions.
+        Build the Pareto front from the predictions, limited to K elements.
         The Pareto front can be built only if using the time predictor (needs time estimation, not possible in PNAS mode).
+
+        IMPORTANT: model_estimates must be sorted by score (max first).
 
         Args:
             model_estimations: list of cells, associated with the metrics targeted by Pareto optimization
@@ -160,29 +164,28 @@ class ControllerManager:
             Pareto front, cell encodings inserted in Pareto front (can be used to prune equivalent models)
         '''
         self._logger.info('Building pareto front...')
-        # The process by putting the first model into pareto front (best score, ordered array), then comparing
-        # the rest only by time because of ordering trick.
-        pareto_front = [model_estimations[0]]
 
-        # for eqv check purposes
-        existing_model_reprs = [cell_pruning.CellEncoding(model_estimations[0].cell_spec)]
-        pruned_count = 0
+        pareto_model_estimations = []
+        pareto_eqv_cell_encodings = []
 
-        for model_est in model_estimations[1:]:
-            # less time than last pareto element
-            if model_est.time < pareto_front[-1].time:
-                # check that model is not equivalent to another one present already in the pareto front
-                cell_repr = cell_pruning.CellEncoding(model_est.cell_spec)
-                if not cell_pruning.check_model_equivalence(cell_repr, existing_model_reprs):
-                    pareto_front.append(model_est)
-                    existing_model_reprs.append(cell_repr)
-                else:
-                    pruned_count += 1
+        for i, model_est in enumerate(model_estimations):
+            model_est_cell_encoding = cell_pruning.CellEncoding(model_est.cell_spec)
+            eqv_to_other_pareto_model = cell_pruning.is_model_equivalent_to_another(model_est_cell_encoding, pareto_eqv_cell_encodings)
 
-        self._logger.info('Pruned %d equivalent models while building pareto front', pruned_count)
-        return pareto_front, existing_model_reprs
+            if not eqv_to_other_pareto_model and \
+                    not any(model_est.is_dominated_by(other_est) for j, other_est in enumerate(model_estimations) if i != j):
+                pareto_model_estimations.append(model_est)
+                pareto_eqv_cell_encodings.append(model_est_cell_encoding)
 
-    def __build_exploration_pareto_front(self, model_estimations: 'list[ModelEstimate]', existing_model_reprs: 'list[CellEncoding]',
+            # algorithm has found K not equivalent Pareto optimal solutions, so it can return the solutions without wasting additional time
+            if len(pareto_model_estimations) >= self.K:
+                break
+
+        self._logger.info('Pareto front built successfully')
+
+        return pareto_model_estimations, pareto_eqv_cell_encodings
+
+    def __build_exploration_pareto_front(self, model_estimations: 'list[ModelEstimate]', curr_model_reprs: 'list[CellEncoding]',
                                          op_exploration_set: set, input_exp_set: set):
         self._logger.info('Building exploration pareto front...')
         self._logger.info('Operators to explore: %s', rstr(op_exploration_set))
@@ -190,32 +193,45 @@ class ControllerManager:
 
         exp_cell_counter = CellCounter(input_exp_set, op_exploration_set)
         exploration_pareto_front = []
-        last_el_time = math.inf
         pruned_count = 0
 
-        for model_est in model_estimations[1:]:
-            # continue searching until we have <ex> elements in the exploration pareto front
-            if len(exploration_pareto_front) == self.ex:
-                break
+        # search the first element not already inserted in the standard Pareto front which satisfies the score threshold
+        # if there is none (shouldn't be possible), then the function terminates immediately, returning an empty exploration Pareto front
+        try:
+            model_estimation = next(model_est
+                                    for model_est in model_estimations
+                                    if exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front) and
+                                    not cell_pruning.is_model_equivalent_to_another(cell_pruning.CellEncoding(model_est.cell_spec), curr_model_reprs))
 
+            exploration_pareto_front.append(model_estimation)
+            curr_model_reprs.append(cell_pruning.CellEncoding(model_estimation.cell_spec))
+            exp_cell_counter.update_from_cell_spec(model_estimation.cell_spec)
+        except StopIteration:
+            self._logger.info('No element satisfied the exploration score threshold, the exploration Pareto front is empty')
+            return [], curr_model_reprs
+
+        for i, model_est in enumerate(model_estimations):
             # less time than last pareto element
-            if model_est.time < last_el_time \
-                    and exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front):
+            if not any(model_est.is_dominated_by(epf_elem) for epf_elem in exploration_pareto_front) and \
+                    exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front):
                 cell_repr = cell_pruning.CellEncoding(model_est.cell_spec)
 
                 # existing_model_reprs contains the pareto front and exploration cells will be progressively added to it
                 # add model to exploration front only if not equivalent to any model in both standard pareto front and exploration front
-                if not cell_pruning.check_model_equivalence(cell_repr, existing_model_reprs):
+                if not cell_pruning.is_model_equivalent_to_another(cell_repr, curr_model_reprs):
                     exploration_pareto_front.append(model_est)
-                    existing_model_reprs.append(cell_repr)
-                    last_el_time = model_est.time
+                    curr_model_reprs.append(cell_repr)
 
                     exp_cell_counter.update_from_cell_spec(model_est.cell_spec)
                 else:
                     pruned_count += 1
 
+            # stop searching if we have reached <ex> elements in the exploration Pareto front
+            if len(exploration_pareto_front) >= self.ex:
+                break
+
         self._logger.info('Pruned %d equivalent models while building exploration pareto front', pruned_count)
-        return exploration_pareto_front, existing_model_reprs
+        return exploration_pareto_front, curr_model_reprs
 
     def update_step(self):
         '''
@@ -256,6 +272,7 @@ class ControllerManager:
             pareto_front, existing_model_reprs = self.__build_pareto_front(model_estimations)
             _save_pareto_front_to_file(pareto_front, self.current_b)
 
+            # TODO: already limited right now
             # limit the Pareto front to K elements if necessary
             children_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
             pareto_front = pareto_front[:children_limit]

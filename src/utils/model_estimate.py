@@ -3,15 +3,20 @@ class ModelEstimate:
     Helper class, basically a struct with a function to convert into array for csv saving
     '''
 
-    def __init__(self, cell_spec, score, time):
+    def __init__(self, cell_spec, score, time, params):
         self.cell_spec = cell_spec
         self.score = score
         self.time = time
+        self.params = params
 
     def to_csv_array(self):
         cell_structure = f"[{';'.join(map(lambda el: str(el), self.cell_spec))}]"
-        return [self.time, self.score, cell_structure]
+        return [self.time, self.score, self.params, cell_structure]
+
+    def is_dominated_by(self, other: 'ModelEstimate'):
+        ''' Check if this point is dominated by another one provided as argument (regarding Pareto optimality). '''
+        return self.score <= other.score and self.time >= other.time and self.params >= other.params
 
     @staticmethod
     def get_csv_headers():
-        return ['time', 'val accuracy', 'cell structure']
+        return ['time', 'val accuracy', 'params', 'cell structure']
