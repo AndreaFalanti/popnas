@@ -175,6 +175,7 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
 
 
 def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
+    ''' For 2 metrics only (time and accuracy). '''
     fig, ax = plt.subplots()
 
     # trans_offset = mtransforms.offset_copy(ax.transData, fig=fig, x=0, y=-0.10, units='inches')
@@ -191,7 +192,8 @@ def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, 
     __save_and_close_plot(fig, save_name)
 
 
-def __plot_3d_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
+def __plot_rank_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
+    ''' For 2 metrics only (time and accuracy), adding another axis for displaying the rank, resulting in a 3D plot. '''
     # fig, ax = plt.subplots()
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -207,6 +209,24 @@ def __plot_3d_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: lis
     ax.set_xlabel('rank')
     ax.set_ylabel('time')
     ax.set_zlabel('accuracy')
+
+    __save_latex_plots(save_name)
+    plt.title(title)
+    __save_and_close_plot(fig, save_name)
+
+
+def __plot_3d_pareto_front(x_real: list, y_real: list, z_real: list, x_pred: list, y_pred: list, z_pred: list, title: str, save_name: str):
+    ''' For 3 metrics only (params, time and accuracy). '''
+    # fig, ax = plt.subplots()
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.plot(x_real, y_real, z_real, '--.b', alpha=0.6)
+    ax.plot(x_pred, y_pred, z_pred, '--.g', alpha=0.6)
+
+    ax.set_xlabel('time')
+    ax.set_ylabel('accuracy')
+    ax.set_zlabel('params')
 
     __save_latex_plots(save_name)
     plt.title(title)
@@ -510,24 +530,30 @@ def plot_pareto_front_curves(B: int, plot3d: bool = False):
     training_df = training_df[training_df['exploration'] == False]
 
     # front built with actual values got from training
-    real_front_acc, real_front_time = [], []
+    real_front_acc, real_front_time, real_front_params = [], [], []
     # pareto front predicted
-    pred_front_acc, pred_front_time = [], []
+    pred_front_acc, pred_front_time, pred_front_params = [], [], []
 
     for b in range(2, B + 1):
         training_df_b = training_df[training_df['# blocks'] == b]
         real_front_acc.append(training_df_b['best val accuracy'].to_list())
         real_front_time.append(training_df_b['training time(seconds)'].to_list())
+        real_front_params.append(training_df_b['total params'].to_list())
 
         pareto_b_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
         pareto_df = pd.read_csv(pareto_b_csv_path)
+
         pred_front_acc.append(pareto_df['val accuracy'].to_list())
         pred_front_time.append(pareto_df['time'].to_list())
+        pred_front_params.append(pareto_df['params'].to_list())
 
     b = 2
-    for real_time, real_acc, pred_time, pred_acc in zip(real_front_time, real_front_acc, pred_front_time, pred_front_acc):
-        plot_func = __plot_3d_pareto_front if plot3d else __plot_pareto_front
+    for real_time, real_acc, real_params, pred_time, pred_acc, pred_params in zip(real_front_time, real_front_acc, real_front_params,
+                                                                                  pred_front_time, pred_front_acc, pred_front_params):
+        plot_func = __plot_rank_pareto_front if plot3d else __plot_pareto_front
         plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}')
+        __plot_3d_pareto_front(real_time, real_acc, real_params, pred_time, pred_acc, pred_params,
+                               title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
         b += 1
 
     __logger.info("Pareto front curve plots written successfully")
