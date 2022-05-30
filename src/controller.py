@@ -30,32 +30,17 @@ def _save_children_specs_to_file(children_specs: list):
         writer.writerows(children_specs)
 
 
-def _save_exploration_pareto_front_to_file(exploration_pareto_front: 'list[ModelEstimate]', current_b: int):
-    ''' Save exploration Pareto front to csv file. '''
-    with open(log_service.build_path('csv', f'exploration_pareto_front_B{current_b}.csv'), mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(ModelEstimate.get_csv_headers())
-        writer.writerows(map(lambda est: est.to_csv_array(), exploration_pareto_front))
-
-
-def _save_pareto_front_to_file(pareto_front: 'list[ModelEstimate]', current_b: int):
-    with open(log_service.build_path('csv', f'pareto_front_B{current_b}.csv'), mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(ModelEstimate.get_csv_headers())
-        writer.writerows(map(lambda est: est.to_csv_array(), pareto_front))
-
-        
-def __save_predictions_to_file(model_estimates: 'list[ModelEstimate]', current_b: int):
+def _save_model_estimates_to_csv_file(filename: str, model_estimates: 'list[ModelEstimate]'):
     '''
-    Write predictions on csv for further data analysis.
-
+    Save a list of model estimation objects to a csv file.
     Args:
-        model_estimates: [description]
+        filename:
+        model_estimates:
     '''
-    with open(log_service.build_path('csv', f'predictions_B{current_b}.csv'), mode='w', newline='') as f:
+    with open(log_service.build_path('csv', filename), mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(ModelEstimate.get_csv_headers())
-        writer.writerows(map(lambda model_est: model_est.to_csv_array(), model_estimates))
+        writer.writerows(map(lambda est: est.to_csv_array(), model_estimates))
 
 
 class ControllerManager:
@@ -262,7 +247,7 @@ class ControllerManager:
 
         # sort the children according to their score
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
-        self.__write_predictions_on_csv(model_estimations)
+        _save_model_estimates_to_csv_file(f'predictions_B{self.current_b}.csv', model_estimations)
 
         self._logger.info('Models evaluation completed')
 
@@ -270,7 +255,7 @@ class ControllerManager:
         # Same for exploration Pareto front, if it is needed
         if not self.pnas_mode:
             pareto_front, existing_model_reprs = self.__build_pareto_front(model_estimations)
-            _save_pareto_front_to_file(pareto_front, self.current_b)
+            _save_model_estimates_to_csv_file(f'pareto_front_B{self.current_b}.csv', pareto_front)
 
             # TODO: already limited right now
             # limit the Pareto front to K elements if necessary
@@ -286,7 +271,7 @@ class ControllerManager:
                 exploration_pareto_front, existing_model_reprs = self.__build_exploration_pareto_front(model_estimations, existing_model_reprs,
                                                                                                        op_exp, input_exp)
 
-                _save_exploration_pareto_front_to_file(exploration_pareto_front, self.current_b)
+                _save_model_estimates_to_csv_file(f'exploration_pareto_front_B{self.current_b}.csv', exploration_pareto_front)
 
                 self.search_space.exploration_front = [child.cell_spec for child in exploration_pareto_front]
                 self._logger.info('Exploration pareto front built successfully')
