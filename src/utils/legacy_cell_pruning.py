@@ -1,12 +1,23 @@
-# These classes are used for representing models in a more structured way, so that it's possible to compare
-# them more easily (trim specular cells and equivalent models in general).
-# TODO: name could be misleading, they are not actual encodings used by algorithm.
+# More readable and intuitive version of cell_pruning module, used in previous algorithm versions.
+# The new one is more performant, but this version gives a better idea on the logic of the module and it is stored for reference
+# (and in case there are some bugs with the new one).
+# since the interface is the same, it is possible to swap them easily by just changing the import.
+
+class OpEncoding:
+    def __init__(self, input, op) -> None:
+        self.input = input  # input can be either a number or a BlockEncoding (if input >= 0, other block output)
+        self.op = op
+
+    def __eq__(self, o: object) -> bool:
+        if isinstance(o, OpEncoding):
+            return self.op == o.op and self.input == o.input
+        return False
 
 
 class BlockEncoding:
-    def __init__(self, in1: str, op1: str, in2: str, op2: str) -> None:
-        self.L = in1 + op1
-        self.R = in2 + op2
+    def __init__(self, in1, op1, in2, op2) -> None:
+        self.L = OpEncoding(in1, op1)
+        self.R = OpEncoding(in2, op2)
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, BlockEncoding):
@@ -22,8 +33,8 @@ class CellEncoding:
         for in1, op1, in2, op2 in model_list:
             # use another block output as input if input >=0
             # substitute input index with BlockEncoding in that case, otherwise keep it as int
-            in1 = f'({self.blocks[in1].L}{self.blocks[in1].R})' if in1 >= 0 else str(in1)
-            in2 = f'({self.blocks[in2].L}{self.blocks[in2].R})' if in2 >= 0 else str(in2)
+            in1 = self.blocks[in1] if in1 >= 0 else in1
+            in2 = self.blocks[in2] if in2 >= 0 else in2
 
             self.blocks.append(BlockEncoding(in1, op1, in2, op2))
 
@@ -53,8 +64,7 @@ class CellEncoding:
 
 # Pruning functions
 
-
-def prune_equivalent_cell_models(models: 'list[list[tuple]]', k: int):
+def prune_equivalent_cell_models(models: list, k: int):
     '''
     Prune equivalent models from given models list until k models have been obtained, then return them.
     Useful for pruning eqv models during PNAS mode children selection.
