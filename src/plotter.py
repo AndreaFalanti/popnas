@@ -17,8 +17,11 @@ from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_
 # so that it can be further analyzed in a more straightforward way
 
 __logger = None  # type: logging.Logger
-# disable matplotlib info messages
-plt.set_loglevel('WARNING')
+# disable matplotlib info and warning messages
+# TODO: it is not wise to disable warnings, but i couldn't find a way to only remove PostScript transparency warning,
+#  which is a known thing and it is triggered thousands of times...
+plt.set_loglevel('ERROR')
+# warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
 
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
@@ -229,8 +232,9 @@ def __plot_predictions_pareto_scatter_chart(predictions: 'tuple[list, list, list
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')  # type: plt.Axes
 
-    ax.scatter(*predictions, marker='.', alpha=0.6)
-    ax.scatter(*pareto_points, marker='^', alpha=1.0)
+    # zorder is used for plotting series over others (highest has priority)
+    ax.scatter(*predictions, marker='o', alpha=0.2, zorder=1, s=(72.*1.5/fig.dpi)**2)
+    ax.scatter(*pareto_points, marker='*', alpha=1.0, zorder=2)
 
     ax.set_xlabel('accuracy')
     ax.set_ylabel('time')
