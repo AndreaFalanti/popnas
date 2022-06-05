@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pandas.io.parsers import TextFileReader
+from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 
 import log_service
@@ -134,6 +135,30 @@ def __plot_pie_chart(labels, values, title, save_name):
     save_and_finalize_plot(fig, title, save_name)
 
 
+def __plot_scatter(x, y, x_label, y_label, title, save_name, legend_labels: Optional['list[str]'] = None):
+    fig, ax = plt.subplots()
+
+    # list of lists with same dimensions are required, or also flat lists with same dimensions
+    assert len(x) == len(y)
+
+    # list of lists case
+    if any(isinstance(el, list) for el in x):
+        assert len(x) == len(legend_labels)
+
+        colors = cm.rainbow(np.linspace(0, 1, len(x)))
+        for xs, ys, color, lab in zip(x, y, colors, legend_labels):
+            plt.scatter(xs, ys, marker='.', color=color, label=lab)
+    else:
+        plt.scatter(x, y, marker='.', label=legend_labels[0])
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+
+    plt.legend(fontsize='x-small')
+
+    save_and_finalize_plot(fig, title, save_name)
+
+
 def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
                                  plot_reference: bool = True, legend_labels: Optional['list[str]'] = None, value_range: Optional[tuple] = None):
     fig, ax = plt.subplots()
@@ -149,7 +174,7 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
         for xs, ys, color, lab in zip(x, y, colors, legend_labels):
             plt.scatter(xs, ys, marker='.', color=color, label=lab)
     else:
-        plt.scatter(x, y)
+        plt.scatter(x, y, marker='.', label=legend_labels[0])
 
     if value_range is not None:
         plt.xlim(*value_range)
@@ -612,6 +637,30 @@ def plot_multi_output_boxplot():
                    'Best accuracies for output (-2 lookback)', 'multi_output_boxplot_na')
 
     __logger.info("Multi output overview plot written successfully")
+
+
+def plot_correlations_with_time():
+    __logger.info('Writing time correlation plots...')
+
+    training_csv_path = log_service.build_path('csv', 'training_results.csv')
+    training_df = pd.read_csv(training_csv_path)
+
+    times = training_df['training time(seconds)'].to_list()
+    params = training_df['total params'].to_list()
+    flops = training_df['flops'].to_list()
+
+    pearson_params_time, _ = pearsonr(params, times)
+    pearson_flops_time, _ = pearsonr(flops, times)
+    spearman_params_time, _ = spearmanr(params, times)
+    spearman_flops_time, _ = spearmanr(flops, times)
+
+    params_legend_labels = [f'Pearson: {pearson_params_time:.3f}, Spearman: {spearman_params_time:.3f}']
+    flops_legend__labels = [f'Pearson: {pearson_flops_time:.3f}, Spearman: {spearman_flops_time:.3f}']
+
+    __plot_scatter(params, times, 'params', 'time(s)', '(Params, Time) correlation', 'params_time_corr', legend_labels=params_legend_labels)
+    __plot_scatter(flops, times, 'FLOPS', 'time(s)', '(FLOPS, Time) correlation', 'flops_time_corr', legend_labels=flops_legend__labels)
+
+    __logger.info('Time correlation plots written successfully')
 
 
 class BarInfo(NamedTuple):
