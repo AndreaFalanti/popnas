@@ -75,25 +75,26 @@ docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python 
 All command line arguments are optional.
 - **-j**: specifies the path of the json configuration to use. If non provided, _configs/run.json_ will be used.
 - **-r**: used to restore a previous interrupted run. Specifies the path of the log folder of the run to resume.
-- **--cpu**: if specified, the algorithm will use only the CPU, even if a GPU is actually available.
-  It must be specified if the host machine has no gpu.
-- **--pnas**: if specified, the algorithm will not use a time predictor, disabling time estimation and pareto front generation.
-  This will make the computation extremely similar to PNAS algorithm.
+- **--name**: specifies a custom name for the log folder. If not provided, it defaults to date-time
+  in which the run is started.
 
 ### Json configuration file
-The run behaviour can be customized through the usage of custom json files. By default, the _run.json_ file inside the _configs_ folder
-will be used. This file can be used as a template and customized to generate new configurations. A properly structured json config file can be
-used by the algorithm by specifying its path in -j command line arguments.
+The run behaviour can be customized through the usage of custom json files. By default, the _run.json_ file
+inside the _configs_ folder will be used. This file can be used as a template and customized to generate new configurations.
+A properly structured json config file can be used by the algorithm by specifying its path in -j command line arguments.
 
 Here it's presented a list of the configuration sections and fields, with a brief description.
 
 **Search Space**:
 - **blocks**: defines the maximum amount of blocks a cell can contain.
-- **max_children**: defines the amount of top-K cells the algorithm picks up to expand at the next iteration.
+- **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
+  (except the first step, which trains all possible cells).
 - **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
-- **lookback_depth**: maximum lookback depth to use.
+- **lookback_depth**: maximum lookback depth to use. Lookback inputs are associated to previous cells,
+  where _-1_ refers to last generated cell, _-2_ a skip connection to second-to-last cell, etc... 
 - **lookforward_depth**: maximum lookforward depth to use. TODO: actually not supported, should always be null.
-- **operators**: list of operators that can be used inside each cell. Note that the string format is important, since they are recognized by regexes.
+- **operators**: list of operators that can be used inside each cell. Note that the string format is important,
+  since they are recognized by regexes.
   Actually supported operators, with customizable kernel size(@):
   - identity
   - @x@ dconv      (Depthwise-separable convolution)
@@ -105,58 +106,90 @@ Here it's presented a list of the configuration sections and fields, with a brie
   
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
-- **batch_size**: defines the batch size dimension of the dataset.
 - **learning_rate**: defines the learning rate of the child CNN networks.
-- **filters**: defines the initial number of filters to use.
+- **filters**: defines the initial number of filters to use, which increase in each reduction cell.
 - **weight_reg**: defines the L2 regularization factor to use in CNNs. If _null_, regularization is not applied.
-- **use_adamW**: use adamW instead of standard L2 regularization
+- **use_adamW**: use adamW instead of standard L2 regularization.
 - **drop_path_prob**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
   then _scheduled drop path_ is not used.
 - **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
-  - **enabled**: use cosine decay restart or not (plain learning rate)
-  - **period_in_epochs**: first decay period in epochs
-  - **[t_mul, m_mul, alpha]**: see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts)
-- **softmax_dropout**: probability of dropping a value in output softmax. If set to 0, then dropout is not used.
+  - **enabled**: if _true_ use cosine decay restart, _false_ instead for using a plain learning rate schedule
+  - **period_in_epochs**: first decay period in epochs, changes at each period based on _m_mul_ value.
+  - **[t_mul, m_mul, alpha]**:
+    see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts).
+- **softmax_dropout**: probability of dropping a value in output Softmax layer. If set to 0, then dropout is not used.
   Note that dropout is used on each output when _multi_output_ flag is set.
 
 **CNN architecture parameters**:
-- **motifs**: motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell, here instead it is used to indicate
-  a stack of N normal cells followed by a single reduction cell.
+- **motifs**: number of motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell,
+  here instead it is used to indicate a stack of N normal cells followed by a single reduction cell.
 - **normal_cells_per_motif**: normal cells to stack in each motif.
-- **concat_only_unused_blocks**: when _true_, only blocks' output not used internally by the cell will be used in final concatenation cell output,
-  following PNAS and NASNet. If set to _false_, all blocks' output will be concatenated in final cell output.
-- **multi_output**: if true, each CNN generated will have an output (GAP + Softmax) at the end of each cell.
+- **concat_only_unused_blocks**: if _true_, only blocks' output not used internally by the cell
+  will be used in final concatenation cell output, following PNAS and NASNet.
+  If set to _false_, all blocks' output will be concatenated in final cell output.
+- **multi_output**: if _true_, CNNs will have an output exit (GAP + Softmax) at the end of each cell.
 
-**RNN hyperparameters (controller, optional)**:\
-If the parameters are not provided or the object is omitted in JSON config, default parameters will be applied.
-They depend on the model type chosen for the controller. See model class to have a better idea (TODO).
-- **epochs**: how many epochs the LSTM is trained on, at each expansion step.
-- **lr**: LSTM learning rate.
-- **wr**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.
-- **er**: LSTM L2 weight regularization factor applied on embeddings only. If _null_, regularization is not applied.
-- **embedding_dim**: LSTM embedding dimension, used for both inputs and operator embeddings.
-- **cells**: total LSTM cells of the model.
+[//]: # (**RNN hyperparameters &#40;controller, optional&#41;**: \\)
+
+[//]: # (If the parameters are not provided or the object is omitted in JSON config, default parameters will be applied.)
+
+[//]: # (The accepted parameters and their names depend on the model type chosen for the controller.)
+
+[//]: # (See KerasPredictor subclasses to have a better idea &#40;TODO&#41;.)
+
+[//]: # (- **epochs**: how many epochs the LSTM is trained on, at each expansion step.)
+
+[//]: # (- **lr**: LSTM learning rate.)
+
+[//]: # (- **wr**: LSTM L2 weight regularization factor. If _null_, regularization is not applied.)
+
+[//]: # (- **er**: LSTM L2 weight regularization factor applied on embeddings only. If _null_, regularization is not applied.)
+
+[//]: # (- **embedding_dim**: LSTM embedding dimension, used for both inputs and operator embeddings.)
+
+[//]: # (- **cells**: total LSTM cells of the model.)
 
 **Dataset**:
-- **name**: used to identify and load a Keras dataset. Can be _null_ if the path of a custom dataset is provided.
-- **path**: path to a folder containing a custom dataset. Can be _null_ if you want to use a dataset already present in Keras.
+- **name**: used to identify and load a Keras or TFDS dataset supported by POPNAS.
+  Can be _null_ if the path of a custom dataset is provided.
+- **path**: path to a folder containing a custom dataset.
+  Can be _null_ if you want to use a supported dataset already present in Keras or TFDS.
 - **classes_count**: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
-- **folds**: number of dataset folds to use. When using multiple folds, the metrics extrapolated from CNN training will be the average of
-  the ones obtained on each fold.
-- **samples**: if provided, limits the total dataset samples to the number provided (integer). This means that the total training and validation
-  samples will amount to this value (or less if the dataset has actually fewer samples than the value indicated). Useful for fast testing.
-- **data_augmentation**: dictionary with parameters related to data augmentation
-  - **enabled**: use data augmentation or not.
+- **batch_size**: defines the batch size dimension of the dataset.
+- **validation_size**: fraction of the total samples to use for validation set, e.g. _0.1_ value means that 10% of the
+  training samples will be reserved for the validation dataset. Can be _null_ for TFDS dataset which have already
+  a separated validation set, for using it instead of partitioning the training set.
+- **cache**: if _true_, the dataset will be cached in memory, increasing the training performance.
+  Strongly advised for small datasets.
+- **folds**: number of dataset folds to use. When using multiple folds, the metrics extrapolated from CNN training
+  will be the average of the ones obtained on each fold.
+- **samples**: if provided, limits the total dataset samples used by the algorithm to the number provided (integer).
+  Useful for fast testing.
+- **balance_class_losses**: if _true_, the class losses will be weighted proportionally to the number of samples.
+  The exact formula for computing the weight of each class is:
+  w<sub>class</sub> = 1 / (classes_count * samples_fraction<sub>class</sub>).
+- **resize**: dictionary with parameters related to image resizing.
+  - **enabled**: _true_ for using resizing, _false_ otherwise.
+  - **width**: target image width in pixels.
+  - **height**: target image height in pixels.
+- **data_augmentation**: dictionary with parameters related to data augmentation.
+  - **enabled**: _true_ for using data augmentation, _false_ otherwise.
   - **perform_on_gpu**: perform data augmentation directly on GPU (through Keras experimental layers).
-    Usually advised only if CPU is very slow, since CPU prepares the images while the GPU trains the network (asynchronous prefetch),
-    instead performing data augmentation on the GPU will make the process sequential, always causing delays even if it's faster to perform.
+    Usually advised only if CPU is very slow, since CPU prepares the images while the GPU trains the network
+    (asynchronous prefetch), instead performing data augmentation on the GPU will make the process sequential,
+    always causing delays even if it's faster to perform on GPU.
 
 **Others**:
+- **accuracy_predictor_ensemble_units**: defines the number of models used in the accuracy predictor (ensemble).
 - **predictions_batch_size**: defines the batch size used when performing both time and accuracy predictions in controller
   update step (predictions about cell expansions for blocks b+1). Incrementing it should decrease the prediction time
   linearly, up to a certain point, defined by hardware resources used.
-- **pnas_mode**: if _true_, the algorithm will not use the temporal regressor and pareto front search, making the run very similar to PNAS.
-- **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs.
+- **save_children_weights**: if _true_, best weights of each child neural network are saved in log folder.
+- **save_children_as_onnx**: if _true_, each child neural network will be serialized and saved as ONNX format.
+- **pnas_mode**: if _true_, the algorithm will not use most of the improvements introduced by POPNAS, mainly the
+  temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
+- **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs. Must be set in case the device
+  has no GPUs or has not a valid GPU setup.
 
 
 ## Additional scripts and utils
