@@ -55,12 +55,15 @@ def __load_dataset_images(dataset_source: str):
     if dataset_source == 'cifar10':
         (x_train, y_train), (x_test, y_test) = datasets.cifar10.load_data()
         classes_count = 10
+        channels = 3
     elif dataset_source == 'cifar100':
         (x_train, y_train), (x_test, y_test) = datasets.cifar100.load_data()
         classes_count = 100
+        channels = 3
     elif dataset_source == 'fashion_mnist':
         (x_train, y_train), (x_test, y_test) = datasets.fashion_mnist.load_data()
         classes_count = 10
+        channels = 1
         # add dimension since the images are in grayscale (dimension 1 is omitted)
         x_train = np.expand_dims(x_train, axis=-1)
         x_test = np.expand_dims(x_test, axis=-1)
@@ -69,10 +72,10 @@ def __load_dataset_images(dataset_source: str):
 
     image_shape = x_train.shape[1:]
 
-    return (x_train, y_train), (x_test, y_test), classes_count, image_shape
+    return (x_train, y_train), (x_test, y_test), classes_count, image_shape, channels
 
 
-def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_limit: Union[int, None]):
+def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_limit: Union[int, None], resize_dim: Union['tuple[int, int]', None]):
     x_train, y_train = train
     x_test, y_test = test
 
@@ -80,9 +83,19 @@ def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_l
         x_train = x_train[:samples_limit]
         y_train = y_train[:samples_limit]
 
-    # normalize images into [0,1] domain
-    x_train = x_train.astype('float32') / 255.
-    x_test = x_test.astype('float32') / 255.
+    # resize if specified so in the configuration, plus normalize values into [0, 1]
+    if resize_dim is not None:
+        x_train = tf.image.resize(x_train, resize_dim) / 255.
+        x_test = tf.image.resize(x_test, resize_dim) / 255.
+
+        # from tensor back to numpy type, since later functions require numpy
+        x_train = x_train.numpy()
+        x_test = x_test.numpy()
+    # otherwise just normalize
+    else:
+        x_train = x_train.astype('float32') / 255.
+        x_test = x_test.astype('float32') / 255.
+
     # transform labels to one-hot encoding, so that categorical crossentropy can be used
     y_train = to_categorical(y_train, classes_count)
     y_test = to_categorical(y_test, classes_count)
@@ -153,7 +166,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
     cache = dataset_config['cache']
 
     resize_config = dataset_config['resize']
-    resize_dim = (resize_config['width'], resize_config['height']) if resize_config['enabled'] else None
+    resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
 
     data_augmentation_config = dataset_config['data_augmentation']
     use_data_augmentation = data_augmentation_config['enabled']
@@ -216,10 +229,13 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         image_shape = resize_dim + (3,)
     # Keras dataset case
     elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
-        train, test, classes, image_shape = __load_dataset_images(dataset_name)
+        train, test, classes, image_shape, channels = __load_dataset_images(dataset_name)
         dataset_classes_count = classes or dataset_classes_count    # like || in javascript
         # TODO: produce also the test dataset
-        (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit)
+        (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit, resize_dim)
+
+        if resize_dim is not None:
+            image_shape = resize_dim + (channels,)
 
         # TODO: is it ok to generate the splits by shuffling randomly?
         for i in range(dataset_folds_count):
