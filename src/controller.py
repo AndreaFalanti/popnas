@@ -112,21 +112,21 @@ class ControllerManager:
         # iterate through all the possible cells for next B step and predict their score and time
         with pbar:
             for cells_batch in batched_models:
-                # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
-                #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
-                batch_time_features = None if self.pnas_mode else [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
-
-                estimated_times = [None] * len(cells_batch) if self.pnas_mode else time_predictor.predict_batch(batch_time_features)
                 estimated_scores = acc_predictor.predict_batch(cells_batch)
-                params_count = [None] * len(cells_batch) if self.pnas_mode \
-                    else [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch]
 
-                # always preserve the child and its score in pnas mode
+                # in PNAS mode only accuracy metric is needed
                 if self.pnas_mode:
-                    model_estimations.extend([ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params
-                                              in zip(cells_batch, estimated_scores, estimated_times, params_count)])
-                # in popnas mode instead check that time estimation is < T (time threshold)
+                    model_estimations.extend([ModelEstimate(cell_spec, score) for cell_spec, score in zip(cells_batch, estimated_scores)])
+                # in POPNAS mode instead predict also training time and address additional Pareto problem metrics (like params)
                 else:
+                    # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
+                    #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
+                    batch_time_features = [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
+
+                    estimated_times = time_predictor.predict_batch(batch_time_features)
+                    params_count = [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch]
+
+                    # apply also time constraint
                     ests_in_time_limit = [ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params
                                           in zip(cells_batch, estimated_scores, estimated_times, params_count) if time <= self.T]
                     model_estimations.extend(ests_in_time_limit)

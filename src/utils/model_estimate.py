@@ -3,7 +3,7 @@ class ModelEstimate:
     Helper class, basically a struct with a function to convert into array for csv saving
     '''
 
-    def __init__(self, cell_spec, score, time, params):
+    def __init__(self, cell_spec: list, score: float, time: float = None, params: int = None):
         self.cell_spec = cell_spec
         self.score = score
         self.time = time

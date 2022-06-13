@@ -82,6 +82,17 @@ class Train:
         if self.restore_info.must_restore_search_space_children():
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
 
+        # create the predictors
+        acc_pred_func, time_pred_func = self.initialize_predictors()
+
+        # set controller step to the correct one (in case of restore is not b=1)
+        controller_b = self.starting_b if self.starting_b > 1 else 1
+        self.controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, self.acc_predictor_ensemble_units,
+                                            graph_generator=self.cnn_manager.graph_gen,
+                                            current_b=controller_b,
+                                            B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size,
+                                            predictions_batch_size=self.preds_batch_size, pnas_mode=self.pnas_mode)
+
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
 
@@ -269,18 +280,6 @@ class Train:
         time_headers, time_feature_types = build_time_feature_names()
         acc_headers, acc_feature_types = build_acc_feature_names(self.blocks, self.input_lookback_depth)
 
-        # create the predictors
-        acc_pred_func, time_pred_func = self.initialize_predictors()
-
-        # create the ControllerManager and build the internal policy network
-        # for restoring purposes
-        controller_b = self.starting_b if self.starting_b > 1 else 1
-        controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, self.acc_predictor_ensemble_units,
-                                       graph_generator=self.cnn_manager.graph_gen,
-                                       current_b=controller_b,
-                                       B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size,
-                                       predictions_batch_size=self.preds_batch_size, pnas_mode=self.pnas_mode)
-
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
         if self.starting_b == 0:
@@ -349,8 +348,8 @@ class Train:
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:
-                controller.train_step()
-                controller.update_step()
+                self.controller.train_step()
+                self.controller.update_step()
 
                 # controller new cells have 1 more block
                 expansion_step_blocks = current_blocks + 1
