@@ -63,7 +63,7 @@
         }
     },
     "accuracy_predictor_ensemble_units": 5,
-    "predictions_batch_size": 32,
+    "predictions_batch_size": 1024,
     "save_children_weights": false,
     "save_children_as_onnx": false,
     "pnas_mode": false,
