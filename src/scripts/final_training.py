@@ -27,13 +27,11 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 
 def create_log_folder(log_path: str):
-    model_training_folder_path = os.path.join(log_path, 'best_model_training')
-    create_empty_folder(model_training_folder_path)
-    os.mkdir(os.path.join(model_training_folder_path, 'weights'))  # create weights folder
-    os.mkdir(os.path.join(model_training_folder_path, 'tensorboard'))  # create tensorboard folder
+    create_empty_folder(log_path)
+    os.mkdir(os.path.join(log_path, 'weights'))  # create weights folder
+    os.mkdir(os.path.join(log_path, 'tensorboard'))  # create tensorboard folder
 
-    log_service.set_log_path(model_training_folder_path)
-    return model_training_folder_path
+    log_service.set_log_path(log_path)
 
 
 def get_best_cell_spec(log_folder_path: str):
@@ -78,6 +76,7 @@ def main():
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
+    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
@@ -89,7 +88,8 @@ def main():
 
     custom_json_path = Path(__file__).parent / '../configs/final_training.json' if args.j is None else args.j
 
-    save_path = create_log_folder(args.p)
+    save_path = os.path.join(args.p, args.name)
+    create_log_folder(save_path)
     logger = log_service.get_logger(__name__)
 
     # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
@@ -110,7 +110,10 @@ def main():
     cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
-    epochs = (93 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
+    # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
+    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
