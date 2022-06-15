@@ -17,6 +17,7 @@ op_regex_dict = {'conv': re.compile(r'(\d+)x(\d+) conv'),
                  'tconv': re.compile(r'(\d+)x(\d+) tconv'),
                  'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
                  'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
+reduction_shape_transform = (0.5, 0.5, 2)
 
 
 def compute_batch_norm_params(filters: int):
@@ -77,8 +78,7 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
     raise AttributeError(f'Unsupported operator "{op}"')
 
 
-def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: int,
-                          reduction_cell_indices: 'list[int]', shape_tx: 'tuple[float, float, float]') -> 'list[TensorShape]':
+def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: int, reduction_cell_indices: 'list[int]') -> 'list[TensorShape]':
     output_shapes = []
 
     # replace last dimension with the filters
@@ -87,7 +87,7 @@ def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: i
 
     for cell_index in range(cells_count):
         if cell_index in reduction_cell_indices:
-            output_shape = TensorShape(*(math.floor(a * b) for a, b in zip(output_shape, shape_tx)))
+            output_shape = TensorShape(*(math.floor(a * b) for a, b in zip(output_shape, reduction_shape_transform)))
 
         output_shapes.append(output_shape)
 
@@ -138,6 +138,7 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
             'name': [f'concat_c{cell_index}', f'out_c{cell_index}'],
             'op': ['concat', '1x1 conv'],
             'cell_index': [cell_index] * 2,
+            'block_index': [-1] * 2,
             'connect_lookback': [-100, -100],
             'params': [0, compute_conv_params(1, 1, concat_shape, output_shape)]
         }
@@ -161,13 +162,14 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
 
 
 def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int, str]]',
-                 lookback_shapes: 'list[TensorShape]', output_shape: TensorShape):
+                 lookback_shapes: 'list[TensorShape]', output_shape: TensorShape, cell_index: int):
     # if shapes differ (and are not related to original input), then -2 lookback must be reshaped to the same dimension of -1 lookback
     # only height is checked since only one dimension is necessary to diverge to trigger the reshaping
     if not lookback_shapes[-1].h == lookback_shapes[-2].h and not lookback_indexes[-2] == 'input':
         layer_name = f'rs_{lookback_indexes[-2]}'
 
-        main_g.add_vertex(layer_name, op='1x1 conv', params=compute_conv_params(1, 1, lookback_shapes[-2], lookback_shapes[-1]))
+        main_g.add_vertex(layer_name, op='1x1 conv', params=compute_conv_params(1, 1, lookback_shapes[-2], lookback_shapes[-1]),
+                          cell_index=cell_index, block_index=-1)
         main_g.add_edge(lookback_indexes[-2], layer_name,
                         tensor_h=lookback_shapes[-2].h, tensor_w=lookback_shapes[-2].w, tensor_c=lookback_shapes[-2].c)
 
@@ -224,16 +226,15 @@ class NetworkGraph:
         used_cell_indices = list(range(cells_count - 1, -1, max(used_lookbacks, default=cells_count)))
 
         reduction_cell_indices = list(range(normals_per_motif, cells_count, normals_per_motif + 1))
-        reduction_shape_transform = (0.5, 0.5, 2)
 
         input_shape = TensorShape(*input_shape)
-        target_shapes = compute_target_shapes(input_shape, cells_count, filters, reduction_cell_indices, reduction_shape_transform)
+        target_shapes = compute_target_shapes(input_shape, cells_count, filters, reduction_cell_indices)
 
         # initialize the graph with only the input node
         g = Graph(n=1, directed=True)
         g.vs['op'] = ['input']
         g.vs['params'] = [0]
-        g.vs['cell_index'] = [-1]
+        g.vs['cell_index'] = [0]
         g.vs['block_index'] = [-1]
         g.vs['name'] = ['input']
 
@@ -241,18 +242,11 @@ class NetworkGraph:
         lookback_vertex_indices = [0, 0]
         lookback_shapes = [input_shape, input_shape]
 
-        # add input shape normalization if using skips
-        # if use_skips:
-        #     # TODO: params
-        #     g.add_vertex('rs_input', type='1x1 conv', params=123, cell_index=-1, block_index=-1)
-        #     g.add_edges([(0, 1)])
-        #     lookback_vertex_indices = [1, 0]
-
         # iterate on cells, using reduction bool list since we need the value later
         for cell_index, output_shape in enumerate(target_shapes):
             if cell_index in used_cell_indices:
                 cell_g = create_cell_graph(cell_spec, cell_index, output_shape)
-                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, output_shape)
+                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, output_shape, cell_index)
 
             # move -1 lookback to -2 position, than add new cell output as -1 lookback
             lookback_vertex_indices[-2] = lookback_vertex_indices[-1]
@@ -266,6 +260,8 @@ class NetworkGraph:
         v_attributes = {
             'name': ['GAP', 'Softmax'],
             'op': ['gap', 'softmax'],
+            'cell_index': [cells_count - 1] * 2,
+            'block_index': [-1] * 2,
             'params': [0, num_classes * (output_shape.c + 1)]
         }
         g.add_vertices(2, attributes=v_attributes)
@@ -280,7 +276,14 @@ class NetworkGraph:
 
         # print(g)
         self.g = g
+        self.cells_count = cells_count
 
     def get_total_params(self):
-        # print(self.g.vs['params'])
         return sum(self.g.vs['params'])
+
+    def get_params_per_cell(self):
+        return [sum(self.g.vs.select(cell_index=i)['params']) for i in range(0, self.cells_count)]
+
+    def get_params_up_through_cell_index(self, c_index: int):
+        ''' Cell index is inclusive. '''
+        return sum(self.g.vs.select(cell_index_lt=c_index)['params'])
