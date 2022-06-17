@@ -287,3 +287,17 @@ class NetworkGraph:
     def get_params_up_through_cell_index(self, c_index: int):
         ''' Cell index is inclusive. '''
         return sum(self.g.vs.select(cell_index_lt=c_index)['params'])
+
+    def get_max_cells_cut_under_param_constraint(self, params_constraint: int):
+        '''
+        Returns the maximum number of cells that can be taken in a cut, starting from first cell,
+        that satisfies the parameter constraint (memory).
+        '''
+        params_per_cell = self.get_params_per_cell()
+
+        for i in range(self.cells_count, 0, -1):
+            if sum(params_per_cell[:i]) <= params_constraint:
+                return i
+
+        return 0
+
