@@ -5,7 +5,7 @@ import statistics
 from timeit import default_timer as timer
 from typing import Any
 
-import tensorflow
+import tensorflow as tf
 
 import log_service
 import plotter
@@ -21,7 +21,7 @@ from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore
 
 class Train:
 
-    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tensorflow.distribute.Strategy):
+    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy):
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
@@ -214,7 +214,7 @@ class Train:
 
             writer.writerow(data)
 
-    def initialize_predictors(self, train_strategy: tensorflow.distribute.Strategy):
+    def initialize_predictors(self, train_strategy: tf.distribute.Strategy):
         acc_col = 'best val accuracy'
         acc_domain = (0, 1)
         predictors_log_path = log_service.build_path('predictors')

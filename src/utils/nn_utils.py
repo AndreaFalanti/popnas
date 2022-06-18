@@ -1,5 +1,6 @@
 import operator
 import re
+import sys
 from functools import reduce
 
 import tensorflow as tf
@@ -105,3 +106,49 @@ def compute_tensor_byte_size(tensor: tf.Tensor):
 
     # byte size is: (number of weights) * (size of each weight)
     return reduce(operator.mul, tensor_shape, 1) * dtype_size
+
+
+def initialize_train_strategy(config_strategy_device: str) -> tf.distribute.Strategy:
+    # debug available devices
+    device_list = tf.config.list_physical_devices()
+    print(device_list)
+
+    gpu_devices = tf.config.list_physical_devices('GPU')
+    tpu_devices = tf.config.list_physical_devices('TPU')
+
+    missing_device_msg = f'{config_strategy_device} is not available for execution, run with a different train strategy' \
+                         f' or troubleshot the issue in case a {config_strategy_device} is actually present in the device.'
+
+    # if tf.test.gpu_device_name():
+    #     print('GPU found')
+    # else:
+    #     print('No GPU found')
+
+    # TODO: add multi-GPU
+    # Generate the train strategy. Currently supported values: ['CPU', 'GPU', 'TPU']
+    # Basically a switch, but is not supported in python.
+    if config_strategy_device is None:
+        # should use GPU if available, otherwise CPU. Fallback for when strategy is not specified and for backwards compatibility.
+        train_strategy = tf.distribute.get_strategy()
+    elif config_strategy_device == 'CPU':
+        # remove GPUs from visible devices, using only CPUs
+        tf.config.set_visible_devices([], 'GPU')
+        tf.config.set_visible_devices([], 'TPU')
+        print('Using CPU devices only')
+        # default strategy
+        train_strategy = tf.distribute.get_strategy()
+    elif config_strategy_device == 'GPU':
+        if len(gpu_devices) == 0:
+            sys.exit(missing_device_msg)
+        # default strategy also for single GPU
+        train_strategy = tf.distribute.get_strategy()
+    elif config_strategy_device == 'TPU':
+        if len(tpu_devices) == 0:
+            sys.exit(missing_device_msg)
+        cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
+        tf.tpu.experimental.initialize_tpu_system(cluster_resolver)
+        train_strategy = tf.distribute.TPUStrategy(cluster_resolver)
+    else:
+        sys.exit('Train strategy provided in configuration file is invalid')
+
+    return train_strategy
