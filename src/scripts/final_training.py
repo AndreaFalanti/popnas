@@ -15,7 +15,7 @@ import log_service
 from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import create_empty_folder, parse_cell_structures
-from utils.nn_utils import get_multi_output_best_epoch_stats
+from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy
 from utils.rstr import rstr
 from utils.timing_callback import TimingCallback
 
@@ -75,6 +75,7 @@ def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
+    parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
     parser.add_argument('--load', help='load model from checkpoint', action='store_true')
@@ -102,7 +103,11 @@ def main():
     logger.info('Reading configuration...')
     config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else custom_json_path
     with open(config_path, 'r') as f:
-        config = json.load(f)
+        config = json.load(f)   # type: dict
+
+    # initialize train strategy
+    ts_device = args.ts if args.ts is not None else config.get('train_strategy', None)
+    train_strategy = initialize_train_strategy(ts_device)
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
@@ -123,7 +128,8 @@ def main():
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
     if args.load:
         logger.info('Loading best model from provided folder...')
-        model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
+        with train_strategy.scope():
+            model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
 
         epochs = 93 if cdr_enabled else 300  # 5 periods of cosine decay restart with starting period 3
         last_cell_index = 7     # TODO
@@ -144,16 +150,17 @@ def main():
             cell_spec = parse_cell_structures([args.spec])[0]
             logger.info('Generating Keras model from given cell specification...')
 
-        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
-                                   data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
-        model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
+        with train_strategy.scope():
+            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
+                                       data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
+            model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
-        loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-        train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
-        # TODO: using average=None would return f1 scores for each class, but conflicts with tensorboard callback which require scalars
-        train_metrics.append(tfa.metrics.F1Score(num_classes=classes_count, average='macro'))
+            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+            train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+            # TODO: using average=None would return f1 scores for each class, but conflicts with tensorboard callback which require scalars
+            train_metrics.append(tfa.metrics.F1Score(num_classes=classes_count, average='macro'))
 
-        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
 
         logger.info('Model generated successfully')
 
