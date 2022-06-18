@@ -34,6 +34,20 @@ def create_log_folder(log_path: str):
     log_service.set_log_path(log_path)
 
 
+def save_trimmed_json_config(config: dict, save_path: str):
+    # remove useless keys (config is a subset of search algorithm config)
+    deletable_keys = []
+    for key in config.keys():
+        if key not in ['cnn_hp', 'architecture_parameters', 'dataset']:
+            deletable_keys.append(key)
+
+    for key in deletable_keys:
+        del config[key]
+
+    with open(os.path.join(save_path, 'run.json'), 'w') as f:
+        json.dump(config, f, indent=4)
+
+
 def get_best_cell_spec(log_folder_path: str):
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
@@ -120,6 +134,11 @@ def main():
     epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
     cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
+    # dump the json into save folder, so that is possible to retrieve how the model had been trained
+    # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
+    cnn_config['epochs'] = epochs
+    save_trimmed_json_config(config, save_path)
+
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
     dataset_folds, classes_count, image_shape, train_batches, val_batches = generate_tensorflow_datasets(config['dataset'], logger)
@@ -131,7 +150,6 @@ def main():
         with train_strategy.scope():
             model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
 
-        epochs = 93 if cdr_enabled else 300  # 5 periods of cosine decay restart with starting period 3
         last_cell_index = 7     # TODO
         logger.info('Model loaded successfully')
     else:
