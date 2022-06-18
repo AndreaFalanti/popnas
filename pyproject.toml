@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "popnas"
-version = "0.1.0"
+version = "2.2.0"
 description = "POPNAS algorithm"
 authors = ["AndreaFalanti <a.falanti@gmail.com>"]
 license = "MIT"
