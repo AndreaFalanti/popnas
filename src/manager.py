@@ -16,7 +16,7 @@ from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops
+from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops, get_optimized_steps_per_execution
 from utils.timing_callback import TimingCallback
 
 absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
@@ -219,7 +219,10 @@ class NetworkManager:
         training_time = times.mean()
         reward = accuracies.mean()
         total_params = model.count_params()
-        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
+        # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
+        #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
+        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
+            else 0
 
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
