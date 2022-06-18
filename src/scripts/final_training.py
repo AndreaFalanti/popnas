@@ -57,6 +57,15 @@ def get_best_cell_spec(log_folder_path: str):
     return cell_spec, best_acc_row['best val accuracy']
 
 
+def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_acc: float):
+    logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
+    logger.info('Cell specification:')
+    for i, block in enumerate(cell_spec):
+        logger.info("Block %d: %s", i + 1, rstr(block))
+    logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
+    logger.info('*' * 60)
+
+
 def define_callbacks(cdr_enabled: bool, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
     '''
     Define callbacks used in model training.
@@ -82,6 +91,49 @@ def define_callbacks(cdr_enabled: bool, multi_output: bool, last_cell_index: int
         train_callbacks.append(callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max'))
 
     return train_callbacks
+
+
+def log_final_training_results(logger: logging.Logger, hist: callbacks.History, training_time: float, using_multi_output: bool):
+    # hist.history is a dictionary of lists (each metric is a key)
+    if using_multi_output:
+        epoch_index, best_val_accuracy, epoch_metrics_per_output = get_multi_output_best_epoch_stats(hist)
+    else:
+        epoch_index, best_val_accuracy = max(enumerate(hist.history['val_accuracy']), key=operator.itemgetter(1))
+        epoch_metrics_per_output = {'best': {}}
+        epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
+        epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
+
+        epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
+        epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['top_k'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
+        epoch_metrics_per_output['best']['f1'] = hist.history[f'f1_score'][epoch_index]
+
+    logger.info('*' * 31 + ' TRAINING SUMMARY ' + '*' * 31)
+    logger.info('Best epoch index: %d', epoch_index + 1)
+    logger.info('Total epochs: %d', len(hist.epoch))  # should work also for early stopping
+    logger.info('Best validation accuracy: %0.4f', best_val_accuracy)
+    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
+                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
+
+    for key in epoch_metrics_per_output:
+        log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
+        logger.info('*' * 36 + log_title + '*' * 36)
+
+        logger.info('Validation')
+        logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
+        logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
+        logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
+        logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
+
+        logger.info('Training')
+        logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
+        logger.info('\tLoss: %0.4f', epoch_metrics_per_output[key]['loss'])
+        logger.info('\tTop_k accuracy: %0.4f', epoch_metrics_per_output[key]['top_k'])
+        logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
+
+    logger.info('*' * 80)
 
 
 def main():
@@ -131,7 +183,7 @@ def main():
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    epochs = (2 if cdr_enabled else 300) if args.same else cnn_config['epochs']
     cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
@@ -154,19 +206,14 @@ def main():
         logger.info('Model loaded successfully')
     else:
         if args.spec is None:
+            logger.info('Getting best cell specification found during POPNAS run...')
             # find best model found during search and log some relevant info
             cell_spec, best_acc = get_best_cell_spec(args.p)
-            logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
-            logger.info('Cell specification:')
-            for i, block in enumerate(cell_spec):
-                logger.info("Block %d: %s", i + 1, rstr(block))
-            logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
-            logger.info('*' * 60)
-
-            logger.info('Generating Keras model from best cell specification...')
+            log_best_cell_results_during_search(logger, cell_spec, best_acc)
         else:
             cell_spec = parse_cell_structures([args.spec])[0]
-            logger.info('Generating Keras model from given cell specification...')
+
+        logger.info('Generating Keras model from cell specification...')
 
         with train_strategy.scope():
             model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
@@ -203,47 +250,7 @@ def main():
                      callbacks=train_callbacks)     # type: callbacks.History
 
     training_time = sum(time_cb.logs)
-
-    # hist.history is a dictionary of lists (each metric is a key)
-    if arc_config['multi_output']:
-        epoch_index, best_val_accuracy, epoch_metrics_per_output = get_multi_output_best_epoch_stats(hist)
-    else:
-        epoch_index, best_val_accuracy = max(enumerate(hist.history['val_accuracy']), key=operator.itemgetter(1))
-        epoch_metrics_per_output = {'best': {}}
-        epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
-        epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
-
-        epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
-        epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['top_k'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['f1'] = hist.history[f'f1_score'][epoch_index]
-
-    logger.info('*' * 31 + ' TRAINING SUMMARY ' + '*' * 31)
-    logger.info('Best epoch index: %d', epoch_index + 1)
-    logger.info('Total epochs: %d', len(hist.epoch))   # should work also for early stopping
-    logger.info('Best validation accuracy: %0.4f', best_val_accuracy)
-    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
-                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
-
-    for key in epoch_metrics_per_output:
-        log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
-        logger.info('*' * 36 + log_title + '*' * 36)
-
-        logger.info('Validation')
-        logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
-        logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
-        logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
-        logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
-
-        logger.info('Training')
-        logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
-        logger.info('\tLoss: %0.4f', epoch_metrics_per_output[key]['loss'])
-        logger.info('\tTop_k accuracy: %0.4f', epoch_metrics_per_output[key]['top_k'])
-        logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
-
-    logger.info('*' * 80)
+    log_final_training_results(logger, hist, training_time, arc_config['multi_output'])
 
 
 if __name__ == '__main__':
