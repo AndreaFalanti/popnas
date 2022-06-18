@@ -5,6 +5,8 @@ import statistics
 from timeit import default_timer as timer
 from typing import Any
 
+import tensorflow
+
 import log_service
 import plotter
 from controller import ControllerManager
@@ -19,7 +21,7 @@ from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore
 
 class Train:
 
-    def __init__(self, run_config: 'dict[str, Any]'):
+    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tensorflow.distribute.Strategy):
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
@@ -48,7 +50,7 @@ class Train:
                                         input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
 
         # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config,
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, train_strategy,
                                           run_config['save_children_weights'], run_config['save_children_as_onnx'])
 
         self.pnas_mode = run_config['pnas_mode']
@@ -83,7 +85,7 @@ class Train:
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
 
         # create the predictors
-        acc_pred_func, time_pred_func = self.initialize_predictors()
+        acc_pred_func, time_pred_func = self.initialize_predictors(train_strategy)
 
         # set controller step to the correct one (in case of restore is not b=1)
         controller_b = self.starting_b if self.starting_b > 1 else 1
@@ -212,7 +214,7 @@ class Train:
 
             writer.writerow(data)
 
-    def initialize_predictors(self):
+    def initialize_predictors(self, train_strategy: tensorflow.distribute.Strategy):
         acc_col = 'best val accuracy'
         acc_domain = (0, 1)
         predictors_log_path = log_service.build_path('predictors')
@@ -222,7 +224,8 @@ class Train:
         self._logger.info('Initializing predictors...')
 
         # accuracy predictors to be used
-        acc_lstm = AttentionRNNPredictor(self.search_space, acc_col, acc_domain, self._logger, predictors_log_path, override_logs=False,
+        acc_lstm = AttentionRNNPredictor(self.search_space, acc_col, acc_domain, train_strategy,
+                                         self._logger, predictors_log_path, override_logs=False,
                                          save_weights=True, hp_config=self.rnn_config)
 
         # time predictors to be used

@@ -67,5 +67,5 @@
     "save_children_weights": false,
     "save_children_as_onnx": false,
     "pnas_mode": false,
-    "use_cpu": false
+    "train_strategy": "GPU"
 }

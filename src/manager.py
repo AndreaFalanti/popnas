@@ -36,7 +36,8 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, save_network_weights: bool, save_as_onnx: bool):
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, train_strategy: tf.distribute.Strategy,
+                 save_network_weights: bool, save_as_onnx: bool):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -50,6 +51,7 @@ class NetworkManager:
         self.augment_on_gpu = dataset_config['data_augmentation']['enabled'] and dataset_config['data_augmentation']['perform_on_gpu']
 
         self.epochs = cnn_config['epochs']
+        self.train_strategy = train_strategy
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
@@ -139,10 +141,11 @@ class NetworkManager:
             (tf.keras.Model, list[tf.keras.callbacks.Callback], dict): model and callbacks to use while training
         '''
 
-        model, partition_dict, _ = self.model_gen.build_model(cell_spec)
+        with self.train_strategy.scope():
+            model, partition_dict, _ = self.model_gen.build_model(cell_spec)
 
-        loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
-        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)
+            loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True

@@ -19,8 +19,8 @@ from utils.rstr import rstr
 
 
 class KerasPredictor(Predictor):
-    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
+    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger, log_folder: str,
+                 name: str = None, override_logs: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         super().__init__(logger, log_folder, name, override_logs)
 
         self.hp_config = self._get_default_hp_config()
@@ -29,6 +29,7 @@ class KerasPredictor(Predictor):
 
         self.y_col = y_col
         self.save_weights = save_weights
+        self.train_strategy = train_strategy
 
         self.hp_tuning = hp_tuning
 
@@ -108,10 +109,12 @@ class KerasPredictor(Predictor):
 
     # kt.HyperParameters is basically a dictionary and can be treated as such
     def _compile_model(self, config: Union[kt.HyperParameters, dict]):
-        loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
+        with self.train_strategy.scope():
+            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
 
-        model = self._build_model(config)
-        model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+            model = self._build_model(config)
+            model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+
         return model
 
     def _get_max_b(self, df: pd.DataFrame):
