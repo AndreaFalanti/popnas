@@ -15,7 +15,7 @@ import log_service
 from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import create_empty_folder, parse_cell_structures
-from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy
+from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
 from utils.timing_callback import TimingCallback
 
@@ -160,7 +160,8 @@ def main():
             # TODO: using average=None would return f1 scores for each class, but conflicts with tensorboard callback which require scalars
             train_metrics.append(tfa.metrics.F1Score(num_classes=classes_count, average='macro'))
 
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
+            execution_steps = get_optimized_steps_per_execution(train_strategy)
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
 
         logger.info('Model generated successfully')
 

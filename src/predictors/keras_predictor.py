@@ -15,6 +15,7 @@ from tensorflow.keras.utils import plot_model
 
 from predictors import Predictor
 from utils.func_utils import parse_cell_structures, create_empty_folder
+from utils.nn_utils import get_optimized_steps_per_execution
 from utils.rstr import rstr
 
 
@@ -113,7 +114,8 @@ class KerasPredictor(Predictor):
             loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
 
             model = self._build_model(config)
-            model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics)
+            execution_steps = get_optimized_steps_per_execution(self.train_strategy)
+            model.compile(optimizer=optimizer, loss=loss, metrics=train_metrics, steps_per_execution=execution_steps)
 
         return model
 

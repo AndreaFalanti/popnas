@@ -145,7 +145,8 @@ class NetworkManager:
             model, partition_dict, _ = self.model_gen.build_model(cell_spec)
 
             loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)
+            execution_steps = get_optimized_steps_per_execution(self.train_strategy)
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics, steps_per_execution=execution_steps)
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
