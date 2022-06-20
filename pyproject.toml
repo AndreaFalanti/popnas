@@ -25,9 +25,7 @@ tensorflow-addons = {extras = ["tensorflow"], version = "0.15.0"}
 tensorflow-datasets = "4.5.2"
 tensorflow-probability = "0.15.0"
 igraph = "0.9.8"
-# shap 0.40.0 has a trivial variable naming bug
-# it's fixed in my personal fork but when shap will be updated it's better to switch back to the official version
-shap = {git = "https://github.com/AndreaFalanti/shap.git"}
+shap = "0.41.0"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
