@@ -13,10 +13,12 @@ from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
 from predictors import *
-from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, generate_dynamic_reindex_function, build_acc_feature_names, \
+from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
+    generate_dynamic_reindex_function, build_acc_feature_names, \
     generate_time_features, generate_acc_features
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
-from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, restore_search_space_children
+from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
+    restore_search_space_children
 
 
 class Train:
@@ -376,6 +378,8 @@ class Train:
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
         plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode)
+        plotter.plot_correlations_with_time()
+
         if not self.pnas_mode:
             plotter.plot_pareto_front_curves(self.blocks, plot3d=True)
             plotter.plot_predictions_with_pareto_analysis(self.blocks)
