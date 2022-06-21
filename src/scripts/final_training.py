@@ -15,7 +15,7 @@ import log_service
 from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import create_empty_folder, parse_cell_structures
-from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
+from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
 from utils.rstr import rstr
 from utils.timing_callback import TimingCallback
 
@@ -232,6 +232,9 @@ def main():
 
     model.summary(line_length=140, print_fn=logger.info)
 
+    logger.info('Converting untrained model to ONNX')
+    save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'untrained.onnx'))
+
     # TODO: right now only the first fold is used, expand the logic later to support multiple folds
     train_dataset, validation_dataset = dataset_folds[0]
 
@@ -251,6 +254,9 @@ def main():
 
     training_time = sum(time_cb.logs)
     log_final_training_results(logger, hist, training_time, arc_config['multi_output'])
+
+    logger.info('Converting trained model to ONNX')
+    save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
 
 
 if __name__ == '__main__':

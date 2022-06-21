@@ -4,6 +4,8 @@ import sys
 from functools import reduce
 
 import tensorflow as tf
+import tf2onnx
+from tensorflow.keras import Model
 from tensorflow.keras.callbacks import History
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
@@ -163,3 +165,7 @@ def get_optimized_steps_per_execution(train_strategy: tf.distribute.Strategy):
     '''
     # TODO: is it useful only for TPUs or can we add more optimization cases?
     return 32 if isinstance(train_strategy, tf.distribute.TPUStrategy) else 1
+
+
+def save_keras_model_to_onnx(model: Model, save_path: str):
+    tf2onnx.convert.from_keras(model, opset=10, output_path=save_path)
