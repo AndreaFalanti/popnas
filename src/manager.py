@@ -1,4 +1,5 @@
 import csv
+import gc
 import logging
 import os
 from typing import Tuple
@@ -6,6 +7,7 @@ from typing import Tuple
 import absl.logging
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend
 import tf2onnx
 from matplotlib import pyplot as plt
 from tensorflow.keras import Model
@@ -246,7 +248,9 @@ class NetworkManager:
             model.save(log_service.build_path('best_model', 'saved_model.h5'), save_format='h5')
             self._logger.info('Model saved successfully')
 
-        # clean up resources and GPU memory
+        # clean up resources and GPU memory (TODO: actually solving TPU_VM problem or not?)
+        tensorflow.keras.backend.clear_session()
+        gc.collect()
         del model
 
         return reward, training_time, total_params, flops

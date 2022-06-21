@@ -1,7 +1,9 @@
 import csv
+import gc
 from typing import Callable
 
 import numpy as np
+import tensorflow
 from tqdm import tqdm
 
 import exploration
@@ -132,6 +134,10 @@ class ControllerManager:
                     model_estimations.extend(ests_in_time_limit)
 
                 pbar.update(len(cells_batch))
+
+        # clean up resources and GPU memory (TODO: actually solving TPU_VM problem or not?)
+        tensorflow.keras.backend.clear_session()
+        gc.collect()
 
         return model_estimations
 
