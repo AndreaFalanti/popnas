@@ -10,6 +10,31 @@ from tensorflow.keras.callbacks import History
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
 
+class TrainingResults:
+    ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
+    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, training_time: float, params: int, flops: int, inference_time: float) -> None:
+        self.cell_spec = cell_spec
+        self.blocks = len(cell_spec)
+        self.accuracy = accuracy
+        self.training_time = training_time
+        self.params = params
+        self.flops = flops
+        self.inference_time = inference_time
+
+    @staticmethod
+    def get_csv_headers():
+        return ['best val accuracy', 'training time(seconds)', 'inference time(seconds)', 'total params', 'flops', '# blocks', 'cell structure']
+
+    def to_csv_list(self):
+        ''' Return a list with fields ordered for csv insertion '''
+        return [self.accuracy, self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
+
+    # TODO: consider to refactor these code parts and remove this function (very low priority)
+    def to_legacy_info_tuple(self):
+        ''' Some code parts use an ordered tuple (time, acc, cell_spec), so return it to support more easily their logic without refactors. '''
+        return self.training_time, self.accuracy, self.cell_spec
+
+
 def get_best_val_accuracy_per_output(hist: History):
     '''
     Produce a dictionary with a key for each model output.

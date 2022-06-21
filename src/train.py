@@ -17,6 +17,7 @@ from utils.feature_utils import build_time_feature_names, initialize_features_cs
     generate_dynamic_reindex_function, build_acc_feature_names, \
     generate_time_features, generate_acc_features
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
+from utils.nn_utils import TrainingResults
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
 
@@ -102,13 +103,10 @@ class Train:
 
     def generate_and_train_model_from_spec(self, cell_spec: list):
         """
-        Generate a model given the actions and train it to get reward and time
+        Generate a model from the cell specification and train it to get an estimate of its quality and characteristics.
 
         Args:
             cell_spec (list): plain cell specification
-
-        Returns:
-            tuple: 4 elements: (max accuracy, training time, params, flops) of trained CNN
         """
         # print the cell in a more comprehensive way
         self.search_space.print_cell_spec(cell_spec)
@@ -116,15 +114,16 @@ class Train:
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        reward, time, total_params, flops = self.cnn_manager.get_rewards(cell_spec, save_best_model=last_block_train)
+        train_res = self.cnn_manager.perform_proxy_training(cell_spec, save_best_model=last_block_train)
 
-        self._logger.info("Best accuracy reached: %0.6f", reward)
-        self._logger.info("Training time: %0.6f", time)
+        self._logger.info("Best accuracy reached: %0.6f", train_res.accuracy)
+        self._logger.info("Training time: %0.6f", train_res.training_time)
+        self._logger.info('Inference time: %0.6f', train_res.inference_time)
         # format is a workaround for thousands separator, since the python logger has no such feature 
-        self._logger.info("Total parameters: %s", format(total_params, ','))
-        self._logger.info("Total FLOPS: %s", format(flops, ','))
+        self._logger.info("Total parameters: %s", format(train_res.params, ','))
+        self._logger.info("Total FLOPS: %s", format(train_res.flops, ','))
 
-        return reward, time, total_params, flops
+        return train_res
 
     def perform_initial_thrust(self, acc_features_len: int):
         '''
@@ -132,11 +131,11 @@ class Train:
         '''
 
         self._logger.info('Performing initial thrust with empty cell')
-        acc, time, params, flops = self.generate_and_train_model_from_spec([])
+        train_res = self.generate_and_train_model_from_spec([])
 
         # last fields are exploration and data augmentation
-        time_data = [time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
-        acc_data = [acc] + [0] * (acc_features_len - 3) + [False, False]
+        time_data = [train_res.training_time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
+        acc_data = [train_res.accuracy] + [0] * (acc_features_len - 3) + [False, False]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -146,9 +145,9 @@ class Train:
             writer = csv.writer(f)
             writer.writerow(acc_data)
 
-        self.write_training_results_into_csv([], acc, time, params, flops, 0)
+        self.write_training_results_into_csv(train_res)
 
-        return time
+        return train_res.training_time
 
     def write_overall_cnn_training_results(self, blocks, times, rewards):
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
@@ -168,10 +167,9 @@ class Train:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def write_training_data(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool = False):
+    def write_predictors_training_data(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool = False):
         '''
-        Write on csv the training time, that will be used for regressor training, and the accuracy reached, that can be used for controller training.
-        Use sliding blocks mechanism and cell equivalence data augmentation to multiply the entries.
+        Write the training results of a sampled architecture, as formatted features that will be used for training the predictors.
 
         Args:
             current_blocks (int): [description]
@@ -199,8 +197,7 @@ class Train:
             writer = csv.writer(f)
             writer.writerows(acc_rows)
 
-    def write_training_results_into_csv(self, cell_spec: list, acc: float, time: float, params: int,
-                                        flops: int, blocks: int, exploration: bool = False):
+    def write_training_results_into_csv(self, train_res: TrainingResults, exploration: bool = False):
         '''
         Append info about a single CNN training to the results csv file.
         '''
@@ -209,10 +206,11 @@ class Train:
 
             # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
             if f.tell() == 0:
-                writer.writerow(['best val accuracy', 'training time(seconds)', 'total params', 'flops', '# blocks', 'exploration', 'cell structure'])
+                writer.writerow(train_res.get_csv_headers() + ['exploration'])
 
-            cell_structure_str = cell_spec_to_str(cell_spec)
-            data = [acc, time, params, flops, blocks, exploration, cell_structure_str]
+            # trim cell structure from csv list and replace it with a valid string representation of it
+            cell_structure_str = cell_spec_to_str(train_res.cell_spec)
+            data = train_res.to_csv_list()[:-1] + [cell_structure_str, exploration]
 
             writer.writerow(data)
 
@@ -308,15 +306,15 @@ class Train:
                 self._logger.info("Model #%d / #%d", model_index + 1, len(self.search_space.children))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, time, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
-                cnns_train_info.append((time, reward, cell_spec))
+                train_res = self.generate_and_train_model_from_spec(cell_spec)
+                cnns_train_info.append(train_res.to_legacy_info_tuple())
                 self._logger.info("Finished %d out of %d models!", model_index + 1, len(self.search_space.children))
 
-                self.write_training_results_into_csv(cell_spec, reward, time, total_params, flops, current_blocks)
+                self.write_training_results_into_csv(train_res)
 
-                # if current_blocks > 1, we have already the dynamic reindex function and it's possible to write the feature data immediately
+                # if current_blocks > 1 we have already the dynamic reindex function, so it's possible to write the feature data immediately
                 if current_blocks > 1:
-                    self.write_training_data(current_blocks, time, reward, cell_spec)
+                    self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple())
 
                 self.restore_info.update(pareto_training_index=model_index + 1, total_time=self._compute_total_time())
 
@@ -329,12 +327,12 @@ class Train:
                 self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(self.search_space.exploration_front))
                 self._logger.debug("\t%s", cell_spec)
 
-                reward, time, total_params, flops = self.generate_and_train_model_from_spec(cell_spec)
-                cnns_train_info.append((time, reward, cell_spec))
+                train_res = self.generate_and_train_model_from_spec(cell_spec)
+                cnns_train_info.append(train_res.to_legacy_info_tuple())
                 self._logger.info("Finished %d out of %d exploration models!", model_index + 1, len(self.search_space.exploration_front))
 
-                self.write_training_results_into_csv(cell_spec, reward, time, total_params, flops, current_blocks, exploration=True)
-                self.write_training_data(current_blocks, time, reward, cell_spec, exploration=True)
+                self.write_training_results_into_csv(train_res, exploration=True)
+                self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple(), exploration=True)
 
                 self.restore_info.update(exploration_training_index=model_index + 1, total_time=self._compute_total_time())
 
@@ -346,7 +344,7 @@ class Train:
                 plotter.plot_dynamic_reindex_related_blocks_info()
 
                 for time, acc, cell_spec in cnns_train_info:
-                    self.write_training_data(current_blocks, time, acc, cell_spec)
+                    self.write_predictors_training_data(current_blocks, time, acc, cell_spec)
 
             times, rewards, _ = zip(*cnns_train_info)
             self.write_overall_cnn_training_results(current_blocks, times, rewards)

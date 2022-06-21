@@ -19,7 +19,8 @@ from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx
+from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
+    TrainingResults
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
 absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
@@ -164,17 +165,17 @@ class NetworkManager:
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
 
-    def get_rewards(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
+    def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''
-        Creates a CNN given the actions predicted by the controller RNN,
-        trains it on the provided dataset, and then returns a reward.
+        Generate a neural network from the cell specification and trains it for a short amount of epochs to get an estimate
+        of its quality. Other relevant metrics of the NN architecture, like the params and flops, are returned together with the training results.
 
         Args:
             cell_spec (list[tuple]): plain cell specification. Used to build the CNN.
             save_best_model (bool, optional): [description]. Defaults to False.
 
         Returns:
-            (tuple): (reward, timer, total_params, flops) of trained network
+            (TrainingResults): (reward, timer, total_params, flops, inference_time) of trained network
         '''
 
         # TODO: legacy function, don't know why it was called. Doesn't seem to harm the execution, if you feel brave
@@ -222,7 +223,7 @@ class NetworkManager:
                 accuracies[i] = max(hist.history['val_accuracy'])
 
         training_time = times.mean()
-        reward = accuracies.mean()
+        accuracy = accuracies.mean()
         total_params = model.count_params()
         # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
@@ -234,7 +235,6 @@ class NetworkManager:
         model.predict(self.inference_batch, callbacks=[inference_time_cb])
         # discard first batch time since it is very noisy due to initialization of the process
         inference_time = mean(inference_time_cb.logs[1:])
-        self._logger.info('Inference time: %0.5f', inference_time)
 
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
@@ -251,8 +251,8 @@ class NetworkManager:
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
-        if save_best_model and reward > self.best_reward:
-            self.best_reward = reward
+        if save_best_model and accuracy > self.best_reward:
+            self.best_reward = accuracy
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
             model.save(log_service.build_path('best_model', 'saved_model.h5'), save_format='h5')
@@ -263,4 +263,4 @@ class NetworkManager:
         gc.collect()
         del model
 
-        return reward, training_time, total_params, flops
+        return TrainingResults(cell_spec, accuracy, training_time, total_params, flops, inference_time)
