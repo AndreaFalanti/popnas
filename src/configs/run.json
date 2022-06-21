@@ -47,6 +47,7 @@
         "path": null,
         "classes_count": 10,
         "batch_size": 128,
+        "inference_batch_size": 16,
         "validation_size": 0.1,
         "cache": true,
         "folds": 1,

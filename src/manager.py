@@ -2,6 +2,7 @@ import csv
 import gc
 import logging
 import os
+from statistics import mean
 from typing import Tuple
 
 import absl.logging
@@ -19,7 +20,7 @@ from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentat
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx
-from utils.timing_callback import TimingCallback
+from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
 absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
 
@@ -77,6 +78,10 @@ class NetworkManager:
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']
 
         self.save_onnx = save_as_onnx
+
+        # take 10 batches of size provided in config, used to check the inference time on that batch size with
+        self.inference_batch_size = dataset_config['inference_batch_size']
+        self.inference_batch = self.dataset_folds[0][0].unbatch().take(self.inference_batch_size * 10).batch(self.inference_batch_size)
 
         # DEBUG ONLY
         # self.__test_data_augmentation(self.dataset_folds[0][0])
@@ -223,6 +228,13 @@ class NetworkManager:
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
         flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
             else 0
+
+        # compute inference time
+        inference_time_cb = InferenceTimingCallback()
+        model.predict(self.inference_batch, callbacks=[inference_time_cb])
+        # discard first batch time since it is very noisy due to initialization of the process
+        inference_time = mean(inference_time_cb.logs[1:])
+        self._logger.info('Inference time: %0.5f', inference_time)
 
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:

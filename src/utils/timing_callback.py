@@ -12,3 +12,14 @@ class TimingCallback(tf.keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         self.logs.append(timer() - self.start_time)
+
+
+class InferenceTimingCallback(tf.keras.callbacks.Callback):
+    def __init__(self, logs={}):
+        self.logs = []
+
+    def on_predict_batch_begin(self, batch, logs={}):
+        self.start_time = timer()
+
+    def on_predict_batch_end(self, batch, logs={}):
+        self.logs.append(timer() - self.start_time)
