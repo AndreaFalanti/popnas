@@ -156,6 +156,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
   Can be _null_ if you want to use a supported dataset already present in Keras or TFDS.
 - **classes_count**: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
 - **batch_size**: defines the batch size dimension of the dataset.
+- **inference_batch_size**: defines the batch size dimension for benchmarking the inference time of a network.
 - **validation_size**: fraction of the total samples to use for validation set, e.g. _0.1_ value means that 10% of the
   training samples will be reserved for the validation dataset. Can be _null_ for TFDS dataset which have already
   a separated validation set, for using it instead of partitioning the training set.
@@ -188,8 +189,8 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **save_children_as_onnx**: if _true_, each child neural network will be serialized and saved as ONNX format.
 - **pnas_mode**: if _true_, the algorithm will not use most of the improvements introduced by POPNAS, mainly the
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
-- **use_cpu**: if _true_, only CPU will be used, even if the device has usable GPUs. Must be set in case the device
-  has no GPUs or has not a valid GPU setup.
+- **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
+  Currently supports only local training with a single device. Accepted values: [CPU, GPU, TPU].
 
 
 ## Output folder structure
