@@ -8,7 +8,7 @@ pandas==1.1.5
 mlxtend==0.18.0
 xgboost==1.4.2
 matplotlib==3.3.4
-eli5==0.11.0
+eli5==0.13.0
 mypy==0.910
 tqdm==4.62.0
 catboost==1.0.3

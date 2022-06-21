@@ -30,7 +30,7 @@ shap = "0.41.0"
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
 hyperopt = "0.2.5"
-eli5 = "0.11.0"
+eli5 = "0.13.0"
 
 
 [tool.poetry.dev-dependencies]
