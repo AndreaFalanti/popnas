@@ -43,13 +43,10 @@ class SearchSpace:
 
         self.B = ss_config['blocks']
         self.input_lookback_depth = -ss_config['lookback_depth']    # it is negative in the class, but positive in config
-        self.input_lookforward_depth = ss_config['lookforward_depth']
         self.operator_values = ss_config['operators']
 
         if self.input_lookback_depth >= 0:
             raise ValueError('Invalid lookback_depth value')
-        if self.input_lookforward_depth is not None:
-            raise NotImplementedError('Lookforward inputs are actually not supported')
         if self.operator_values is None or len(self.operator_values) == 0:
             raise ValueError('No operators have been provided in search space')
 
@@ -152,30 +149,26 @@ class SearchSpace:
         search_space = (inputs, self.operator_values)
         self.children = list(self.__construct_permutations(search_space))
 
-    def prepare_intermediate_children(self, new_b, use_exploration_front: bool = True):
+    def perform_children_expansion(self, curr_b: int, use_exploration_front: bool = True):
         '''
-        Generates the intermediate product of the previous children
-        and the current generation of children.
+        Expand the children with an additional block.
 
         Args:
-            new_b: the number of blocks in current stage
+            curr_b: the number of blocks in current stage
             use_exploration_front: use exploration front networks as baseline for progressive expansion
 
         Returns:
-            A function that returns a generator that produces a joint of
-            the previous and current child models
+            A function that returns a generator for producing iteratively the cell expansions
         '''
 
         if use_exploration_front:
             self.children = self.children + self.exploration_front
 
-        new_b_dash = new_b - 1 if self.input_lookforward_depth is None \
-            else min(self.input_lookforward_depth, new_b)
-
-        allowed_input_values = list(range(self.input_lookback_depth, new_b_dash))
+        # last block index can't be used by any block, so -1 to exclude it
+        allowed_input_values = list(range(self.input_lookback_depth, curr_b - 1))
         non_specular_expansions = self.__compute_non_specular_expansions_count(allowed_input_values)
 
-        self._logger.info("Obtaining search space for b = %d", new_b)
+        self._logger.info("Obtaining search space for b = %d", curr_b)
         self._logger.info("Search space size: %d", non_specular_expansions)
 
         self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_expansions)

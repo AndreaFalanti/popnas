@@ -2,7 +2,6 @@
     "search_space": {
         "blocks": 5,
         "lookback_depth": 2,
-        "lookforward_depth": null,
         "operators": [
             "identity",
             "3x3 dconv",

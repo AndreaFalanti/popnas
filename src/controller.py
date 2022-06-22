@@ -229,7 +229,7 @@ class ControllerManager:
 
         self.current_b += 1
         # closure that returns a function that returns the model generator for current generation step
-        generate_models = self.search_space.prepare_intermediate_children(self.current_b)
+        generate_models = self.search_space.perform_children_expansion(self.current_b)
 
         # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
         #  necessary ones and takes lot less time (instead of O(N^2) it becomes O(len(pareto)^2)). Now done in that way,

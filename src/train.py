@@ -32,7 +32,6 @@ class Train:
         ss_config = run_config['search_space']
         self.blocks = ss_config['blocks']
         self.input_lookback_depth = ss_config['lookback_depth']
-        self.input_lookforward_depth = ss_config['lookforward_depth']
         self.operators = ss_config['operators']
 
         # search strategy parameters
