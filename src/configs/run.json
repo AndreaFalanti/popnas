@@ -1,8 +1,6 @@
 {
     "search_space": {
         "blocks": 5,
-        "max_children": 256,
-        "max_exploration_children": 16,
         "lookback_depth": 2,
         "lookforward_depth": null,
         "operators": [
@@ -19,6 +17,10 @@
             "2x2 maxpool",
             "2x2 avgpool"
         ]
+    },
+    "search_strategy": {
+        "max_children": 256,
+        "max_exploration_children": 16
     },
     "cnn_hp": {
         "epochs": 21,
@@ -63,10 +65,12 @@
             "perform_on_gpu": false
         }
     },
-    "accuracy_predictor_ensemble_units": 5,
-    "predictions_batch_size": 1024,
-    "save_children_weights": false,
-    "save_children_as_onnx": false,
-    "pnas_mode": false,
-    "train_strategy": "GPU"
+    "others": {
+        "accuracy_predictor_ensemble_units": 5,
+        "predictions_batch_size": 1024,
+        "save_children_weights": false,
+        "save_children_as_onnx": false,
+        "pnas_mode": false,
+        "train_strategy": "GPU"
+    }
 }

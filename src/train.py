@@ -31,11 +31,13 @@ class Train:
         # search space parameters
         ss_config = run_config['search_space']
         self.blocks = ss_config['blocks']
-        self.children_max_size = ss_config['max_children']
-        self.exploration_max_size = ss_config['max_exploration_children']
         self.input_lookback_depth = ss_config['lookback_depth']
         self.input_lookforward_depth = ss_config['lookforward_depth']
         self.operators = ss_config['operators']
+
+        # search strategy parameters
+        sstr_config = run_config['search_strategy']
+        self.children_max_size = sstr_config['max_children']
 
         # dataset parameters
         ds_config = run_config['dataset']
@@ -48,20 +50,20 @@ class Train:
         max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
         self.multi_output_models = arc_config['multi_output']
 
-        # build a search space
-        self.search_space = SearchSpace(ss_config['blocks'], ss_config['operators'], max_cells,
-                                        input_lookback_depth=-ss_config['lookback_depth'], input_lookforward_depth=ss_config['lookforward_depth'])
-
-        # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, train_strategy,
-                                          run_config['save_children_weights'], run_config['save_children_as_onnx'])
-
-        self.pnas_mode = run_config['pnas_mode']
-        self.preds_batch_size = run_config['predictions_batch_size']
+        # Other parameters (last category including heterogeneous parameters not classifiable in previous sections)
+        others_config = run_config['others']
+        self.pnas_mode = others_config['pnas_mode']
+        self.preds_batch_size = others_config['predictions_batch_size']
+        self.acc_predictor_ensemble_units = others_config['accuracy_predictor_ensemble_units']
 
         self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
 
-        self.acc_predictor_ensemble_units = run_config['accuracy_predictor_ensemble_units']
+        # build a search space
+        self.search_space = SearchSpace(ss_config, max_cells)
+
+        # create the Network Manager
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, train_strategy,
+                                          others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         plotter.initialize_logger()
 
@@ -92,11 +94,9 @@ class Train:
 
         # set controller step to the correct one (in case of restore is not b=1)
         controller_b = self.starting_b if self.starting_b > 1 else 1
-        self.controller = ControllerManager(self.search_space, acc_pred_func, time_pred_func, self.acc_predictor_ensemble_units,
-                                            graph_generator=self.cnn_manager.graph_gen,
-                                            current_b=controller_b,
-                                            B=self.blocks, K=self.children_max_size, ex=self.exploration_max_size,
-                                            predictions_batch_size=self.preds_batch_size, pnas_mode=self.pnas_mode)
+        self.controller = ControllerManager(self.search_space, sstr_config, others_config,
+                                            acc_pred_func, time_pred_func,
+                                            graph_generator=self.cnn_manager.graph_gen, current_b=controller_b)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)

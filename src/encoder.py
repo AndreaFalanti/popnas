@@ -16,8 +16,7 @@ class SearchSpace:
     for various use cases.
     '''
 
-    def __init__(self, B: int, operators: 'list[str]', cell_stack_depth: int,
-                 input_lookback_depth: int = -1, input_lookforward_depth: int = None):
+    def __init__(self, ss_config: 'dict[str, Any]', cell_stack_depth: int):
         '''
         Constructs a search space which models the NASNet and PNAS papers, producing encodings for blocks and cells.
         The encodings are useful to store architecture information, from which the models can be generated.
@@ -25,32 +24,13 @@ class SearchSpace:
         A single block encoding consists of the 4-tuple: (input 1, operation 1, input 2, operation 2).
         A cell encoding is instead a list of block encodings.
 
-        The operators are used for adding up intermediate values
-        inside the same cell. See the NASNet and PNASNet models to see
-        how intermediate blocks connect based on input values.
-
-        The default operator values are based on the PNAS paper. They
-        should be changed as needed.
+        The operators are used for adding up intermediate values inside the same cell.
+        See the NASNet and PNASNet models to see how intermediate blocks connect based on input values.
 
         Args:
-            B: Maximum number of blocks
+            ss_config: search space configuration provided in the input configuration file
 
-            operators: a list of operations (can be anything, must be
-                interpreted by the model designer when constructing the
-                actual model. Usually a list of strings.
-
-            input_lookback_depth: should be a negative number.
-                Describes how many cells the input should look behind.
-                The negative number describes how many cells to look back.
-                -1 indicates the last cell (or input image at start), and so on.          
-
-            input_lookforward_depth: (TODO: not supported) sets a limit on input depth that can be looked forward.
-                This is useful for scenarios where "flat" models are preferred,
-                wherein each cell is flat, though it may take input from deeper
-                layers (if the designer so chooses)
-
-                The default searches over cells which can have inter-connections.
-                Setting it to 0 limits this to just the current input for that cell (flat cells).
+            cell_stack_depth: maximum cell depth that the networks can achieve
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -61,25 +41,23 @@ class SearchSpace:
         self.input_encoders = {}  # type: dict[str, Encoder]
         self.operator_encoders = {}  # type: dict[str, Encoder]
 
-        if input_lookback_depth >= 0:
-            raise ValueError('Invalid lookback_depth value')
-        if input_lookforward_depth is not None:
-            raise NotImplementedError('Lookforward inputs are actually not supported')
+        self.B = ss_config['blocks']
+        self.input_lookback_depth = -ss_config['lookback_depth']    # it is negative in the class, but positive in config
+        self.input_lookforward_depth = ss_config['lookforward_depth']
+        self.operator_values = ss_config['operators']
 
-        self.B = B
-        self.input_lookback_depth = input_lookback_depth
-        self.input_lookforward_depth = input_lookforward_depth
+        if self.input_lookback_depth >= 0:
+            raise ValueError('Invalid lookback_depth value')
+        if self.input_lookforward_depth is not None:
+            raise NotImplementedError('Lookforward inputs are actually not supported')
+        if self.operator_values is None or len(self.operator_values) == 0:
+            raise ValueError('No operators have been provided in search space')
 
         self.cell_stack_depth = cell_stack_depth
 
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
-        self.input_values = list(range(input_lookback_depth, self.B - 1))
-        if operators is None or len(operators) == 0:
-            self.operator_values = ['identity', '3x3 dconv', '5x5 dconv', '7x7 dconv',
-                                    '1x7-7x1 conv', '3x3 conv', '3x3 maxpool', '3x3 avgpool']
-        else:
-            self.operator_values = operators
+        self.input_values = list(range(self.input_lookback_depth, self.B - 1))
 
         # for embedding (see LSTM controller), use categorical values
         # all values must be strictly < than these (that's the reason for + 1)

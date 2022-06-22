@@ -141,10 +141,9 @@ def instantiate_search_space_from_logs(log_folder_path: str):
 
     ss_config = run_config['search_space']
     arc_config = run_config['architecture_parameters']
-    operators = ss_config['operators']
     max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
 
-    return SearchSpace(B=ss_config['blocks'], operators=operators, cell_stack_depth=max_cells, input_lookback_depth=-ss_config['lookback_depth'])
+    return SearchSpace(ss_config, max_cells)
 
 
 def cell_spec_to_str(cell_spec: list):

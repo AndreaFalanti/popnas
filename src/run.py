@@ -29,7 +29,7 @@ def main():
     # DEBUG: To find out which devices your operations and tensors are assigned to
     # tf.debugging.set_log_device_placement(True)
 
-    train_strategy = initialize_train_strategy(run_config['train_strategy'])
+    train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
 
     # initialize folders after CPU/GPU check, just to avoid making folders when run is faulty
     if args.r is None:

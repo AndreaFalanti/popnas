@@ -1,6 +1,6 @@
 import csv
 import gc
-from typing import Callable
+from typing import Callable, Any
 
 import numpy as np
 import tensorflow
@@ -53,36 +53,27 @@ class ControllerManager:
     cull non-optimal children model configurations and resume training.
     '''
 
-    def __init__(self, search_space: SearchSpace, get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 acc_predictor_ensemble_units: int, graph_generator: GraphGenerator, B=5, K=256, ex=16, T=np.inf,
-                 current_b: int = 1, predictions_batch_size: int = 16, pnas_mode: bool = False):
+    def __init__(self, search_space: SearchSpace, sstr_config: 'dict[str, Any]', others_config: 'dict[str, Any]',
+                 get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
+                 graph_generator: GraphGenerator, current_b: int = 1):
         '''
         Manages the Controller network training and prediction process.
-
-        Args:
-            search_space: completely defined search space.
-            B: depth of progression.
-            K: maximum number of children model trained per level of depth.
-            T: maximum training time.
-            pnas_mode: if True, do not build a regressor to estimate time. Use only LSTM controller,
-                like original PNAS.
         '''
         self._logger = log_service.get_logger(__name__)
         self.search_space = search_space
         self.graph_generator = graph_generator
 
-        self.B = B
-        self.K = K
-        self.ex = ex
-        self.T = T
+        self.B = search_space.B
+        self.K = sstr_config['max_children']
+        self.ex = sstr_config['max_exploration_children']
+        self.T = np.inf     # TODO: add it to sstr_config if actually necessary, for now we have never used the time constraint
         self.current_b = current_b
-        self.predictions_batch_size = predictions_batch_size
-        self.acc_ensemble_units = acc_predictor_ensemble_units
+        self.predictions_batch_size = others_config['predictions_batch_size']
+        self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
+        self.pnas_mode = others_config['pnas_mode']
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
-
-        self.pnas_mode = pnas_mode
 
     def train_step(self):
         '''
