@@ -66,14 +66,18 @@ class ControllerManager:
         self.B = search_space.B
         self.K = sstr_config['max_children']
         self.ex = sstr_config['max_exploration_children']
-        self.T = np.inf     # TODO: add it to sstr_config if actually necessary, for now we have never used the time constraint
         self.current_b = current_b
+
+        self.T = np.inf     # TODO: add it to sstr_config if actually necessary, for now we have never used the time constraint
+
+        self.pareto_objectives = sstr_config['pareto_objectives']
         self.predictions_batch_size = others_config['predictions_batch_size']
-        self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
-        self.pnas_mode = others_config['pnas_mode']
 
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
+        self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
+
+        self.pnas_mode = others_config['pnas_mode']
 
     def train_step(self):
         '''
@@ -89,7 +93,7 @@ class ControllerManager:
             acc_predictor.train(log_service.build_path('csv', 'training_results.csv'))
 
         # train time predictor with new data
-        if not self.pnas_mode:
+        if not self.pnas_mode and 'time' in self.pareto_objectives:
             csv_path = log_service.build_path('csv', 'training_time.csv')
             time_predictor = self.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
@@ -111,13 +115,19 @@ class ControllerManager:
                 if self.pnas_mode:
                     model_estimations.extend([ModelEstimate(cell_spec, score) for cell_spec, score in zip(cells_batch, estimated_scores)])
                 # in POPNAS mode instead predict also training time and address additional Pareto problem metrics (like params)
+                # Pareto objectives are defined in the configuration file, unused objectives are simply set to 0
+                # to not alter the Pareto front construction
                 else:
                     # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
                     #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
-                    batch_time_features = [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
+                    if 'time' in self.pareto_objectives:
+                        batch_time_features = [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
+                        estimated_times = time_predictor.predict_batch(batch_time_features)
+                    else:
+                        estimated_times = [0] * len(cells_batch)
 
-                    estimated_times = time_predictor.predict_batch(batch_time_features)
-                    params_count = [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch]
+                    params_count = [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch] \
+                        if 'params' in self.pareto_objectives else [0] * len(cells_batch)
 
                     # apply also time constraint
                     ests_in_time_limit = [ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params

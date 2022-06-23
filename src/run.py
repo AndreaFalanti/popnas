@@ -8,6 +8,22 @@ from train import Train
 from utils.nn_utils import initialize_train_strategy
 
 
+def validate_pareto_objectives(objectives: 'list[str]'):
+    # TODO: config structure check should be done in entirety in a single place, think about it in the future
+    valid_pareto_objectives = ['accuracy', 'time', 'params']
+
+    if len(objectives) <= 1:
+        raise ValueError('You must provide at least two objectives to optimize (see config search_strategy.pareto_objectives)')
+    # TODO: actually we need to have at least one metric for prediction quality (accuracy, f1score, ecc..) to have meaningful results.
+    #  Other metrics should be included in future.
+    if 'accuracy' not in objectives:
+        raise ValueError('Accuracy must always be included in Pareto objectives')
+
+    for obj in objectives:
+        if obj not in valid_pareto_objectives:
+            raise ValueError(f'Invalid Pareto objective provided ({obj})')
+
+
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-r', metavar='RESTORE_FOLDER', type=str, help='path of log folder to restore (timestamp-named folder)', default=None)
@@ -30,6 +46,8 @@ def main():
     # tf.debugging.set_log_device_placement(True)
 
     train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
+
+    validate_pareto_objectives(run_config['search_strategy']['pareto_objectives'])
 
     # initialize folders after CPU/GPU check, just to avoid making folders when run is faulty
     if args.r is None:

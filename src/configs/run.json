@@ -19,7 +19,8 @@
     },
     "search_strategy": {
         "max_children": 256,
-        "max_exploration_children": 16
+        "max_exploration_children": 16,
+        "pareto_objectives": ["accuracy", "time"]
     },
     "cnn_hp": {
         "epochs": 21,
