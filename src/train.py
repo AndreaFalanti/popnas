@@ -37,6 +37,7 @@ class Train:
         # search strategy parameters
         sstr_config = run_config['search_strategy']
         self.children_max_size = sstr_config['max_children']
+        self.pareto_objectives = sstr_config['pareto_objectives']
 
         # dataset parameters
         ds_config = run_config['dataset']
@@ -378,8 +379,8 @@ class Train:
         plotter.plot_correlations_with_time()
 
         if not self.pnas_mode:
-            plotter.plot_pareto_front_curves(self.blocks, plot3d=True)
-            plotter.plot_predictions_with_pareto_analysis(self.blocks)
+            plotter.plot_pareto_front_curves(self.blocks, self.pareto_objectives)
+            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_objectives)
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 

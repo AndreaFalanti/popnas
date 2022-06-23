@@ -1,7 +1,7 @@
 import logging
 import os.path
 import statistics
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Collection, Sequence
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -198,72 +198,79 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
     save_and_finalize_plot(fig, title, save_name)
 
 
-def __plot_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
-    ''' For 2 metrics only (time and accuracy). '''
-    fig, ax = plt.subplots()
-
-    # trans_offset = mtransforms.offset_copy(ax.transData, fig=fig, x=0, y=-0.10, units='inches')
-
-    plt.plot(x_real, y_real, '--.b', x_pred, y_pred, '--.g', alpha=0.6)
-    # for i, (x, y) in enumerate(zip(x_real, y_real)):
-    #     plt.text(x, y, str(i), color='red', fontsize=12, transform=trans_offset)
-
-    plt.xlabel('time')
-    plt.ylabel('accuracy')
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_rank_pareto_front(x_real: list, y_real: list, x_pred: list, y_pred: list, title: str, save_name: str):
-    ''' For 2 metrics only (time and accuracy), adding another axis for displaying the rank, resulting in a 3D plot. '''
-    # fig, ax = plt.subplots()
+def __plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[list], labels: 'list[str]', title: str, save_name: str):
+    ''' Plot Pareto front in 3D plot. If only 2 objectives are used in the Pareto optimization, rank is added as x-axis. '''
     fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
+    ax = fig.add_subplot(projection='3d')   # type: plt.Axes
 
-    x_real.reverse()
-    y_real.reverse()
-    x_pred.reverse()
-    y_pred.reverse()
+    if len(real_coords) != len(pred_coords):
+        raise ValueError(f'Inconsistent coordinates, real are {len(real_coords)}D while pred are {len(pred_coords)}D')
+    if len(real_coords) != len(labels):
+        raise ValueError('Labels count missmatch with coordinates dimensions')
 
-    ax.plot(list(range(len(x_real))), x_real, y_real, '--.b', alpha=0.6)
-    ax.plot(list(range(len(x_pred))), x_pred, y_pred, '--.g', alpha=0.6)
+    # already in 3D case, simply plot it
+    if len(real_coords) == 3:
+        ax.plot(*real_coords, '.b', alpha=0.6)
+        ax.plot(*pred_coords, '.g', alpha=0.6)
+        # ax.plot_wireframe(*real_coords, color='b', alpha=0.6)
+        # ax.plot_wireframe(*pred_coords, color='g', alpha=0.6)
 
-    ax.set_xlabel('rank')
-    ax.set_ylabel('time')
-    ax.set_zlabel('accuracy')
+        ax.set_xlabel(labels[0])
+        ax.set_ylabel(labels[1])
+        ax.set_zlabel(labels[2])
+    # For 2 metrics only, adding another axis for displaying the rank, resulting in a 3D plot.
+    elif len(real_coords) == 2:
+        x_real, y_real = real_coords
+        x_pred, y_pred = pred_coords
+
+        x_real.reverse()
+        y_real.reverse()
+        x_pred.reverse()
+        y_pred.reverse()
+
+        ax.plot(list(range(len(x_real))), y_real, x_real, '--.b', alpha=0.6)
+        ax.plot(list(range(len(x_pred))), y_pred, x_pred, '--.g', alpha=0.6)
+
+        ax.set_xlabel('rank')
+        ax.set_ylabel(labels[1])
+        ax.set_zlabel(labels[0])
+    else:
+        raise ValueError('Unsupported coordinate dimension')
 
     save_and_finalize_plot(fig, title, save_name)
 
 
-def __plot_3d_pareto_front(x_real: list, y_real: list, z_real: list, x_pred: list, y_pred: list, z_pred: list, title: str, save_name: str):
-    ''' For 3 metrics only (params, time and accuracy). '''
-    # fig, ax = plt.subplots()
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-
-    ax.plot(x_real, y_real, z_real, '--.b', alpha=0.6)
-    ax.plot(x_pred, y_pred, z_pred, '--.g', alpha=0.6)
-
-    ax.set_xlabel('accuracy')
-    ax.set_ylabel('time')
-    ax.set_zlabel('params')
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_predictions_pareto_scatter_chart(predictions: 'tuple[list, list, list]', pareto_points: 'tuple[list, list, list]', title: str, save_name: str):
+def __plot_predictions_pareto_scatter_chart(predictions: Sequence[list], pareto_points: Sequence[list],
+                                            labels: 'list[str]', title: str, save_name: str):
     ''' Plot all predictions made, with the Pareto selected as highlight. '''
     # fig, ax = plt.subplots()
     fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')  # type: plt.Axes
+    # rectilinear is for 2d
+    proj = '3d' if len(predictions) >= 3 else 'rectilinear'
+
+    ax = fig.add_subplot(projection=proj)  # type: plt.Axes
+
+    point_dim = (72.*1.5/fig.dpi)**2
+    num_pred_points = len(predictions[0])
+    # in case of huge amount of predictions (standard case in NAS), if >= 0.5% of the points overlaps in a point saturate the alpha,
+    # otherwise it is partially transparent. Clamped to 0.0125 since minimum is 1 / 255 and it's very hard to spot on plot.
+    alpha = 0.25 if num_pred_points < 1000 else max(0.0125, 1 / (num_pred_points * 0.005))
 
     # zorder is used for plotting series over others (highest has priority)
-    ax.scatter(*predictions, marker='o', alpha=0.2, zorder=1, s=(72.*1.5/fig.dpi)**2)
-    ax.scatter(*pareto_points, marker='*', alpha=1.0, zorder=2)
+    if proj == '3d':
+        ax.scatter(*predictions, marker='o', alpha=alpha, zorder=1, s=point_dim)
+        ax.scatter(*pareto_points, marker='*', alpha=1.0, zorder=2)
 
-    ax.set_xlabel('accuracy')
-    ax.set_ylabel('time')
-    ax.set_zlabel('params')
+        ax.set_xlabel(labels[0])
+        ax.set_ylabel(labels[1])
+        ax.set_zlabel(labels[2])
+    else:
+        # accuracy is put first, but it's better to have it on y-axis for readability
+        ax.scatter(*reversed(predictions), marker='o', alpha=alpha, zorder=1, s=point_dim)
+        ax.plot(*reversed(pareto_points), '*--', color='tab:orange', alpha=1.0, zorder=2)
+
+        ax.set_xlabel(labels[1])
+        ax.set_ylabel(labels[0])
 
     save_and_finalize_plot(fig, title, save_name)
 
@@ -559,55 +566,69 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     __logger.info("Prediction error overview plots written successfully")
 
 
-def plot_pareto_front_curves(B: int, plot3d: bool = False):
+def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
     training_df = training_df[training_df['exploration'] == False]
 
-    # front built with actual values got from training
-    real_front_acc, real_front_time, real_front_params = [], [], []
-    # pareto front predicted
-    pred_front_acc, pred_front_time, pred_front_params = [], [], []
+    # map pareto objectives to csv fields
+    objective_to_training_df_field = {
+        'accuracy': 'best val accuracy',
+        'time': 'training time(seconds)',
+        'params': 'total params'
+    }
+    objective_to_pareto_df_field = {
+        'accuracy': 'val accuracy',
+        'time': 'time',
+        'params': 'params'
+    }
 
     for b in range(2, B + 1):
+        # front built with actual values got from training
         training_df_b = training_df[training_df['# blocks'] == b]
-        real_front_acc.append(training_df_b['best val accuracy'].to_list())
-        real_front_time.append(training_df_b['training time(seconds)'].to_list())
-        real_front_params.append(training_df_b['total params'].to_list())
 
+        # pareto front predicted
         pareto_b_csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
         pareto_df = pd.read_csv(pareto_b_csv_path)
 
-        pred_front_acc.append(pareto_df['val accuracy'].to_list())
-        pred_front_time.append(pareto_df['time'].to_list())
-        pred_front_params.append(pareto_df['params'].to_list())
+        real_coords, pred_coords = [], []
 
-    b = 2
-    for real_time, real_acc, real_params, pred_time, pred_acc, pred_params in zip(real_front_time, real_front_acc, real_front_params,
-                                                                                  pred_front_time, pred_front_acc, pred_front_params):
-        plot_func = __plot_rank_pareto_front if plot3d else __plot_pareto_front
-        plot_func(real_time, real_acc, pred_time, pred_acc, title=f'Pareto front B{b}', save_name=f'pareto_plot_B{b}')
-        __plot_3d_pareto_front(real_acc, real_time, real_params, pred_acc, pred_time, pred_params,
-                               title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
-        b += 1
+        for objective in pareto_objectives:
+            real_coords.append(training_df_b[objective_to_training_df_field[objective]].to_list())
+            pred_coords.append(pareto_df[objective_to_pareto_df_field[objective]].to_list())
+
+        __plot_pareto_front(real_coords, pred_coords, pareto_objectives,
+                            title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
 
     __logger.info("Pareto front curve plots written successfully")
 
 
-def plot_predictions_with_pareto_analysis(B: int):
+def plot_predictions_with_pareto_analysis(B: int, pareto_objectives: 'list[str]'):
+    # predictions df fields are actually the same, so no need to have two maps
+    objective_to_pareto_df_field = {
+        'accuracy': 'val accuracy',
+        'time': 'time',
+        'params': 'params'
+    }
+
     for b in range(2, B + 1):
         predictions_df = pd.read_csv(log_service.build_path('csv', f'predictions_B{b}.csv'))
         pareto_df = pd.read_csv(log_service.build_path('csv', f'pareto_front_B{b}.csv'))
 
-        pred_acc = predictions_df['val accuracy'].to_list()
-        pred_times = predictions_df['time'].to_list()
-        pred_params = predictions_df['params'].to_list()
+        pred_coords, pareto_coords = [], []
 
-        pareto_acc = pareto_df['val accuracy'].to_list()
-        pareto_times = pareto_df['time'].to_list()
-        pareto_params = pareto_df['params'].to_list()
+        for objective in pareto_objectives:
+            pred_coords.append(predictions_df[objective_to_pareto_df_field[objective]].to_list())
+            # pred_acc = predictions_df['val accuracy'].to_list()
+            # pred_times = predictions_df['time'].to_list()
+            # pred_params = predictions_df['params'].to_list()
 
-        __plot_predictions_pareto_scatter_chart((pred_acc, pred_times, pred_params), (pareto_acc, pareto_times, pareto_params),
+            pareto_coords.append(pareto_df[objective_to_pareto_df_field[objective]].to_list())
+            # pareto_acc = pareto_df['val accuracy'].to_list()
+            # pareto_times = pareto_df['time'].to_list()
+            # pareto_params = pareto_df['params'].to_list()
+
+        __plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objectives,
                                                 f'Predictions with Pareto points B{b}', f'predictions_with_pareto_B{b}')
 
     __logger.info("Predictions-Pareto analysis plots written successfully")
