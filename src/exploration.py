@@ -59,9 +59,13 @@ def has_sufficient_exploration_score(model_est: ModelEstimate, exp_cell_counter:
 
     # additional conditions for pareto variety (float values, 1 point every difference of 4% of accuracy or 10% of time difference
     # with previous pareto entry). Considered only for cells with elements in exploration sets, when exploration pareto front is not empty.
-    if exp_score > 0 and len(exploration_pareto_front) > 0:
-        exp_score += (1 - model_est.score / exploration_pareto_front[-1].score) / 0.04
-        exp_score += (1 - model_est.time / exploration_pareto_front[-1].time) / 0.10
+    # TODO: disabled since it doesn't work well for >=3 objectives of Pareto optimization. It is also not really needed probably,
+    #  so simplifying isn't a bad thing. For >=3 objectives could add a negative score, if instead done absolute still it is not very sound
+    #  to make the rapport with the previous inserted element.
+    # if exp_score > 0 and len(exploration_pareto_front) > 0:
+    #     exp_score += (1 - model_est.score / exploration_pareto_front[-1].score) / 0.04
+    #     exp_score += (1 - model_est.time / exploration_pareto_front[-1].time) / 0.10
+    #     exp_score += (1 - model_est.params / exploration_pareto_front[-1].params) / 0.20
 
     # adapt threshold if one of the two sets is empty
     exp_score_threshold = 8 if (exp_cell_counter.ops_keys_len() > 0 and exp_cell_counter.inputs_keys_len() > 0) else 4
