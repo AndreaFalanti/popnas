@@ -375,7 +375,7 @@ class Train:
 
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
-        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode)
+        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, time_predictor_enabled='time' in self.pareto_objectives)
         plotter.plot_correlations_with_time()
 
         if not self.pnas_mode:

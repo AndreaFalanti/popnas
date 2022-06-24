@@ -489,7 +489,7 @@ def __build_prediction_dataframe(b: int, k: int, pnas_mode: bool):
     return pd.merge(training_df, pred_df, on=['cell structure'], how='inner')
 
 
-def plot_predictions_error(B: int, K: int, pnas_mode: bool):
+def plot_predictions_error(B: int, K: int, pnas_mode: bool, time_predictor_enabled: bool):
     time_errors, avg_time_errors, max_time_errors, min_time_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     acc_errors, avg_acc_errors, max_acc_errors, min_acc_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
     time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
@@ -507,7 +507,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
         merge_df = __build_prediction_dataframe(b, K, pnas_mode)
 
         # compute time prediction errors (regressor)
-        if not pnas_mode:
+        if not pnas_mode and time_predictor_enabled:
             pred_times.append(merge_df['time'].to_list())
             real_times.append(merge_df['training time(seconds)'].to_list())
 
@@ -544,7 +544,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool):
     x = np.arange(2, B + 1)
 
     # write plots about time
-    if not pnas_mode:
+    if not pnas_mode and time_predictor_enabled:
         time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
 
         __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
