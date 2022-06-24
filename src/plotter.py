@@ -20,8 +20,8 @@ from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_
 __logger = None  # type: logging.Logger
 # disable matplotlib info and warning messages
 # TODO: it is not wise to disable warnings, but i couldn't find a way to only remove PostScript transparency warning,
-#  which is a known thing and it is triggered thousands of times...
-plt.set_loglevel('ERROR')
+#  which is a known thing and it is triggered thousands of times... EPS disabled, reverted to WARNING
+plt.set_loglevel('WARNING')
 # warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
 
@@ -40,9 +40,10 @@ def __save_and_close_plot(fig, save_name):
 
 
 def __save_latex_plots(save_name):
+    # TODO: Deprecated since it should be possible to convert PDF to EPS if necessary. EPS is inferior since it doesn't support transparency.
     # save as eps (good format for Latex)
-    save_path = log_service.build_path('plots', 'eps', save_name + '.eps')
-    plt.savefig(save_path, bbox_inches='tight', format='eps')
+    # save_path = log_service.build_path('plots', 'eps', save_name + '.eps')
+    # plt.savefig(save_path, bbox_inches='tight', format='eps')
 
     # save as pdf
     save_path = log_service.build_path('plots', 'pdf', save_name + '.pdf')
