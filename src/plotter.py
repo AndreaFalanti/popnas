@@ -660,26 +660,28 @@ def plot_multi_output_boxplot():
     __logger.info("Multi output overview plot written successfully")
 
 
-def plot_correlations_with_time():
+def plot_correlations_with_training_time():
     __logger.info('Writing time correlation plots...')
 
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
 
-    times = training_df['training time(seconds)'].to_list()
+    training_times = training_df['training time(seconds)'].to_list()
     params = training_df['total params'].to_list()
     flops = training_df['flops'].to_list()
+    inference_times = training_df['inference time(seconds)'].to_list()
 
-    pearson_params_time, _ = pearsonr(params, times)
-    pearson_flops_time, _ = pearsonr(flops, times)
-    spearman_params_time, _ = spearmanr(params, times)
-    spearman_flops_time, _ = spearmanr(flops, times)
+    def _compute_correlations_and_plot(metric_list: list, train_times: list, metric_name: str):
+        pearson, _ = pearsonr(metric_list, train_times)
+        spearman, _ = spearmanr(metric_list, train_times)    # types are correct, they are wrongly declared in scipy
+        labels = [f'Pearson: {pearson:.3f}, Spearman: {spearman:.3f}']
 
-    params_legend_labels = [f'Pearson: {pearson_params_time:.3f}, Spearman: {spearman_params_time:.3f}']
-    flops_legend__labels = [f'Pearson: {pearson_flops_time:.3f}, Spearman: {spearman_flops_time:.3f}']
+        __plot_scatter(metric_list, train_times, metric_name, 'time(s)',
+                       f'({metric_name.capitalize()}, Training time) correlation', f'{metric_name}_time_corr', legend_labels=labels)
 
-    __plot_scatter(params, times, 'params', 'time(s)', '(Params, Time) correlation', 'params_time_corr', legend_labels=params_legend_labels)
-    __plot_scatter(flops, times, 'FLOPS', 'time(s)', '(FLOPS, Time) correlation', 'flops_time_corr', legend_labels=flops_legend__labels)
+    _compute_correlations_and_plot(params, training_times, metric_name='params')
+    _compute_correlations_and_plot(flops, training_times, metric_name='flops')
+    _compute_correlations_and_plot(inference_times, training_times, metric_name='inference time')
 
     __logger.info('Time correlation plots written successfully')
 
