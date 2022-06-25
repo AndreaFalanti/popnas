@@ -172,7 +172,9 @@ def main():
         config = json.load(f)   # type: dict
 
     # initialize train strategy
-    ts_device = args.ts if args.ts is not None else config.get('train_strategy', None)
+    # retrocompatible with previous config format, which have no "others" section
+    config_ts_device = config['others'].get('train_strategy', None) if 'others' in config.keys() else config.get('train_strategy', None)
+    ts_device = args.ts if args.ts is not None else config_ts_device
     train_strategy = initialize_train_strategy(ts_device)
 
     cnn_config = config['cnn_hp']
