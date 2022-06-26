@@ -133,10 +133,16 @@ def main():
                               3, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
         b += 1
 
-    pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
-    if len(pareto_plot_paths) > 0:
-        cols, rows = compute_dynamic_size_layout(len(pareto_plot_paths))
-        display_plot_overview(gen_paths(pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save,
+    pred_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('predictions_with_pareto_B')]
+    if len(pred_pareto_plot_paths) > 0:
+        cols, rows = compute_dynamic_size_layout(len(pred_pareto_plot_paths))
+        display_plot_overview(gen_paths(pred_pareto_plot_paths), cols, rows, title='Predictions with Pareto overview', save=args.save,
+                              save_name=next(gen_save_path, None))
+
+    real_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
+    if len(real_pareto_plot_paths) > 0:
+        cols, rows = compute_dynamic_size_layout(len(real_pareto_plot_paths))
+        display_plot_overview(gen_paths(real_pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save,
                               save_name=next(gen_save_path, None))
 
     multi_output_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('multi_output_boxplot')]
@@ -147,6 +153,12 @@ def main():
 
     display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
                           2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))
+
+    time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.endswith('_time_corr.png')]
+    if len(time_corr_plot_paths) > 0:
+        cols, rows = compute_dynamic_size_layout(len(time_corr_plot_paths))
+        display_plot_overview(gen_paths(time_corr_plot_paths), cols, rows, title='Correlation with training time overview', save=args.save,
+                              save_name=next(gen_save_path, None))
 
     # check if predictors time test folder is present (predictors_time_testing.py output)
     time_test_path = os.path.join(args.p, 'pred_time_test')
