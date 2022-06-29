@@ -678,7 +678,7 @@ def plot_correlations_with_training_time():
         labels = [f'Pearson: {pearson:.3f}, Spearman: {spearman:.3f}']
 
         __plot_scatter(metric_list, train_times, metric_name, 'time(s)',
-                       f'({metric_name.capitalize()}, Training time) correlation', f'{metric_name}_time_corr', legend_labels=labels)
+                       f'({metric_name.capitalize()}, Training time) correlation', f'{metric_name.replace(" ", "_")}_time_corr', legend_labels=labels)
 
     _compute_correlations_and_plot(params, training_times, metric_name='params')
     _compute_correlations_and_plot(flops, training_times, metric_name='flops')
