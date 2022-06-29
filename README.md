@@ -1,9 +1,13 @@
 # POPNASv2
-Second version of POPNAS algorithm, a neural architecture search method developed for a master thesis by Matteo Vantadori
-(Politecnico di Milano, academic year 2018-2019), based on 
+Second version of POPNAS algorithm, a neural architecture search method based on 
 [PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
-This new version improves the time efficiency of the search algorithm, but also drastically increase the accuracy of the networks found,
-making it competitive with other NAS works. It also fixes problems and bugs of the original version. 
+The first version has been developed for a master thesis by Matteo Vantadori (Politecnico di Milano, academic year 2018-2019).
+
+This new version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
+an average 4x speed-up compared to PNAS on same experiment configurations.
+
+The accuracy of the final neural network architectures found are now competitive with other NAS works,
+solving the main drawback of the first POPNAS version, which had a large accuracy GAP with PNAS and similar methods. 
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
@@ -67,7 +71,7 @@ docker build -f ../docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python run.py -j configs/run_debug.json --cpu
+docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python run.py -j configs/run_debug.json
 ```
 
 ## Run configuration
@@ -87,12 +91,8 @@ Here it's presented a list of the configuration sections and fields, with a brie
 
 **Search Space**:
 - **blocks**: defines the maximum amount of blocks a cell can contain.
-- **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
-  (except the first step, which trains all possible cells).
-- **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
-- **lookback_depth**: maximum lookback depth to use. Lookback inputs are associated to previous cells,
-  where _-1_ refers to last generated cell, _-2_ a skip connection to second-to-last cell, etc... 
-- **lookforward_depth**: maximum lookforward depth to use. TODO: actually not supported, should always be null.
+- **lookback_depth**: maximum lookback depth to use (in absolute value). Lookback inputs are associated to previous cells,
+  where _-1_ refers to last generated cell, _-2_ a skip connection to second-to-last cell, etc...
 - **operators**: list of operators that can be used inside each cell. Note that the string format is important,
   since they are recognized by regexes.
   Actually supported operators, with customizable kernel size(@):
@@ -103,6 +103,14 @@ Here it's presented a list of the configuration sections and fields, with a brie
   - @x@ maxpool
   - @x@ avgpool
   - @x@ tconv      (Transpose convolution)
+
+**Search strategy**:
+- **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
+  (except the first step, which trains all possible cells).
+- **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
+- **pareto_objectives**: defines the objectives considered during the search for optimizing the selection of the neural network architectures to
+  train. Currently supported values are [accuracy, time, params], at least two of them must be provided and accuracy must always be set to have
+  meaningful results.
   
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
@@ -119,6 +127,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
     see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts).
 - **softmax_dropout**: probability of dropping a value in output Softmax layer. If set to 0, then dropout is not used.
   Note that dropout is used on each output when _multi_output_ flag is set.
+
 
 **CNN architecture parameters**:
 - **motifs**: number of motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell,
@@ -259,110 +268,3 @@ neural networks sampled during the search process, run the command:
 tensorboard --logdir {path_to_log_folder}/tensorboard_cnn --port 6096
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
-
-
-## Changelog from original version
-
-### Generated CNN structure changes
-- Fix cell structure to be an actual DAG, before only flat cells were generated (it was not possible to use other blocks output
-  as input of another block).
-- Fix blocks not having addition of the two operations output.
-- Fix skip connections (input index -2) not working as expected.
-- Tweak child CNN training hyperparameters, to make them more similar to PNAS paper.
-- Add AdamW as an alternative optimizer that can be optionally enabled and used instead of Adam + L2 regularization, providing a more
-  accurate weight decay.
-- Add ScheduledDropPath in local version (see FractalNet paper), since it was used in both PNAS and NASNet.
-- Add cosine decay restart learning rate schedule, since also ADAM benefits a lot from it.
-- Allow the usage of flexible kernel sizes for each operator supported by the algorithm, thanks to regex parsing.
-- Add support for TransposeConvolution operator.
-- Add the possibility to generate models with multiple outputs, one at the end of each cell. The CNN is then trained with custom loss weights
-  for each output, scaling exponentially based on the cell index (last cell loss has weight 1/2, the second-last 1/4, the third-last 1/8, etc...)
-
-
-### Equivalent networks detection
-- Equivalent blocks are now excluded from the search space, like in PNAS.
-- Equivalent models (cell with equivalent structure) are now pruned from search, improving pareto front quality.
-  Equivalent models could be present multiple times in pareto front before this change, this should improve a bit the diversity of the models trained.
-
-
-### Predictors changes
-- CatBoost can now be used as time regressor, instead or together with aMLLibrary supported regressors. By default, CatBoost is now used in time
-  predictions of each expansion step, with automatic hyperparameters tuning based on random search.
-- Add back the input columns features to regressor, as now inputs really are from different cells/blocks, unlike original implementation.
-  Therefore, input values have a great influence on actual training time and must be used by regressor for accurate estimations.
-- Use a newer version of aMLLibrary, with support for hyperopt. POPNAS algorithm and the additional scripts also use aMLLibrary multithreading to
-  train the models faster, with a default number of threads equal to accessible CPU cores (affinity mask).
-- Keras predictors support hyperparameters tuning via Keras Tuner library. The search space for the parameters is
-  defined in each class and can be overridden by each model to adapt it for each specific model structure.
-- Add predictors testing scripts, useful to tune their hyperparameters on data of an already completed run (both time and accuracy).
-  These scripts are useful to tune the predictors in case their results are far from optimal on the given dataset.
-- A totally new feature set has been engineered for time predictors, based mainly the dag representation of a cell specification. This new set
-  is quite small but very indicative of the main factors that dictates time differences among the networks. It also implicitly generalize on
-  equivalent cell specifications, since they have the same DAG representation and so the same features, making futile the data augmentation step.
-- Accuracy predictor is now an ensemble of 5 models, each one trained on 4/5 of the data.
-  This closely follows PNAS work and improved slightly the results.
-
-### Exploration step
-- Add an exploration step to POPNAS algorithm. Some inputs and operators could not appear in pareto front
-  networks (or appear very rarely) due to their early performance, making the predictors penalizing them heavily also
-  in future steps. Since these inputs and operators could be actually quite effective in later cell expansions,
-  the exploration step now trains a small set of networks that contains these underused values. It also helps to
-  discover faster the value of input values >= 0, since they are unknown in B=1 step and progressively added in future steps.
-
-
-### Data extrapolation and data analysis
-- Add plotter module, to analyze csv data saved and automatically producing relevant plots and metrics while running the algorithm.
-- Add the plot slideshow script to visualize all produced plots easily in aggregated views.
-- Add _avg_training_time.csv_ to automatically extrapolate the average CNN training time for each considered block size.
-- Add _multi_output.csv_ to extrapolate the best accuracy reached for each cell output, when _multi_output_ is enabled in JSON config.
-
-
-### Software improvements and refactors
-- Migrate code to Tensorflow 2, in particular to the 2.7 version.
-- The algorithm now supports 4 different image classification datasets: CIFAR10, CIFAR100, fashionMNIST and EuroSAT. It should be easy to implement
-  support for other datasets and datasets supported by [Tensorflow-datasets](https://www.tensorflow.org/datasets/catalog/overview?hl=en)
-  could work fine without any code change.
-- Now use JSON configuration files, with some optional command line arguments. This approach is much more flexible and makes easier to parametrize
-  all the various components of the algorithm run. Many parameters and hyperparameters that were hardcoded in POPNAS initial version are now
-  tunable from the JSON config.
-- Implement an actually working run restoring functionality. This allows to resume a previously interrupted run.
-- CNN training has been refactored to use Keras model.fit method, instead of using a custom tape gradient method.
-  New training method supports data augmentation and allows the usage of weight regularization if parameter is provided.
-- LSTM controller has been refactored to use Keras API, instead of using a custom tape gradient method.
-  This make the whole procedure easier to interpret and also more flexible to further changes and additions.
-- Add predictors hierarchy (see _predictors_ folder). Predictor abstract class provides a standardized interface for all regressor methods
-  tested during the work. Predictors can be either based on ML or NN techniques, they just need to satisfy the interface to be used during POPNAS
-  algorithm and the additional scripts.
-- Encoder has been totally refactored since it was a total mess, causing also a lot of confusion inside the other modules.
-  Now the state space stores each cell specification as a list of tuples, where the tuples are the blocks (input1, op1, input2, op2).
-  The encoder class instead provides methods to encode/decode the inputs and operators values, with the possibility of adding multiple encoders
-  at runtime and using them easily when needed. The default encoders are now 1-indexed categorical integers, instead of the 0-indexed used before. 
-- Improve immensely virtual environment creation, by using _Poetry_ tool to easily install all dependencies.
-- Improve logging (see log_service.py), using standard python log to print on both console and file. Before, text logs were printed only on console.
-- Implement saving of best model, so that can be easily trained after POPNAS run for further experiments.
-- A script is provided to train the best model from checkpoint saved during the POPNAS run. It can also recreate the best network from scratch or
-  train a custom cell specification, provided as argument.
-- Format code with pep8 and flake, to follow standard python formatting conventions.
-- General code fixes and improvements, especially improve readability of various code parts for better future maintainability.
-  Many blob functions have been finely subdivided in multiple sub-functions and are now properly commented and typed.
-  Right now almost the total codebase of original POPNAS version have been refactored, either due to structural or quality changes.
-
-
-### Command line arguments changes
-- Add --cpu option to easily choose between running on CPU or GPU.
-- Add --pnas option to run without regressor, making the procedure similar to original PNAS algorithm.
-- Add a lot of new configuration parameters, which can be set in the new JSON configuration file.
-
-
-### Other bug fixes
-- Fix regressor features bug: dynamic reindexing was inaccurate due to an int cast that was totally unnecessary since the dynamic reindex is
-  designed to be a float value.
-- Fix training batch processing not working as expected, last batch of training of each epoch could have contained duplicate images
-  due to how repeat was wrongly used before batching.
-- Fix tqdm bars for model predictions procedure, to visualize better its progress.
-
-
-
-## TODO
-- Improve the restoring function and investigate potential bugs (especially in prediction and expansion phase it could not work properly, since
-  I only wrote the logic to stop it during CNN training, which should be the 90% of the cases).
