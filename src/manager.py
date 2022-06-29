@@ -256,6 +256,7 @@ class NetworkManager:
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
             model.save(log_service.build_path('best_model', 'saved_model.h5'), save_format='h5')
+            save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
             self._logger.info('Model saved successfully')
 
         # clean up resources and GPU memory (TODO: actually solving TPU_VM problem or not?)
