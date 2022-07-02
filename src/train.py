@@ -283,6 +283,8 @@ class Train:
         time_headers, time_feature_types = build_time_feature_names()
         acc_headers, acc_feature_types = build_acc_feature_names(self.blocks, self.input_lookback_depth)
 
+        self.cnn_manager.bootstrap_dataset_lazy_initialization()
+
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure
         if self.starting_b == 0:

@@ -2,6 +2,7 @@ import csv
 import gc
 import logging
 import os
+import shutil
 from statistics import mean
 from typing import Tuple
 
@@ -164,6 +165,31 @@ class NetworkManager:
             self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
         return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
+
+    def bootstrap_dataset_lazy_initialization(self):
+        '''
+        Train the empty cell model for a single epoch, just to load, process and cache the dataset, so that the first model trained in the session
+        is not affected by a time estimation bias (which can be very large for datasets generated from image folders).
+        '''
+        self._logger.info('Performing an epoch of training to lazy load and cache the dataset')
+        fake_tb_logdir = log_service.build_path('tensorboard_cnn', f'Bx')
+        model, callbacks, partition_dict = self.__compile_model([], fake_tb_logdir)
+
+        for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
+            if self.dataset_folds_count > 1:
+                self._logger.info("Training on dataset #%d / #%d", i + 1, self.dataset_folds_count)
+
+            model.fit(x=train_ds,
+                      epochs=1,
+                      steps_per_epoch=self.train_batches,
+                      validation_data=val_ds,
+                      validation_steps=self.validation_batches,
+                      class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)
+
+        # remove useless directory
+        shutil.rmtree(fake_tb_logdir, ignore_errors=True)
+        self._logger.info('Dummy training complete, training time should now be unaffected by dataset lazy initialization')
+
 
     def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''
