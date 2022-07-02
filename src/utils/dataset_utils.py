@@ -14,7 +14,7 @@ from tensorflow.keras.utils import to_categorical, image_dataset_from_directory
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: int,
+def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: Union[int, None],
                         data_augmentation: Sequential, augment_on_gpu: bool, cache: bool):
     '''
     Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
@@ -24,9 +24,10 @@ def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batc
         train dataset, validation dataset, train batches count, validation batches count
     '''
 
-    # create a batched dataset
-    train_ds = train_ds.batch(batch_size)
-    val_ds = val_ds.batch(batch_size)
+    # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
+    if batch_size is not None:
+        train_ds = train_ds.batch(batch_size)
+        val_ds = val_ds.batch(batch_size)
 
     # cache in memory for better performance, if enabled
     if cache:
@@ -181,12 +182,19 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         if resize_dim is None:
             raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-        # TODO: samples limit not used in this case, implement it later
+        # TODO: samples limit is applied but in a naive way, since unbatching breakes the dataset cardinality.
+        #  Stratification is done due stochasticity, which is not good for low amount of samples.
+        #  Anyway not a big problem since in "real" runs you would not limit the samples deliberately.
         if val_size is None:
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), label_mode='categorical',
                                                     image_size=resize_dim, batch_size=batch_size)
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_validation'), label_mode='categorical',
                                                   image_size=resize_dim, batch_size=batch_size)
+
+            # limit only train dataset, if limit is set
+            if samples_limit is not None:
+                logger.info('Limiting training dataset to %d batches', samples_limit // batch_size)
+                train_ds = train_ds.take(samples_limit // batch_size)
         # extract a validation split from training samples
         else:
             # TODO: find a way to make the split stratified.
@@ -194,6 +202,16 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                                                     subset='training', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
                                                   subset='validation', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
+
+            # limit both datasets, so that the sum of samples is the declared one
+            if samples_limit is not None:
+                training_samples = math.ceil(samples_limit * (1 - val_size) // batch_size)
+                val_samples = math.floor(samples_limit * val_size // batch_size)
+
+                logger.info('Limiting training dataset to %d batches', training_samples)
+                train_ds = train_ds.take(training_samples)
+                logger.info('Limiting validation dataset to %d batches', val_samples)
+                val_ds = val_ds.take(val_samples)
 
         # debug
         # train_labels_perc = get_dataset_stratification(train_ds)
@@ -206,22 +224,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
         val_ds = val_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
-        # TODO: repetition of __finalize_datasets function, because batch_size=None is not supported for image_dataset_from_directory in tf 2.7.
-        #  An update or refactor of the function can avoid the duplication
-        # cache in memory for better performance, if enabled
-        if cache:
-            train_ds = train_ds.cache()
-            val_ds = val_ds.cache()
-
-        # if data augmentation is performed on CPU, map it before prefetch
-        if data_augmentation is not None and not augment_on_gpu:
-            train_ds = train_ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
-
-        train_ds = train_ds.prefetch(AUTOTUNE)
-        val_ds = val_ds.prefetch(AUTOTUNE)
-
-        train_batches = len(train_ds)
-        val_batches = len(val_ds)
+        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, None, data_augmentation, augment_on_gpu, cache)
 
         dataset_folds.append((train_ds, val_ds))
 
