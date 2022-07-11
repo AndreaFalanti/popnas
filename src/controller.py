@@ -136,7 +136,7 @@ class ControllerManager:
 
                 pbar.update(len(cells_batch))
 
-        # clean up resources and GPU memory (TODO: actually solving TPU_VM problem or not?)
+        # clean up resources and GPU memory (TODO: not solving leak on TPU_VM, maybe unnecessary)
         tensorflow.keras.backend.clear_session()
         gc.collect()
 

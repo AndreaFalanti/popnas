@@ -225,9 +225,12 @@ class NetworkManager:
             # generate a CNN model given the cell specification
             # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
             model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
+
             # add callback to register as accurate as possible the training time
+            # it must be the first callback, so that it register the time before other callbacks are executed, registering "almost" only the
+            # time due to the training operations (some keras callbacks could be executed before this).
             time_cb = TimingCallback()
-            callbacks.append(time_cb)
+            callbacks.insert(0, time_cb)
 
             hist = model.fit(x=train_ds,
                              epochs=self.epochs,
@@ -285,9 +288,9 @@ class NetworkManager:
             save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
             self._logger.info('Model saved successfully')
 
-        # clean up resources and GPU memory (TODO: actually solving TPU_VM problem or not?)
+        # clean up resources and GPU memory (TODO: not solving leak on TPU_VM, maybe unnecessary)
         tensorflow.keras.backend.clear_session()
-        gc.collect()
         del model
+        gc.collect()
 
         return TrainingResults(cell_spec, accuracy, training_time, total_params, flops, inference_time)
