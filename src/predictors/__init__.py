@@ -11,6 +11,7 @@ from keras_predictor import KerasPredictor
 from conv1d_predictor import Conv1DPredictor
 from conv1d1i_predictor import Conv1D1IPredictor
 from rnn_attention_predictor import AttentionRNNPredictor
+from lgbm_predictor import LGBMPredictor
 
 __all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'RNNPredictor', 'KerasPredictor',
-           'Conv1DPredictor', 'Conv1D1IPredictor', 'AttentionRNNPredictor']
+           'Conv1DPredictor', 'Conv1D1IPredictor', 'AttentionRNNPredictor', 'LGBMPredictor']

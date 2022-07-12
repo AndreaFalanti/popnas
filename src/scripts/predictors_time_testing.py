@@ -66,8 +66,9 @@ def main():
         # RNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, name='CatBoost_CPU_NEW'),
+        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=False),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU', name='CatBoost_GPU_NEW'),
+        LGBMPredictor(logger, log_path, drop_feature_names=['exploration'], use_random_search=True)
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:
