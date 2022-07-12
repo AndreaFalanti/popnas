@@ -31,7 +31,7 @@ def initialize_logger():
     __logger = log_service.get_logger(__name__)
 
 
-def __save_and_close_plot(fig, save_name):
+def __save_and_close_plot(fig: plt.Figure, save_name):
     # save as png
     save_path = log_service.build_path('plots', save_name + '.png')
     plt.savefig(save_path, bbox_inches='tight')
