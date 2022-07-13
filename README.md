@@ -64,9 +64,9 @@ to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https:
 In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
 and mount POPNAS source code.
 
-To build the image, open the terminal into the _src_ folder and execute this command:
+To build the image, open the terminal into the root folder and execute this command:
 ```
-docker build -f ../docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
+docker build -f docker/Dockerfile -t falanti/popnas:tf2.7.0gpu .
 ```
 
 POPNASv2 can then be launched with command (set arguments as you like):
