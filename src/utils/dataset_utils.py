@@ -15,7 +15,8 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 
 def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: Union[int, None],
-                        data_augmentation: Sequential, augment_on_gpu: bool, cache: bool):
+                        data_augmentation: Sequential, augment_on_gpu: bool, cache: bool,
+                        shard_policy: tf.data.experimental.AutoShardPolicy = tf.data.experimental.AutoShardPolicy.DATA):
     '''
     Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
     Basically apply batch, cache, data augmentation (only to training set) and prefetch.
@@ -23,6 +24,12 @@ def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batc
     Returns:
         train dataset, validation dataset, train batches count, validation batches count
     '''
+    # set sharding options to DATA. This improves performances on distributed environments.
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = shard_policy
+
+    train_ds = train_ds.with_options(options)
+    val_ds = val_ds.with_options(options)
 
     # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
     if batch_size is not None:
@@ -220,11 +227,13 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         # print('Validation labels distribution: ' + str(val_labels_perc))
 
         # normalize into [0, 1] domain
-        normalization_layer = tf.keras.layers.Rescaling(1. / 255)
+        normalization_layer = layers.Rescaling(1. / 255)
         train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
         val_ds = val_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
-        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, None, data_augmentation, augment_on_gpu, cache)
+        # TODO: sharding should be set to FILE here? or not?
+        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, None, data_augmentation, augment_on_gpu, cache,
+                                                                           shard_policy=tf.data.experimental.AutoShardPolicy.FILE)
 
         dataset_folds.append((train_ds, val_ds))
 

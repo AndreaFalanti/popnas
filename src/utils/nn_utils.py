@@ -186,7 +186,7 @@ def get_optimized_steps_per_execution(train_strategy: tf.distribute.Strategy):
     Get a good steps_per_execution parameter for Keras model.compile.
     If the returned value is > batches, it is automatically trimmed by Keras model.fit.
 
-    It is extremely important for optimizing TPU performances.
+    It is extremely important for optimizing TPU performances. Note that it works also at inference time.
     '''
     # TODO: is it useful only for TPUs or can we add more optimization cases?
     return 32 if isinstance(train_strategy, tf.distribute.TPUStrategy) else 1
