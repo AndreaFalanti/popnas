@@ -1,3 +1,4 @@
+# TODO: deprecated, must be adjusted for new version or ROCM, with TF version matching the project one
 FROM rocm/tensorflow:rocm4.3.1-tf2.6-dev
 
 # Install graphviz

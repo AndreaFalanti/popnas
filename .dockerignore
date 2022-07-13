@@ -1,0 +1,7 @@
+__pycache__/
+src/logs/
+.git/
+.idea/
+.vscode/
+build/
+.venv/
