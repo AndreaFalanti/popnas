@@ -57,6 +57,7 @@ class NetworkManager:
 
         self.epochs = cnn_config['epochs']
         self.train_strategy = train_strategy
+        self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
         self.num_child = 0  # SUMMARY
         self.best_reward = 0.0
@@ -81,9 +82,12 @@ class NetworkManager:
 
         self.save_onnx = save_as_onnx
 
-        # take 10 batches of size provided in config, used to check the inference time on that batch size with
+        # take 6 batches of size provided in config, used to test the inference time.
+        # when using multiple step per execution, multiply the number of batches by the steps executed.
         self.inference_batch_size = dataset_config['inference_batch_size']
-        self.inference_batch = self.dataset_folds[0][0].unbatch().take(self.inference_batch_size * 10).batch(self.inference_batch_size)
+        self.inference_batches_count = 6 * self.execution_steps
+        self.inference_batch = self.dataset_folds[0][0].unbatch() \
+            .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
         # DEBUG ONLY
         # self.__test_data_augmentation(self.dataset_folds[0][0])
@@ -154,8 +158,7 @@ class NetworkManager:
             model, partition_dict, _ = self.model_gen.build_model(cell_spec)
 
             loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
-            execution_steps = get_optimized_steps_per_execution(self.train_strategy)
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics, steps_per_execution=execution_steps)
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics, steps_per_execution=self.execution_steps)
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
@@ -261,7 +264,7 @@ class NetworkManager:
 
         # compute inference time
         inference_time_cb = InferenceTimingCallback()
-        model.predict(self.inference_batch, callbacks=[inference_time_cb])
+        model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
         # discard first batch time since it is very noisy due to initialization of the process
         inference_time = mean(inference_time_cb.logs[1:])
 
