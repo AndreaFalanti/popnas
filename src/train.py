@@ -244,7 +244,7 @@ class Train:
 
         return get_acc_predictor_for_b, get_time_predictor_for_b
 
-    def write_smb_results(self, monoblocks_train_info: 'list[tuple[float, float, list[tuple]]]'):
+    def write_smb_times(self, monoblocks_train_info: 'list[tuple[float, float, list[tuple]]]'):
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_times = {}
 
@@ -348,10 +348,10 @@ class Train:
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
-                op_times = self.write_smb_results(cnns_train_info)
+                op_times = self.write_smb_times(cnns_train_info)
                 reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
-                plotter.plot_dynamic_reindex_related_blocks_info()
+                plotter.plot_smb_info()
 
                 for time, acc, cell_spec in cnns_train_info:
                     self.write_predictors_training_data(current_blocks, time, acc, cell_spec)

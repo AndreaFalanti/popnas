@@ -295,7 +295,7 @@ def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
     return [bar_avg, bar_max, bar_min]
 
 
-def plot_dynamic_reindex_related_blocks_info():
+def plot_smb_info():
     __logger.info("Analyzing training_results.csv...")
     csv_path = log_service.build_path('csv', 'training_results.csv')
     df = pd.read_csv(csv_path)
@@ -309,20 +309,17 @@ def plot_dynamic_reindex_related_blocks_info():
 
     # unpack values into separate columns
     df['in1'], df['op1'], df['in2'], df['op2'] = zip(*first_block_iter)
+    # filter only SMB
+    smb_df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == -1)]
 
-    df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == -1)]
-
-    x = df['op1']
-    y_time = df['training time(seconds)']
-    y_acc = df['best val accuracy']
-    y_params = df['total params']
-    y_flops = df['flops']
+    x = smb_df['op1']
 
     __logger.info("Writing plots...")
-    __plot_histogram(x, y_time, 'Operation', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
-    __plot_histogram(x, y_acc, 'Operation', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
-    __plot_histogram(x, y_params, 'Operation', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
-    __plot_histogram(x, y_flops, 'Operation', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
+    __plot_histogram(x, smb_df['training time(seconds)'], 'Operator', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
+    __plot_histogram(x, smb_df['best val accuracy'], 'Operator', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
+    __plot_histogram(x, smb_df['val F1 score'], 'Operator', 'F1 score', 'SMB (-1 input) validation F1 score', 'SMB_F1', incline_labels=True)
+    __plot_histogram(x, smb_df['total params'], 'Operator', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
+    __plot_histogram(x, smb_df['flops'], 'Operator', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
     __logger.info("SMB plots written successfully")
 
 
