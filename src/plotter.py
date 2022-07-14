@@ -640,23 +640,33 @@ def plot_multi_output_boxplot():
     csv_path = log_service.build_path('csv', 'multi_output.csv')
     outputs_df = pd.read_csv(csv_path).drop(columns=['cell_spec'])
 
-    # remove all rows that have some missing values (this means the cell don't use -1 lookback, stacking less cells)
-    # removing these rows allow a fair comparison in the plot
-    full_df = outputs_df.dropna()
-    x_labels = full_df.columns.to_list()
-    output_accuracies = [full_df[output_key] for output_key in x_labels]
+    col_names = outputs_df.columns.to_list()    # type: list[str]
+    accuracy_df = outputs_df[[col for col in col_names if col.endswith('accuracy')]]
+    f1_df = outputs_df[[col for col in col_names if col.endswith('f1_score')]]
 
-    # get the entries with less cells
-    na_df = outputs_df[outputs_df[x_labels[-2]].isnull()]
-    x_labels_na = x_labels[::-2][::-1]  # TODO: -2 because it's the lookback used, expand the logic to other lookbacks if needed
-    output_accuracies_na = [na_df[output_key] for output_key in x_labels_na]
+    def plot_multi_output_metric_boxplots(metric_df: pd.DataFrame, metric_name: str):
+        # remove all rows that have some missing values (this means the cell don't use -1 lookback, stacking less cells)
+        # removing these rows allow a fair comparison in the plot
+        lb1_df = metric_df.dropna()
+        lb1_x_labels = lb1_df.columns.to_list()
+        lb1_series_list = [lb1_df[col] for col in lb1_x_labels]
 
-    x_labels = [str(label).split('_')[0] for label in x_labels]
-    x_labels_na = x_labels[::-2][::-1]
+        # get the entries with less cells (use only -2 lookback)
+        # TODO: -2 because it's the lookback used, expand the logic to other lookbacks if needed
+        lb2_df = metric_df[metric_df[lb1_x_labels[-2]].isnull()]
+        lb2_x_labels = lb1_x_labels[::-2][::-1]
+        lb2_series_list = [lb2_df[output_key] for output_key in lb2_x_labels]
 
-    __plot_boxplot(output_accuracies, x_labels, 'Outputs', 'Val accuracy', 'Best accuracies for output', 'multi_output_boxplot')
-    __plot_boxplot(output_accuracies_na, x_labels_na, 'Outputs', 'Val accuracy',
-                   'Best accuracies for output (-2 lookback)', 'multi_output_boxplot_na')
+        # get only the cell index
+        lb1_x_labels = [str(label).split('_')[0] for label in lb1_x_labels]
+        lb2_x_labels = lb1_x_labels[::-2][::-1]
+
+        __plot_boxplot(lb1_series_list, lb1_x_labels, 'Cell outputs', metric_name, f'Best {metric_name} per output', f'multi_output_{metric_name}_lb1')
+        __plot_boxplot(lb2_series_list, lb2_x_labels, 'Cell outputs', metric_name,
+                       f'Best {metric_name} per output (-2 lookback)', f'multi_output_{metric_name}_lb2')
+
+    plot_multi_output_metric_boxplots(accuracy_df, 'accuracy')
+    plot_multi_output_metric_boxplots(f1_df, 'f1_score')
 
     __logger.info("Multi output overview plot written successfully")
 
