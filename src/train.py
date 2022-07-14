@@ -265,6 +265,7 @@ class Train:
         return op_times
 
     def log_run_final_results(self):
+        self._logger.info('Finished!')
         total_time = self._compute_total_time()
 
         training_results_path = log_service.build_path('csv', 'training_results.csv')
@@ -276,6 +277,46 @@ class Train:
         self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time,
                           total_time // 3600, (total_time // 60) % 60, total_time % 60)
         self._logger.info('*' * 94)
+
+    def generate_final_plots(self):
+        ''' Generate plots after the run has been terminated, analyzing the whole results. '''
+        plotter.plot_training_info_per_block()
+        plotter.plot_cnn_train_boxplots_per_block(self.blocks)
+        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, time_predictor_enabled='time' in self.pareto_objectives)
+        plotter.plot_correlations_with_training_time()
+
+        if not self.pnas_mode:
+            plotter.plot_pareto_front_curves(self.blocks, self.pareto_objectives)
+            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_objectives)
+        if self.multi_output_models:
+            plotter.plot_multi_output_boxplot()
+
+    def train_selected_architectures(self, cnns_train_info: 'list[tuple[float, float, list[tuple]]]', current_blocks: int, exploration: bool):
+        cell_specs = self.search_space.exploration_front if exploration else self.search_space.children
+        restore_index = self.restore_exploration_train_index if exploration else self.restore_pareto_train_index
+
+        for model_index, cell_spec in enumerate(cell_specs):
+            # skip networks already trained when restoring a run
+            if model_index < restore_index:
+                continue
+
+            self._logger.info("%s #%d / #%d", 'Exploration model' if exploration else 'Model', model_index + 1, len(cell_specs))
+            self._logger.debug("\t%s", cell_spec)
+
+            train_res = self.generate_and_train_model_from_spec(cell_spec)
+            cnns_train_info.append(train_res.to_legacy_info_tuple())
+            self._logger.info("Finished %d out of %d %s!", model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
+
+            self.write_training_results_into_csv(train_res, exploration=exploration)
+
+            # if current_blocks > 1 we have already the dynamic reindex function, so it's possible to write the feature data immediately
+            if current_blocks > 1:
+                self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple(), exploration=exploration)
+
+            if exploration:
+                self.restore_info.update(exploration_training_index=model_index + 1, total_time=self._compute_total_time())
+            else:
+                self.restore_info.update(pareto_training_index=model_index + 1, total_time=self._compute_total_time())
 
     def process(self):
         '''
@@ -296,48 +337,14 @@ class Train:
             self.starting_b = 1
             self.restore_info.update(current_b=1, total_time=self._compute_total_time())
 
-        # train the child CNN networks for each number of blocks
+        # train the selected CNN networks for each number of blocks (algorithm step)
         for current_blocks in range(self.starting_b, self.blocks + 1):
             cnns_train_info = [] if self.restore_pareto_train_index == 0 \
                 else restore_train_info(current_blocks)  # type: list[tuple[float, float, list[tuple]]]
 
-            for model_index, cell_spec in enumerate(self.search_space.children):
-                # skip networks already trained when restoring a run
-                if model_index < self.restore_pareto_train_index:
-                    continue
-
-                self._logger.info("Model #%d / #%d", model_index + 1, len(self.search_space.children))
-                self._logger.debug("\t%s", cell_spec)
-
-                train_res = self.generate_and_train_model_from_spec(cell_spec)
-                cnns_train_info.append(train_res.to_legacy_info_tuple())
-                self._logger.info("Finished %d out of %d models!", model_index + 1, len(self.search_space.children))
-
-                self.write_training_results_into_csv(train_res)
-
-                # if current_blocks > 1 we have already the dynamic reindex function, so it's possible to write the feature data immediately
-                if current_blocks > 1:
-                    self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple())
-
-                self.restore_info.update(pareto_training_index=model_index + 1, total_time=self._compute_total_time())
-
+            self.train_selected_architectures(cnns_train_info, current_blocks, exploration=False)
             # train the models built from exploration pareto front
-            for model_index, cell_spec in enumerate(self.search_space.exploration_front):
-                # skip networks already trained when restoring a run
-                if model_index < self.restore_exploration_train_index:
-                    continue
-
-                self._logger.info("Exploration Model #%d / #%d", model_index + 1, len(self.search_space.exploration_front))
-                self._logger.debug("\t%s", cell_spec)
-
-                train_res = self.generate_and_train_model_from_spec(cell_spec)
-                cnns_train_info.append(train_res.to_legacy_info_tuple())
-                self._logger.info("Finished %d out of %d exploration models!", model_index + 1, len(self.search_space.exploration_front))
-
-                self.write_training_results_into_csv(train_res, exploration=True)
-                self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple(), exploration=True)
-
-                self.restore_info.update(exploration_training_index=model_index + 1, total_time=self._compute_total_time())
+            self.train_selected_architectures(cnns_train_info, current_blocks, exploration=True)
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
@@ -376,16 +383,5 @@ class Train:
                 self.restore_pareto_train_index = 0
                 self.restore_exploration_train_index = 0
 
-        plotter.plot_training_info_per_block()
-        plotter.plot_cnn_train_boxplots_per_block(self.blocks)
-        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, time_predictor_enabled='time' in self.pareto_objectives)
-        plotter.plot_correlations_with_training_time()
-
-        if not self.pnas_mode:
-            plotter.plot_pareto_front_curves(self.blocks, self.pareto_objectives)
-            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_objectives)
-        if self.multi_output_models:
-            plotter.plot_multi_output_boxplot()
-
-        self._logger.info("Finished!")
+        self.generate_final_plots()
         self.log_run_final_results()
