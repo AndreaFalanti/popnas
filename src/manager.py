@@ -20,7 +20,7 @@ from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import get_best_val_accuracy_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
+from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
     TrainingResults
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
@@ -78,7 +78,8 @@ class NetworkManager:
         self.graph_gen = GraphGenerator(cnn_config, arc_config, image_shape, self.dataset_classes_count)
 
         self.multi_output_model = arc_config['multi_output']
-        self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + ['cell_spec']
+        self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + \
+                                        [f'c{i}_f1_score' for i in range(self.model_gen.total_cells)] + ['cell_spec']
 
         self.save_onnx = save_as_onnx
 
@@ -220,6 +221,7 @@ class NetworkManager:
         # store training results for each fold
         times = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
         accuracies = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
+        f1_scores = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
 
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
             if self.dataset_folds_count > 1:
@@ -246,16 +248,20 @@ class NetworkManager:
             times[i] = sum(time_cb.logs)
             # compute the reward (best validation accuracy)
             if self.multi_output_model and len(cell_spec) > 0:
-                multi_output_accuracies = get_best_val_accuracy_per_output(hist)
+                multi_output_accuracies = get_best_metric_per_output(hist, 'accuracy')
+                multi_output_f1 = get_best_metric_per_output(hist, 'f1_score')
 
                 # use as val accuracy metric the best one among all softmax layers
                 accuracies[i] = max(multi_output_accuracies.values())
-                self.__write_multi_output_file(cell_spec, multi_output_accuracies)
+                f1_scores[i] = max(multi_output_f1.values())
+                self.__write_multi_output_file(cell_spec, {**multi_output_accuracies, **multi_output_f1})
             else:
                 accuracies[i] = max(hist.history['val_accuracy'])
+                f1_scores[i] = max(hist.history['f1_score'])
 
         training_time = times.mean()
         accuracy = accuracies.mean()
+        f1_score = f1_scores.mean()
         total_params = model.count_params()
         # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
@@ -296,4 +302,4 @@ class NetworkManager:
         del model
         gc.collect()
 
-        return TrainingResults(cell_spec, accuracy, training_time, total_params, flops, inference_time)
+        return TrainingResults(cell_spec, accuracy, f1_score, training_time, total_params, flops, inference_time)

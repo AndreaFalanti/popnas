@@ -12,10 +12,11 @@ from tensorflow.python.framework.convert_to_constants import convert_variables_t
 
 class TrainingResults:
     ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
-    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, training_time: float, params: int, flops: int, inference_time: float) -> None:
+    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, params: int, flops: int, inference_time: float) -> None:
         self.cell_spec = cell_spec
         self.blocks = len(cell_spec)
         self.accuracy = accuracy
+        self.f1_score = f1_score
         self.training_time = training_time
         self.params = params
         self.flops = flops
@@ -23,11 +24,11 @@ class TrainingResults:
 
     @staticmethod
     def get_csv_headers():
-        return ['best val accuracy', 'training time(seconds)', 'inference time(seconds)', 'total params', 'flops', '# blocks', 'cell structure']
+        return ['best val accuracy', 'val F1 score', 'training time(seconds)', 'inference time(seconds)', 'total params', 'flops', '# blocks', 'cell structure']
 
     def to_csv_list(self):
         ''' Return a list with fields ordered for csv insertion '''
-        return [self.accuracy, self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
+        return [self.accuracy, self.f1_score, self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
 
     # TODO: consider to refactor these code parts and remove this function (very low priority)
     def to_legacy_info_tuple(self):
@@ -35,23 +36,26 @@ class TrainingResults:
         return self.training_time, self.accuracy, self.cell_spec
 
 
-def get_best_val_accuracy_per_output(hist: History):
+def get_best_metric_per_output(hist: History, metric: str, maximize: bool = True):
     '''
     Produce a dictionary with a key for each model output.
      The value associated is the best one found for that output during the whole train procedure.
     Args:
         hist: train history
+        metric: metric name
+        maximize: True if max is best, false instead if min is best
 
     Returns:
-        (dict[str, float]): dictionary with best validation accuracy values, for each output.
+        (dict[str, float]): dictionary with best metric values, for each output.
     '''
-    r = re.compile(r'val_Softmax_c(\d+)_accuracy')
+    r = re.compile(rf'val_Softmax_c(\d+)_{metric}')
     output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
 
     # save best accuracy reached for each output
     multi_output_accuracies = {}
     for output_index in output_indexes:
-        multi_output_accuracies[f'c{output_index}_accuracy'] = max(hist.history[f'val_Softmax_c{output_index}_accuracy'])
+        multi_output_accuracies[f'c{output_index}_{metric}'] = max(hist.history[f'val_Softmax_c{output_index}_{metric}']) if maximize \
+            else min(hist.history[f'val_Softmax_c{output_index}_{metric}'])
 
     return multi_output_accuracies
 

@@ -458,7 +458,7 @@ class ModelGenerator:
             loss = losses.CategoricalCrossentropy()
             loss_weights = None
 
-        metrics = ['accuracy']
+        metrics = ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
 
         if self.cdr_config['enabled']:
             decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
