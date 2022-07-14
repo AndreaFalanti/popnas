@@ -70,7 +70,7 @@ class NetworkManager:
             if self.balance_class_losses else None
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
-                                        output_classes=self.dataset_classes_count, image_shape=image_shape,
+                                        output_classes_count=self.dataset_classes_count, image_shape=image_shape,
                                         data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None,
                                         save_weights=save_network_weights)
 

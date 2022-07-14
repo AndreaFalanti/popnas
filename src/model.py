@@ -46,7 +46,7 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes: int, image_shape: 'tuple[int, int, int]',
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, image_shape: 'tuple[int, int, int]',
                  data_augmentation_model: Sequential = None, save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
         self.op_regexes = self.__compile_op_regexes()
@@ -56,7 +56,7 @@ class ModelGenerator:
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         self.multi_output = arc_params['multi_output']
-        self.output_classes = output_classes
+        self.output_classes_count = output_classes_count
         self.image_shape = image_shape
 
         self.lr = cnn_hp['learning_rate']
@@ -152,7 +152,7 @@ class ModelGenerator:
         gap = layers.GlobalAveragePooling2D(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
+        output = layers.Dense(self.output_classes_count, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
 
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output

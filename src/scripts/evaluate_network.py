@@ -65,7 +65,7 @@ def main():
 
     logger.info('Generating Keras model from cell specification...')
 
-    model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes=classes_count, image_shape=image_shape,
+    model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, image_shape=image_shape,
                                data_augmentation_model=None)
     model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
