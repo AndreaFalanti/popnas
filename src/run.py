@@ -4,7 +4,7 @@ import os.path
 import sys
 
 import log_service
-from train import Train
+from popnas import Popnas
 from utils.nn_utils import initialize_train_strategy
 
 
@@ -59,8 +59,8 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
-    run = Train(run_config, train_strategy)
-    run.process()
+    popnas = Popnas(run_config, train_strategy)
+    popnas.start()
 
 
 if __name__ == '__main__':

@@ -22,9 +22,10 @@ from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore
     restore_search_space_children
 
 
-class Train:
+class Popnas:
 
     def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy):
+        ''' Configure and set up POPNASv2 algorithm for execution. Use start() function to start the NAS procedure. '''
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
@@ -318,9 +319,9 @@ class Train:
             else:
                 self.restore_info.update(pareto_training_index=model_index + 1, total_time=self._compute_total_time())
 
-    def process(self):
+    def start(self):
         '''
-        Main function, executed by run.py to start POPNAS algorithm.
+        Start a neural architecture search run, using POPNASv2 algorithm customized with provided configuration.
         '''
         time_headers, time_feature_types = build_time_feature_names()
         acc_headers, acc_feature_types = build_acc_feature_names(self.blocks, self.input_lookback_depth)
