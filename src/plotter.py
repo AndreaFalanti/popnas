@@ -25,6 +25,21 @@ plt.set_loglevel('WARNING')
 # warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
 
+# define utility namedtuple for mapping a metric to the respective columns in the csv produced during POPNAS run, so that is possible to
+# easily access them without typos during plot class. Make also easier to change the names in the future.
+class MetricDfFields(NamedTuple):
+    pred_column: str
+    real_column: str
+    units: Optional[str] = None
+
+
+metrics_fields_dict = {
+    'time': MetricDfFields('time', 'training time(seconds)', 'seconds'),
+    'accuracy': MetricDfFields('val accuracy', 'best val accuracy'),
+    'params': MetricDfFields('params', 'total params')
+}
+
+
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
 def initialize_logger():
     global __logger
@@ -488,78 +503,64 @@ def __build_prediction_dataframe(b: int, k: int, pnas_mode: bool):
 
 
 def plot_predictions_error(B: int, K: int, pnas_mode: bool, time_predictor_enabled: bool):
-    time_errors, avg_time_errors, max_time_errors, min_time_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
-    acc_errors, avg_acc_errors, max_acc_errors, min_acc_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
-    time_mapes, acc_mapes, time_spearman_coeffs, acc_spearman_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
-    time_r2, acc_r2 = np.zeros(B - 1), np.zeros(B - 1)
+    # build dataframes
+    merge_dfs = [__build_prediction_dataframe(b, K, pnas_mode) for b in range(2, B + 1)]
+    
+    def plot_prediction_errors_for_metric(metric_name: str):
+        '''
+        Plot predictors related graphs, comparing the results with real values obtained after training.
+         
+        Args:
+            metric_name: Pareto metric which has an associated predictor
+        '''
+        errors, avg_errors, max_errors, min_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+        mapes, spearman_coeffs, r2_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
+        
+        pred_values, real_values = [], []
+        legend_labels = []
 
-    # TODO: maybe better to refactor these lists to numpy arrays too.
-    # They are used as list of lists for scatter plots.
-    pred_times, real_times = [], []
-    pred_acc, real_acc = [], []
-    scatter_time_legend_labels, scatter_acc_legend_labels = [], []
+        m = metrics_fields_dict[metric_name]
 
-    # TODO: find a good way to remove duplication
-    for b in range(2, B + 1):
-        __logger.info("Comparing predicted values with actual CNN training of b=%d", b)
-        merge_df = __build_prediction_dataframe(b, K, pnas_mode)
+        for b in range(2, B + 1):
+            __logger.info("Comparing predicted values of %s with actual values retrieved after CNN training (b=%d)", metric_name, b)
+            df = merge_dfs[b - 2]
 
-        # compute time prediction errors (regressor)
-        if not pnas_mode and time_predictor_enabled:
-            pred_times.append(merge_df['time'].to_list())
-            real_times.append(merge_df['training time(seconds)'].to_list())
+            pred_b = df[m.pred_column]
+            real_b = df[m.real_column]
 
-            time_errors_b = merge_df['training time(seconds)'] - merge_df['time']
-            time_errors.append(time_errors_b)
+            pred_values.append(pred_b.to_list())
+            real_values.append(real_b.to_list())
 
-            avg_time_errors[b - 2] = statistics.mean(time_errors_b)
-            max_time_errors[b - 2] = max(time_errors_b)
-            min_time_errors[b - 2] = min(time_errors_b)
+            errors_b = real_b - pred_b
+            errors.append(errors_b)
 
-            time_mapes[b - 2] = compute_mape(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
-            time_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'training time(seconds)', 'time')
-            time_r2[b - 2] = r2_score(merge_df['training time(seconds)'].to_list(), merge_df['time'].to_list())
+            avg_errors[b - 2] = statistics.mean(errors_b)
+            max_errors[b - 2] = max(errors_b)
+            min_errors[b - 2] = min(errors_b)
 
-        # always compute accuracy prediction errors (LSTM controller)
-        pred_acc.append(merge_df['val accuracy'].to_list())
-        real_acc.append(merge_df['best val accuracy'].to_list())
+            mapes[b - 2] = compute_mape(real_b.to_list(), pred_b.to_list())
+            spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(df, m.real_column, m.pred_column)
+            r2_coeffs[b - 2] = r2_score(real_b.to_list(), pred_b.to_list())
 
-        val_accuracy_errors_b = merge_df['best val accuracy'] - merge_df['val accuracy']
-        acc_errors.append(val_accuracy_errors_b)
+            legend_labels.append(f'B{b} (MAPE: {mapes[b - 2]:.3f}%, ρ: {spearman_coeffs[b - 2]:.3f})')
 
-        avg_acc_errors[b - 2] = statistics.mean(val_accuracy_errors_b)
-        max_acc_errors[b - 2] = max(val_accuracy_errors_b)
-        min_acc_errors[b - 2] = min(val_accuracy_errors_b)
+        x = np.arange(2, B + 1)
+        bars = __generate_avg_max_min_bars(avg_errors, max_errors, min_errors)
+        capitalized_metric = metric_name.capitalize()
+        units_str = f'({m.units})' if m.units is not None else ''
 
-        acc_mapes[b - 2] = compute_mape(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
-        acc_spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(merge_df, 'best val accuracy', 'val accuracy')
-        acc_r2[b - 2] = r2_score(merge_df['best val accuracy'].to_list(), merge_df['val accuracy'].to_list())
+        __plot_multibar_histogram(x, bars, 0.15, 'Blocks', f'{capitalized_metric}{units_str}',
+                                  f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_overview')
+        __plot_boxplot(errors, x, 'Blocks', f'{capitalized_metric} error{units_str}',
+                       f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_boxplot')
+        __plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
+                                     f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
 
-        # add MAPE, R^2 and spearman metrics to legends
-        scatter_time_legend_labels.append(f'B{b} (MAPE: {time_mapes[b - 2]:.3f}%, ρ: {time_spearman_coeffs[b - 2]:.3f})')
-        scatter_acc_legend_labels.append(f'B{b} (MAPE: {acc_mapes[b - 2]:.3f}%, ρ: {acc_spearman_coeffs[b - 2]:.3f})')
-
-    x = np.arange(2, B + 1)
-
-    # write plots about time
+    # write plots about each Pareto metric associated to a predictor
     if not pnas_mode and time_predictor_enabled:
-        time_bars = __generate_avg_max_min_bars(avg_time_errors, max_time_errors, min_time_errors)
+        plot_prediction_errors_for_metric('time')
 
-        __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)',
-                                  'Time prediction errors overview (real - predicted)', 'pred_time_errors_overview')
-        __plot_boxplot(time_errors, x, 'Blocks', 'Time error', 'Time prediction errors overview (real - predicted)', 'pred_time_errors_boxplot')
-        __plot_squared_scatter_chart(real_times, pred_times, 'Real time(seconds)', 'Predicted time(seconds)', 'Time predictions overview',
-                                     'time_pred_overview', legend_labels=scatter_time_legend_labels)
-
-    acc_bars = __generate_avg_max_min_bars(avg_acc_errors, max_acc_errors, min_acc_errors)
-
-    # write plots about accuracy
-    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy',
-                              'Val accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_overview')
-    __plot_boxplot(acc_errors, x, 'Blocks', 'Accuracy error',
-                   'Accuracy prediction errors overview (real - predicted)', 'pred_acc_errors_boxplot')
-    __plot_squared_scatter_chart(real_acc, pred_acc, 'Real accuracy', 'Predicted accuracy', 'Accuracy predictions overview',
-                                 'acc_pred_overview', legend_labels=scatter_acc_legend_labels)
+    plot_prediction_errors_for_metric('accuracy')
 
     __logger.info("Prediction error overview plots written successfully")
 
@@ -568,18 +569,6 @@ def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
     training_df = training_df[training_df['exploration'] == False]
-
-    # map pareto objectives to csv fields
-    objective_to_training_df_field = {
-        'accuracy': 'best val accuracy',
-        'time': 'training time(seconds)',
-        'params': 'total params'
-    }
-    objective_to_pareto_df_field = {
-        'accuracy': 'val accuracy',
-        'time': 'time',
-        'params': 'params'
-    }
 
     for b in range(2, B + 1):
         # front built with actual values got from training
@@ -592,8 +581,9 @@ def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
         real_coords, pred_coords = [], []
 
         for objective in pareto_objectives:
-            real_coords.append(training_df_b[objective_to_training_df_field[objective]].to_list())
-            pred_coords.append(pareto_df[objective_to_pareto_df_field[objective]].to_list())
+            m = metrics_fields_dict[objective]
+            real_coords.append(training_df_b[m.real_column].to_list())
+            pred_coords.append(pareto_df[m.pred_column].to_list())
 
         __plot_pareto_front(real_coords, pred_coords, pareto_objectives,
                             title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
@@ -602,13 +592,6 @@ def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
 
 
 def plot_predictions_with_pareto_analysis(B: int, pareto_objectives: 'list[str]'):
-    # predictions df fields are actually the same, so no need to have two maps
-    objective_to_pareto_df_field = {
-        'accuracy': 'val accuracy',
-        'time': 'time',
-        'params': 'params'
-    }
-
     for b in range(2, B + 1):
         predictions_df = pd.read_csv(log_service.build_path('csv', f'predictions_B{b}.csv'))
         pareto_df = pd.read_csv(log_service.build_path('csv', f'pareto_front_B{b}.csv'))
@@ -616,15 +599,9 @@ def plot_predictions_with_pareto_analysis(B: int, pareto_objectives: 'list[str]'
         pred_coords, pareto_coords = [], []
 
         for objective in pareto_objectives:
-            pred_coords.append(predictions_df[objective_to_pareto_df_field[objective]].to_list())
-            # pred_acc = predictions_df['val accuracy'].to_list()
-            # pred_times = predictions_df['time'].to_list()
-            # pred_params = predictions_df['params'].to_list()
-
-            pareto_coords.append(pareto_df[objective_to_pareto_df_field[objective]].to_list())
-            # pareto_acc = pareto_df['val accuracy'].to_list()
-            # pareto_times = pareto_df['time'].to_list()
-            # pareto_params = pareto_df['params'].to_list()
+            m = metrics_fields_dict[objective]
+            pred_coords.append(predictions_df[m.pred_column].to_list())
+            pareto_coords.append(pareto_df[m.pred_column].to_list())
 
         __plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objectives,
                                                 f'Predictions with Pareto points B{b}', f'predictions_with_pareto_B{b}')
