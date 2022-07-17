@@ -12,15 +12,16 @@ from tensorflow.python.framework.convert_to_constants import convert_variables_t
 
 class TrainingResults:
     ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
-    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, params: int, flops: int, inference_time: float) -> None:
+    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, inference_time: float, params: int, flops: int) -> None:
         self.cell_spec = cell_spec
-        self.blocks = len(cell_spec)
         self.accuracy = accuracy
         self.f1_score = f1_score
         self.training_time = training_time
+        self.inference_time = inference_time
         self.params = params
         self.flops = flops
-        self.inference_time = inference_time
+
+        self.blocks = len(cell_spec)
 
     @staticmethod
     def get_csv_headers():
@@ -30,10 +31,10 @@ class TrainingResults:
         ''' Return a list with fields ordered for csv insertion '''
         return [self.accuracy, self.f1_score, self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
 
-    # TODO: consider to refactor these code parts and remove this function (very low priority)
-    def to_legacy_info_tuple(self):
+    @staticmethod
+    def from_csv_row(row: list) -> 'TrainingResults':
         ''' Some code parts use an ordered tuple (time, acc, cell_spec), so return it to support more easily their logic without refactors. '''
-        return self.training_time, self.accuracy, self.cell_spec
+        return TrainingResults(row[7], *row[0:6])
 
 
 def get_best_metric_per_output(hist: History, metric: str, maximize: bool = True):

@@ -257,7 +257,7 @@ class NetworkManager:
                 self.__write_multi_output_file(cell_spec, {**multi_output_accuracies, **multi_output_f1})
             else:
                 accuracies[i] = max(hist.history['val_accuracy'])
-                f1_scores[i] = max(hist.history['f1_score'])
+                f1_scores[i] = max(hist.history['val_f1_score'])
 
         training_time = times.mean()
         accuracy = accuracies.mean()
@@ -302,4 +302,4 @@ class NetworkManager:
         del model
         gc.collect()
 
-        return TrainingResults(cell_spec, accuracy, f1_score, training_time, total_params, flops, inference_time)
+        return TrainingResults(cell_spec, accuracy, f1_score, training_time, inference_time, total_params, flops)

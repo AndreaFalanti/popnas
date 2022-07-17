@@ -6,6 +6,7 @@ import pandas as pd
 import log_service
 from encoder import SearchSpace
 from utils.func_utils import parse_cell_structures
+from utils.nn_utils import TrainingResults
 
 
 class RestoreInfo:
@@ -60,13 +61,10 @@ def restore_dynamic_reindex_function():
 def restore_train_info(b: int):
     training_df = pd.read_csv(log_service.build_path('csv', 'training_results.csv'))
     # filter on current block level
-    training_df = training_df[training_df['# blocks'] == b]
+    training_df = training_df[training_df['# blocks'] == b].drop(columns=['exploration'])
+    training_df['cell structure'] = parse_cell_structures(training_df['cell structure'])
 
-    cell_specs = parse_cell_structures(training_df['cell structure'].to_list())
-    times = training_df['training time(seconds)'].to_list()
-    accuracies = training_df['best val accuracy'].to_list()
-
-    return list(zip(times, accuracies, cell_specs))
+    return [TrainingResults.from_csv_row(row) for row in training_df.itertuples(index=False)]
 
 
 def restore_search_space_children(search_space: SearchSpace, b: int, max_children: int, pnas_mode: bool):

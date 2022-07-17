@@ -151,7 +151,15 @@ class Popnas:
 
         return train_res.training_time
 
-    def write_overall_cnn_training_results(self, blocks, times, rewards):
+    def write_overall_cnn_training_results(self, blocks: int, train_results: 'list[TrainingResults]'):
+        def get_metric_aggregate_values(metric_values: 'list[float]'):
+            return statistics.mean(metric_values), max(metric_values), min(metric_values)
+
+        times, scores = [], []
+        for train_res in train_results:
+            times.append(train_res.training_time)
+            scores.append(train_res.accuracy)
+
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
 
@@ -159,36 +167,29 @@ class Popnas:
             if f.tell() == 0:
                 writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val acc', 'max acc', 'min acc'])
 
-            avg_time = statistics.mean(times)
-            max_time = max(times)
-            min_time = min(times)
-
-            avg_acc = statistics.mean(rewards)
-            max_acc = max(rewards)
-            min_acc = min(rewards)
+            avg_time, max_time, min_time = get_metric_aggregate_values(times)
+            avg_acc, max_acc, min_acc = get_metric_aggregate_values(scores)
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def write_predictors_training_data(self, current_blocks: int, time: float, accuracy: float, cell_spec: list, exploration: bool = False):
+    def write_predictors_training_data(self, current_blocks: int, train_res: TrainingResults, exploration: bool = False):
         '''
         Write the training results of a sampled architecture, as formatted features that will be used for training the predictors.
 
         Args:
-            current_blocks (int): [description]
-            time (float): [description]
-            accuracy (float):
-            cell_spec (list): [description]
+            current_blocks:
+            train_res:
             exploration:
         '''
         # single record, no data augmentation needed
-        time_row = [time] + generate_time_features(cell_spec, self.search_space) + [exploration]
+        time_row = [train_res.training_time] + generate_time_features(train_res.cell_spec, self.search_space) + [exploration]
 
         # accuracy features need data augmentation to generalize on equivalent cell specifications
-        eqv_cells, _ = self.search_space.generate_eqv_cells(cell_spec, size=self.blocks)
+        eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
-        full_cell_spec = cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
+        full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
 
-        acc_rows = [[accuracy] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
+        acc_rows = [[train_res.accuracy] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -245,13 +246,13 @@ class Popnas:
 
         return get_acc_predictor_for_b, get_time_predictor_for_b
 
-    def write_smb_times(self, monoblocks_train_info: 'list[tuple[float, float, list[tuple]]]'):
+    def write_smb_times(self, monoblocks_train_info: 'list[TrainingResults]'):
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_times = {}
 
-        for time, _, cell_spec in monoblocks_train_info:
+        for t_res in monoblocks_train_info:
             # unpack the block (only tuple present in the list) into its components
-            in1, op1, in2, op2 = cell_spec[0]
+            in1, op1, in2, op2 = t_res.cell_spec[0]
 
             # get required data for dynamic reindex
             # op_times will contain training times for blocks with both same operation and input -1, for each operation, in order
@@ -260,8 +261,8 @@ class Popnas:
             if same_inputs and same_op and in1 == -1:
                 with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow([time, op1])
-                    op_times[op1] = time
+                    writer.writerow([t_res.training_time, op1])
+                    op_times[op1] = t_res.training_time
 
         return op_times
 
@@ -292,7 +293,7 @@ class Popnas:
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 
-    def train_selected_architectures(self, cnns_train_info: 'list[tuple[float, float, list[tuple]]]', current_blocks: int, exploration: bool):
+    def train_selected_architectures(self, cnns_train_info: 'list[TrainingResults]', current_blocks: int, exploration: bool):
         cell_specs = self.search_space.exploration_front if exploration else self.search_space.children
         restore_index = self.restore_exploration_train_index if exploration else self.restore_pareto_train_index
 
@@ -305,14 +306,14 @@ class Popnas:
             self._logger.debug("\t%s", cell_spec)
 
             train_res = self.generate_and_train_model_from_spec(cell_spec)
-            cnns_train_info.append(train_res.to_legacy_info_tuple())
+            cnns_train_info.append(train_res)
             self._logger.info("Finished %d out of %d %s!", model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
 
             self.write_training_results_into_csv(train_res, exploration=exploration)
 
             # if current_blocks > 1 we have already the dynamic reindex function, so it's possible to write the feature data immediately
             if current_blocks > 1:
-                self.write_predictors_training_data(current_blocks, *train_res.to_legacy_info_tuple(), exploration=exploration)
+                self.write_predictors_training_data(current_blocks, train_res, exploration=exploration)
 
             if exploration:
                 self.restore_info.update(exploration_training_index=model_index + 1, total_time=self._compute_total_time())
@@ -340,25 +341,24 @@ class Popnas:
 
         # train the selected CNN networks for each number of blocks (algorithm step)
         for current_blocks in range(self.starting_b, self.blocks + 1):
-            cnns_train_info = [] if self.restore_pareto_train_index == 0 \
-                else restore_train_info(current_blocks)  # type: list[tuple[float, float, list[tuple]]]
+            training_results = [] if self.restore_pareto_train_index == 0 \
+                else restore_train_info(current_blocks)  # type: list[TrainingResults]
 
-            self.train_selected_architectures(cnns_train_info, current_blocks, exploration=False)
+            self.train_selected_architectures(training_results, current_blocks, exploration=False)
             # train the models built from exploration pareto front
-            self.train_selected_architectures(cnns_train_info, current_blocks, exploration=True)
+            self.train_selected_architectures(training_results, current_blocks, exploration=True)
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
-                op_times = self.write_smb_times(cnns_train_info)
+                op_times = self.write_smb_times(training_results)
                 reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_smb_info()
 
-                for time, acc, cell_spec in cnns_train_info:
-                    self.write_predictors_training_data(current_blocks, time, acc, cell_spec)
+                for train_res in training_results:
+                    self.write_predictors_training_data(current_blocks, train_res)
 
-            times, rewards, _ = zip(*cnns_train_info)
-            self.write_overall_cnn_training_results(current_blocks, times, rewards)
+            self.write_overall_cnn_training_results(current_blocks, training_results)
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:
