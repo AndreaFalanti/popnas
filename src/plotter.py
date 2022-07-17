@@ -35,8 +35,9 @@ class MetricDfFields(NamedTuple):
 
 metrics_fields_dict = {
     'time': MetricDfFields('time', 'training time(seconds)', 'seconds'),
-    'accuracy': MetricDfFields('val accuracy', 'best val accuracy'),
-    'params': MetricDfFields('params', 'total params')
+    'accuracy': MetricDfFields('val score', 'best val accuracy'),
+    'params': MetricDfFields('params', 'total params'),
+    'f1_score': MetricDfFields('val score', 'val F1 score'),
 }
 
 
@@ -346,10 +347,10 @@ def plot_training_info_per_block():
     x = df['# blocks']
 
     time_bars = __generate_avg_max_min_bars(df['avg training time(s)'], df['max time'], df['min time'])
-    acc_bars = __generate_avg_max_min_bars(df['avg val acc'], df['max acc'], df['min acc'])
+    score_bars = __generate_avg_max_min_bars(df['avg val score'], df['max score'], df['min score'])
 
     __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview')
-    __plot_multibar_histogram(x, acc_bars, 0.15, 'Blocks', 'Accuracy', 'Validation accuracy overview', 'train_acc_overview')
+    __plot_multibar_histogram(x, score_bars, 0.15, 'Blocks', 'Score', 'Validation score overview', 'train_score_overview')
 
     __logger.info("Training aggregated overview plots written successfully")
 
@@ -359,16 +360,18 @@ def plot_cnn_train_boxplots_per_block(B: int):
     csv_path = log_service.build_path('csv', 'training_results.csv')
     df = pd.read_csv(csv_path)
 
-    times_per_block, acc_per_block = [], []
+    times_per_block, acc_per_block, f1_scores_per_block = [], [], []
     x = list(range(1, B + 1))
     for b in x:
         b_df = df[df['# blocks'] == b]
 
         acc_per_block.append(b_df['best val accuracy'])
         times_per_block.append(b_df['training time(seconds)'])
+        f1_scores_per_block.append(b_df['val F1 score'])
 
     __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
     __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
+    __plot_boxplot(f1_scores_per_block, x, 'Blocks', 'Val F1 score', 'Val F1 score overview', 'val_f1_score_boxplot')
 
 
 def __initialize_dict_usage_data(keys: list):
@@ -502,7 +505,7 @@ def __build_prediction_dataframe(b: int, k: int, pnas_mode: bool):
     return pd.merge(training_df, pred_df, on=['cell structure'], how='inner')
 
 
-def plot_predictions_error(B: int, K: int, pnas_mode: bool, time_predictor_enabled: bool):
+def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: 'list[str]'):
     # build dataframes
     merge_dfs = [__build_prediction_dataframe(b, K, pnas_mode) for b in range(2, B + 1)]
     
@@ -556,11 +559,12 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, time_predictor_enabl
         __plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
                                      f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
 
+    score_metric = 'accuracy' if 'accuracy' in pareto_objectives else 'f1_score'
     # write plots about each Pareto metric associated to a predictor
-    if not pnas_mode and time_predictor_enabled:
+    if not pnas_mode and 'time' in pareto_objectives:
         plot_prediction_errors_for_metric('time')
 
-    plot_prediction_errors_for_metric('accuracy')
+    plot_prediction_errors_for_metric(score_metric)
 
     __logger.info("Prediction error overview plots written successfully")
 

@@ -41,7 +41,7 @@ def main():
 
     csv_path = os.path.join(args.p, 'csv')
     amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'regressors_hyperopt.ini')
-    training_acc_csv_path = os.path.join(csv_path, 'training_accuracy.csv')
+    training_acc_csv_path = os.path.join(csv_path, 'training_score.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_acc.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')
     nn_y_col = 'best val accuracy'

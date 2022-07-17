@@ -19,4 +19,4 @@ class ModelEstimate:
 
     @staticmethod
     def get_csv_headers():
-        return ['time', 'val accuracy', 'params', 'cell structure']
+        return ['time', 'val score', 'params', 'cell structure']

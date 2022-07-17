@@ -14,7 +14,7 @@ from encoder import SearchSpace
 from manager import NetworkManager
 from predictors import *
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
-    generate_dynamic_reindex_function, build_acc_feature_names, \
+    generate_dynamic_reindex_function, build_score_feature_names, \
     generate_time_features, generate_acc_features
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
 from utils.nn_utils import TrainingResults
@@ -39,6 +39,7 @@ class Popnas:
         sstr_config = run_config['search_strategy']
         self.children_max_size = sstr_config['max_children']
         self.pareto_objectives = sstr_config['pareto_objectives']
+        self.score_objective = 'accuracy' if 'accuracy' in self.pareto_objectives else 'f1_score'
 
         # dataset parameters
         ds_config = run_config['dataset']
@@ -143,7 +144,7 @@ class Popnas:
             writer = csv.writer(f)
             writer.writerow(time_data)
 
-        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
+        with open(log_service.build_path('csv', 'training_score.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(acc_data)
 
@@ -158,14 +159,14 @@ class Popnas:
         times, scores = [], []
         for train_res in train_results:
             times.append(train_res.training_time)
-            scores.append(train_res.accuracy)
+            scores.append(train_res.accuracy if self.score_objective == 'accuracy' else train_res.f1_score)
 
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
 
             # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
             if f.tell() == 0:
-                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val acc', 'max acc', 'min acc'])
+                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val score', 'max score', 'min score'])
 
             avg_time, max_time, min_time = get_metric_aggregate_values(times)
             avg_acc, max_acc, min_acc = get_metric_aggregate_values(scores)
@@ -188,15 +189,16 @@ class Popnas:
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
         full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
+        score = train_res.accuracy if self.score_objective else train_res.f1_score
 
-        acc_rows = [[train_res.accuracy] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
+        acc_rows = [[score] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(time_row)
 
-        with open(log_service.build_path('csv', 'training_accuracy.csv'), mode='a+', newline='') as f:
+        with open(log_service.build_path('csv', 'training_score.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(acc_rows)
 
@@ -284,7 +286,7 @@ class Popnas:
         ''' Generate plots after the run has been terminated, analyzing the whole results. '''
         plotter.plot_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
-        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, time_predictor_enabled='time' in self.pareto_objectives)
+        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, self.pareto_objectives)
         plotter.plot_correlations_with_training_time()
 
         if not self.pnas_mode:
@@ -325,7 +327,7 @@ class Popnas:
         Start a neural architecture search run, using POPNASv2 algorithm customized with provided configuration.
         '''
         time_headers, time_feature_types = build_time_feature_names()
-        acc_headers, acc_feature_types = build_acc_feature_names(self.blocks, self.input_lookback_depth)
+        score_headers, score_feature_types = build_score_feature_names(self.blocks, self.input_lookback_depth)
 
         self.cnn_manager.bootstrap_dataset_lazy_initialization()
 
@@ -333,9 +335,9 @@ class Popnas:
         # if B = 0, perform initial thrust before starting actual training procedure
         if self.starting_b == 0:
             # add headers to csv and create CatBoost feature files
-            initialize_features_csv_files(time_headers, time_feature_types, acc_headers, acc_feature_types, log_service.build_path('csv'))
+            initialize_features_csv_files(time_headers, time_feature_types, score_headers, score_feature_types, log_service.build_path('csv'))
 
-            initial_thrust_time = self.perform_initial_thrust(len(acc_headers))
+            initial_thrust_time = self.perform_initial_thrust(len(score_headers))
             self.starting_b = 1
             self.restore_info.update(current_b=1, total_time=self._compute_total_time())
 

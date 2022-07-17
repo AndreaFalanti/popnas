@@ -10,14 +10,15 @@ from utils.nn_utils import initialize_train_strategy
 
 def validate_pareto_objectives(objectives: 'list[str]'):
     # TODO: config structure check should be done in entirety in a single place, think about it in the future
-    valid_pareto_objectives = ['accuracy', 'time', 'params']
+    valid_pareto_objectives = ['accuracy', 'f1_score', 'time', 'params']
 
     if len(objectives) <= 1:
         raise ValueError('You must provide at least two objectives to optimize (see config search_strategy.pareto_objectives)')
     # TODO: actually we need to have at least one metric for prediction quality (accuracy, f1score, ecc..) to have meaningful results.
     #  Other metrics should be included in future.
-    if 'accuracy' not in objectives:
-        raise ValueError('Accuracy must always be included in Pareto objectives')
+    # XNOR basically
+    if ('accuracy' not in objectives and 'f1_score' not in objectives) or ('accuracy' in objectives and 'f1_score' in objectives):
+        raise ValueError('Accuracy or F1 score must always be included in Pareto objectives, but not both at the same time')
 
     for obj in objectives:
         if obj not in valid_pareto_objectives:

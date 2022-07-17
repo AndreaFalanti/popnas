@@ -18,7 +18,7 @@ def build_time_feature_names():
     return headers, header_types
 
 
-def build_acc_feature_names(max_blocks: int, max_lookback: int):
+def build_score_feature_names(max_blocks: int, max_lookback: int):
     op_headers, op_headers_types = [], []
     block_incidence_headers, block_incidence_headers_types = [], []
     lookback_incidence_headers, lookback_incidence_headers_types = [], []
@@ -39,7 +39,7 @@ def build_acc_feature_names(max_blocks: int, max_lookback: int):
     lookback_incidence_headers_types = ['Num'] * len(lookback_incidence_headers)
     lookback_usage_headers_types = ['Num'] * len(lookback_usage_headers)
 
-    headers = ['acc', 'blocks', 'cells'] + op_headers + lookback_usage_headers + \
+    headers = ['score', 'blocks', 'cells'] + op_headers + lookback_usage_headers + \
               lookback_incidence_headers + block_incidence_headers + ['exploration', 'data_augmented']
     header_types = ['Label', 'Num', 'Num'] + op_headers_types + lookback_usage_headers_types + \
                    lookback_incidence_headers_types + block_incidence_headers_types + ['Auxiliary', 'Auxiliary']
@@ -60,7 +60,7 @@ def initialize_features_csv_files(time_headers: list, time_feature_types: list, 
         writer = csv.writer(f)
         writer.writerow(time_headers)
 
-    with open(os.path.join(csv_folder_path, 'training_accuracy.csv'), mode='w', newline='') as f:
+    with open(os.path.join(csv_folder_path, 'training_score.csv'), mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(acc_headers)
 # endregion
