@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import os
 import shutil
@@ -120,9 +121,15 @@ def main():
     gen_paths = path_closure(args.p)
     gen_save_path = generate_slide_save_path(args.p) if args.save else iter(())
 
+    with open(os.path.join(args.p, 'restore', 'run.json')) as f:
+        run_config = json.load(f)
+
+    sstr_config = run_config['search_strategy']
+    score_metric = 'accuracy' if 'accuracy' in sstr_config['pareto_objectives'] else 'f1_score'
+
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
                           2, 2, title='Specular mono blocks (input -1) overview', save=args.save, save_name=next(gen_save_path, None))
-    display_plot_overview(gen_paths(['acc_pred_overview.png', 'pred_acc_errors_boxplot.png',
+    display_plot_overview(gen_paths([f'{score_metric}_pred_overview.png', f'pred_{score_metric}_errors_boxplot.png',
                                      'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
                           2, 2, title='Prediction errors overview', save=args.save, save_name=next(gen_save_path, None))
 
