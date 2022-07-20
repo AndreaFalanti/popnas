@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pandas as pd
 import tensorflow as tf
-import tensorflow_addons as tfa
 from tensorflow.keras import callbacks, models, metrics
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
@@ -224,8 +223,6 @@ def main():
 
             loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
             train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
-            # TODO: using average=None would return f1 scores for each class, but conflicts with tensorboard callback which require scalars
-            train_metrics.append(tfa.metrics.F1Score(num_classes=classes_count, average='macro'))
 
             execution_steps = get_optimized_steps_per_execution(train_strategy)
             model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
