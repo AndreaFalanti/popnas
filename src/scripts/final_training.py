@@ -13,7 +13,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 import log_service
 from model import ModelGenerator
 from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
-from utils.func_utils import create_empty_folder, parse_cell_structures
+from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
 from utils.rstr import rstr
 from utils.timing_callback import TimingCallback
@@ -215,6 +215,9 @@ def main():
             cell_spec = parse_cell_structures([args.spec])[0]
 
         logger.info('Generating Keras model from cell specification...')
+        # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
+        with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
+            f.write(cell_spec_to_str(cell_spec))
 
         with train_strategy.scope():
             model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, image_shape=image_shape,
