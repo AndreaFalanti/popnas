@@ -3,7 +3,7 @@ name = "popnas"
 version = "2.4.1"
 description = "POPNAS algorithm"
 authors = ["AndreaFalanti <a.falanti@gmail.com>"]
-license = "MIT"
+license = "Apache-2.0"
 
 [tool.poetry.dependencies]
 # tested on 3.7.4 on windows, docker use 3.8.10
