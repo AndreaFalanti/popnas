@@ -11,7 +11,6 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend
 import tf2onnx
-from matplotlib import pyplot as plt
 from tensorflow.keras import Model
 from tensorflow.keras.utils import plot_model
 
@@ -91,37 +90,7 @@ class NetworkManager:
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
         # DEBUG ONLY
-        # self.__test_data_augmentation(self.dataset_folds[0][0])
-
-    def __test_data_augmentation(self, ds: tf.data.Dataset):
-        '''
-        Function helpful for debugging data augmentation and making sure it's working properly.
-        DON'T USE IT IN ACTUAL RUNS.
-        Args:
-            ds: any TF dataset where data augmentation is applied
-        '''
-        # switch to an interactive matplotlib backend
-        plt.switch_backend('TkAgg')
-
-        data_augmentation_model = get_data_augmentation_model()
-
-        # get a batch
-        images, labels = next(iter(ds))
-
-        # display 9 transformation of the first 3 images of the first training batch
-        for j in range(3):
-            image = images[j]
-            plt.imshow(image)
-            plt.show()
-
-            for i in range(9):
-                augmented_image = data_augmentation_model(image)
-                _ = plt.subplot(3, 3, i + 1)
-                plt.imshow(augmented_image)
-                plt.axis('off')
-
-            plt.show()
-        self._logger.debug('Data augmentation debug shown')
+        # test_data_augmentation(self.dataset_folds[0][0])
 
     def __write_partitions_file(self, partition_dict: dict, save_dir: str):
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]

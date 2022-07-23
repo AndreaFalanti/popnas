@@ -2,24 +2,26 @@ import math
 import os.path
 from collections import Counter
 from logging import Logger
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, layers, Sequential
-from tensorflow.keras.utils import to_categorical, image_dataset_from_directory
+from tensorflow.keras.utils import image_dataset_from_directory
 
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: Union[int, None],
-                        data_augmentation: Sequential, augment_on_gpu: bool, cache: bool,
+def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batch_size: Optional[int],
+                        data_augmentation: Sequential, augment_on_gpu: bool, cache: bool, resize_dim: Optional['tuple[int, int]'],
+                        class_count_for_one_hot: Optional[int] = None,
                         shard_policy: tf.data.experimental.AutoShardPolicy = tf.data.experimental.AutoShardPolicy.DATA):
     '''
     Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
-    Basically apply batch, cache, data augmentation (only to training set) and prefetch.
+    Basically apply batch, preprocessing, cache, data augmentation (only to training set) and prefetch.
 
     Returns:
         train dataset, validation dataset, train batches count, validation batches count
@@ -36,7 +38,22 @@ def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batc
         train_ds = train_ds.batch(batch_size)
         val_ds = val_ds.batch(batch_size)
 
-    # cache in memory for better performance, if enabled
+    # PREPROCESSING (TODO: could use a "strategy pattern", using different classes based on task)
+    if resize_dim is not None:
+        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
+
+    # normalize into [0, 1] domain
+    normalization_layer = layers.Rescaling(1. / 255)
+    train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=AUTOTUNE)
+    val_ds = val_ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=AUTOTUNE)
+
+    # convert to one-hot encoding
+    if class_count_for_one_hot is not None:
+        train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, class_count_for_one_hot)), num_parallel_calls=AUTOTUNE)
+        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, class_count_for_one_hot)), num_parallel_calls=AUTOTUNE)
+
+    # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
     if cache:
         train_ds = train_ds.cache()
         val_ds = val_ds.cache()
@@ -51,9 +68,9 @@ def __finalize_datasets(train_ds: tf.data.Dataset, val_ds: tf.data.Dataset, batc
     return train_ds.prefetch(AUTOTUNE), val_ds.prefetch(AUTOTUNE), train_batches, val_batches
 
 
-def __load_dataset_images(dataset_source: str):
+def __load_keras_dataset_images(dataset_source: str):
     '''
-    Load images of a dataset
+    Load images of a Keras dataset. In this case the data is in form of Numpy arrays.
     Args:
         dataset_source: A valid Keras dataset name or a path to a dataset location
 
@@ -83,72 +100,21 @@ def __load_dataset_images(dataset_source: str):
     return (x_train, y_train), (x_test, y_test), classes_count, image_shape, channels
 
 
-def __preprocess_images(train: tuple, test: tuple, classes_count: int, samples_limit: Union[int, None], resize_dim: Union['tuple[int, int]', None]):
-    x_train, y_train = train
-    x_test, y_test = test
-
-    if samples_limit is not None:
-        x_train = x_train[:samples_limit]
-        y_train = y_train[:samples_limit]
-
-    # resize if specified so in the configuration, plus normalize values into [0, 1]
-    if resize_dim is not None:
-        x_train = tf.image.resize(x_train, resize_dim) / 255.
-        x_test = tf.image.resize(x_test, resize_dim) / 255.
-
-        # from tensor back to numpy type, since later functions require numpy
-        x_train = x_train.numpy()
-        x_test = x_test.numpy()
-    # otherwise just normalize
-    else:
-        x_train = x_train.astype('float32') / 255.
-        x_test = x_test.astype('float32') / 255.
-
-    # transform labels to one-hot encoding, so that categorical crossentropy can be used
-    y_train = to_categorical(y_train, classes_count)
-    y_test = to_categorical(y_test, classes_count)
-
-    return (x_train, y_train), (x_test, y_test)
-
-
-def __build_tf_datasets(samples_fold: 'tuple[list, list, list, list]'):
-    '''
-    Build the training and validation datasets to be used in model.fit().
-    '''
-
-    x_train, y_train, x_val, y_val = samples_fold
-
-    # create the tf datasets from numpy arrays
-    train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    validation_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-
-    return train_dataset, validation_dataset
-
-
-def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, None], validation_size: float, resize_dim: 'tuple[int, int]'):
+def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, None], validation_size: float):
     split_spec = 'train' if samples_limit is None else f'train[:{samples_limit}]'
     train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=True, with_info=True,
                                read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
-
-    # convert to one-hot encoding
-    classes = info.features['label'].num_classes
-    train_ds = train_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
 
     if validation_size is None:
         val_split_spec = 'validation' if samples_limit is None else f'validation[:{samples_limit}]'
         val_ds = tfds.load(dataset_name, split=val_split_spec, as_supervised=True, shuffle_files=True,
                            read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
-        val_ds = val_ds.map(lambda x, y: (x, tf.one_hot(y, classes)), num_parallel_calls=AUTOTUNE)
     else:
         samples_count = samples_limit or info.splits['train'].num_examples
         train_samples = math.ceil(samples_count * (1 - validation_size))
 
         val_ds = train_ds.skip(train_samples)
         train_ds = train_ds.take(train_samples)
-
-    if resize_dim is not None:
-        train_ds = train_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (tf.image.resize(x, resize_dim), y), num_parallel_calls=AUTOTUNE)
 
     return train_ds, val_ds, info
 
@@ -204,7 +170,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                 train_ds = train_ds.take(samples_limit // batch_size)
         # extract a validation split from training samples
         else:
-            # TODO: find a way to make the split stratified.
+            # TODO: find a way to make the split stratified (Stratification is done due stochasticity right now)
             train_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
                                                     subset='training', label_mode='categorical', image_size=resize_dim, batch_size=batch_size)
             val_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_training'), validation_split=val_size, seed=123,
@@ -220,19 +186,10 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
                 logger.info('Limiting validation dataset to %d batches', val_samples)
                 val_ds = val_ds.take(val_samples)
 
-        # debug
-        # train_labels_perc = get_dataset_stratification(train_ds)
-        # val_labels_perc = get_dataset_stratification(val_ds)
-        # print('Train labels distribution: ' + str(train_labels_perc))
-        # print('Validation labels distribution: ' + str(val_labels_perc))
-
-        # normalize into [0, 1] domain
-        normalization_layer = layers.Rescaling(1. / 255)
-        train_ds = train_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
-        val_ds = val_ds.map(lambda x, y: (normalization_layer(x, training=True), y), num_parallel_calls=AUTOTUNE)
-
+        # batch and resize set to None since already done with image_dataset_from_directory
         # TODO: sharding should be set to FILE here? or not?
-        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, None, data_augmentation, augment_on_gpu, cache,
+        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds,
+                                                                           None, data_augmentation, augment_on_gpu, cache, None,
                                                                            shard_policy=tf.data.experimental.AutoShardPolicy.FILE)
 
         dataset_folds.append((train_ds, val_ds))
@@ -241,10 +198,13 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         image_shape = resize_dim + (3,)
     # Keras dataset case
     elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
-        train, test, classes, image_shape, channels = __load_dataset_images(dataset_name)
+        train, test, classes, image_shape, channels = __load_keras_dataset_images(dataset_name)
         dataset_classes_count = classes or dataset_classes_count    # like || in javascript
-        # TODO: produce also the test dataset
-        (x_train_init, y_train_init), _ = __preprocess_images(train, test, dataset_classes_count, samples_limit, resize_dim)
+
+        if samples_limit is not None:
+            x_train_init, y_train_init = train
+            x_train_init = x_train_init[:samples_limit]
+            y_train_init = y_train_init[:samples_limit]
 
         if resize_dim is not None:
             image_shape = resize_dim + (channels,)
@@ -255,15 +215,21 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
 
             # create a validation set for evaluation of the child models
             x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, test_size=val_size, stratify=y_train_init)
+            # remove last axis
+            y_train = np.squeeze(y_train)
+            y_val = np.squeeze(y_val)
+
             train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
             val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-            train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu, cache)
+            train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu,
+                                                                               cache, resize_dim, class_count_for_one_hot=dataset_classes_count)
 
             dataset_folds.append((train_ds, val_ds))
     # TFDS case
     else:
-        train_ds, val_ds, info = __generate_datasets_from_tfds(dataset_name, samples_limit, val_size, resize_dim)
-        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu, cache)
+        train_ds, val_ds, info = __generate_datasets_from_tfds(dataset_name, samples_limit, val_size)
+        train_ds, val_ds, train_batches, val_batches = __finalize_datasets(train_ds, val_ds, batch_size, data_augmentation, augment_on_gpu,
+                                                                           cache, resize_dim, class_count_for_one_hot=dataset_classes_count)
 
         image_shape = info.features['image'].shape if resize_dim is None else resize_dim + (info.features['image'].shape[2],)
         classes = info.features['label'].num_classes
@@ -289,6 +255,37 @@ def get_data_augmentation_model():
         # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
         layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
     ], name='data_augmentation')
+
+
+def test_data_augmentation(ds: tf.data.Dataset):
+    '''
+    Function helpful for debugging data augmentation and making sure it's working properly.
+    DON'T USE IT IN ACTUAL RUNS.
+    Args:
+        ds: any TF dataset where data augmentation is applied
+    '''
+    # switch to an interactive matplotlib backend
+    plt.switch_backend('TkAgg')
+
+    data_augmentation_model = get_data_augmentation_model()
+
+    # get a batch
+    images, labels = next(iter(ds))
+
+    # display 9 transformation of the first 3 images of the first training batch
+    for j in range(3):
+        image = images[j]
+        plt.imshow(image)
+        plt.show()
+
+        for i in range(9):
+            augmented_image = data_augmentation_model(image)
+            _ = plt.subplot(3, 3, i + 1)
+            plt.imshow(augmented_image)
+            plt.axis('off')
+
+        plt.show()
+    print('Data augmentation debug shown')
 
 
 def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
