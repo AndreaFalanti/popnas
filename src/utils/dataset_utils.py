@@ -201,8 +201,8 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         train, test, classes, image_shape, channels = __load_keras_dataset_images(dataset_name)
         dataset_classes_count = classes or dataset_classes_count    # like || in javascript
 
+        x_train_init, y_train_init = train
         if samples_limit is not None:
-            x_train_init, y_train_init = train
             x_train_init = x_train_init[:samples_limit]
             y_train_init = y_train_init[:samples_limit]
 

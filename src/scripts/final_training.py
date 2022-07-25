@@ -47,21 +47,21 @@ def save_trimmed_json_config(config: dict, save_path: str):
         json.dump(config, f, indent=4)
 
 
-def get_best_cell_spec(log_folder_path: str):
+def get_best_cell_spec(log_folder_path: str, metric: str = 'best val accuracy'):
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
-    best_acc_row = df.loc[df['best val accuracy'].idxmax()]
+    best_acc_row = df.loc[df[metric].idxmax()]
 
     cell_spec = parse_cell_structures([best_acc_row['cell structure']])[0]
-    return cell_spec, best_acc_row['best val accuracy']
+    return cell_spec, best_acc_row[metric]
 
 
-def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_acc: float):
+def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_score: float, metric: str):
     logger.info('%s', '*' * 22 + ' BEST CELL INFO ' + '*' * 22)
     logger.info('Cell specification:')
     for i, block in enumerate(cell_spec):
         logger.info("Block %d: %s", i + 1, rstr(block))
-    logger.info('Best validation accuracy reached during training: %0.4f', best_acc)
+    logger.info('Best score (%s) reached during training: %0.4f', metric, best_score)
     logger.info('*' * 60)
 
 
@@ -165,10 +165,15 @@ def main():
             tensor_debug_mode="FULL_HEALTH",
             circular_buffer_size=-1)
 
+    with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
+        run_config = json.load(f)  # type: dict
+
     logger.info('Reading configuration...')
-    config_path = os.path.join(args.p, 'restore', 'run.json') if args.same else custom_json_path
-    with open(config_path, 'r') as f:
-        config = json.load(f)   # type: dict
+    if args.same:
+        config = run_config
+    else:
+        with open(custom_json_path, 'r') as f:
+            config = json.load(f)   # type: dict
 
     # initialize train strategy
     # retrocompatible with previous config format, which have no "others" section
@@ -209,8 +214,10 @@ def main():
         if args.spec is None:
             logger.info('Getting best cell specification found during POPNAS run...')
             # find best model found during search and log some relevant info
-            cell_spec, best_acc = get_best_cell_spec(args.p)
-            log_best_cell_results_during_search(logger, cell_spec, best_acc)
+            metric = 'best val accuracy' if run_config.get('search_strategy') and 'accuracy' in run_config['search_strategy']['pareto_objectives'] \
+                else 'val F1 score'
+            cell_spec, best_score = get_best_cell_spec(args.p, metric)
+            log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
         else:
             cell_spec = parse_cell_structures([args.spec])[0]
 
