@@ -100,7 +100,7 @@ def __generate_datasets_from_tfds(dataset_name: str, samples_limit: Union[int, N
     return train_ds, val_ds, info
 
 
-def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
+def generate_train_val_datasets(dataset_config: dict, logger: Logger):
     '''
     Generates training and validation tensorflow datasets for each fold to perform, based on the provided configuration parameters.
 
@@ -182,7 +182,7 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
         # Keras dataset case
         elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
             train, test, classes, image_shape, channels = __load_keras_dataset_images(dataset_name)
-            dataset_classes_count = classes or dataset_classes_count    # like || in javascript
+            classes = classes or dataset_classes_count    # like || in javascript
 
             x_train_init, y_train_init = train
             if samples_limit is not None:
@@ -223,3 +223,74 @@ def generate_tensorflow_datasets(dataset_config: dict, logger: Logger):
 
     # IDE is wrong, variables are always assigned since folds > 1, so at least one cycle is always executed
     return dataset_folds, classes, image_shape, train_batches, val_batches
+
+
+def generate_test_dataset(dataset_config: dict, logger: Logger):
+    '''
+    Generates test tensorflow datasets, based on the provided configuration parameters.
+
+    Args:
+        dataset_config:
+        logger:
+
+    Returns:
+        list of dataset tuples (one for each fold), the number of classes, the image shape, training batch count and validation batch count
+    '''
+    dataset_name = dataset_config['name']   # type: str
+    dataset_path = dataset_config['path']
+    dataset_classes_count = dataset_config['classes_count']
+    batch_size = dataset_config['batch_size']
+    cache = dataset_config['cache']
+
+    resize_config = dataset_config['resize']
+    resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
+
+    shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+
+    # Custom dataset, loaded with Keras utilities
+    if dataset_path is not None:
+        if resize_dim is None:
+            raise ValueError('Image must have a set resize dimension to use a custom dataset')
+
+        # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
+        test_ds = image_dataset_from_directory(os.path.join(dataset_path, 'keras_test'), label_mode='categorical',
+                                                image_size=resize_dim, batch_size=batch_size)
+
+        # TODO: sharding should be set to FILE here? or not?
+        shard_policy = tf.data.experimental.AutoShardPolicy.FILE
+
+        classes = dataset_classes_count
+        image_shape = resize_dim + (3,)
+    # Keras dataset case
+    elif dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
+        train, test, classes, image_shape, channels = __load_keras_dataset_images(dataset_name)
+        classes = classes or dataset_classes_count    # like || in javascript
+
+        x_test, y_test = test
+
+        if resize_dim is not None:
+            image_shape = resize_dim + (channels,)
+
+        # remove last axis
+        y_test = np.squeeze(y_test)
+
+        test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+    # TFDS case
+    else:
+        test_ds, info = tfds.load(dataset_name, split='test', as_supervised=True, shuffle_files=False, with_info=True,
+                                   read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+        image_shape = info.features['image'].shape if resize_dim is None else resize_dim + (info.features['image'].shape[2],)
+        classes = info.features['label'].num_classes
+
+    # finalize dataset generation, common logic to all dataset formats
+    # avoid categorical for custom datasets, since already done
+    using_custom_ds = dataset_path is not None
+    data_preprocessor = ImagePreprocessor(resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
+    # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
+    batch_len = None if using_custom_ds else batch_size
+    test_ds, batches = __finalize_dataset(test_ds, batch_len, data_preprocessor, None, False,
+                                                 cache, shard_policy=shard_policy)
+
+    logger.info('Test dataset built successfully')
+    return test_ds, classes, image_shape, batches

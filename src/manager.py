@@ -16,7 +16,7 @@ from tensorflow.keras.utils import plot_model
 
 import log_service
 from datasets.augmentation import get_image_data_augmentation_model
-from datasets.generator import generate_tensorflow_datasets
+from datasets.generator import generate_train_val_datasets
 from datasets.utils import generate_balanced_weights_for_classes
 from model import ModelGenerator
 from utils.func_utils import cell_spec_to_str
@@ -65,7 +65,7 @@ class NetworkManager:
 
         # setup dataset. Batches variables are used for displaying progress during training
         self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = \
-            generate_tensorflow_datasets(dataset_config, self._logger)
+            generate_train_val_datasets(dataset_config, self._logger)
         self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if self.balance_class_losses else None

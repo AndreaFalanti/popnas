@@ -12,7 +12,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from datasets.augmentation import get_image_data_augmentation_model
-from datasets.generator import generate_tensorflow_datasets
+from datasets.generator import generate_train_val_datasets
 from model import ModelGenerator
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
@@ -200,7 +200,7 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_folds, classes_count, image_shape, train_batches, val_batches = generate_tensorflow_datasets(config['dataset'], logger)
+    dataset_folds, classes_count, image_shape, train_batches, val_batches = generate_train_val_datasets(config['dataset'], logger)
     logger.info('Datasets generated successfully')
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
