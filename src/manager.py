@@ -15,8 +15,10 @@ from tensorflow.keras import Model
 from tensorflow.keras.utils import plot_model
 
 import log_service
+from datasets.augmentation import get_image_data_augmentation_model
+from datasets.generator import generate_tensorflow_datasets
+from datasets.utils import generate_balanced_weights_for_classes
 from model import ModelGenerator
-from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model, generate_balanced_weights_for_classes
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
@@ -70,7 +72,7 @@ class NetworkManager:
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
                                         output_classes_count=self.dataset_classes_count, image_shape=image_shape,
-                                        data_augmentation_model=get_data_augmentation_model() if self.augment_on_gpu else None,
+                                        data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                         save_weights=save_network_weights)
 
         # TODO: if not needed here, just generate it in train to pass it in controller

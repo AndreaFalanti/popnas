@@ -11,8 +11,9 @@ from tensorflow.keras import callbacks, models, metrics
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
+from datasets.augmentation import get_image_data_augmentation_model
+from datasets.generator import generate_tensorflow_datasets
 from model import ModelGenerator
-from utils.dataset_utils import generate_tensorflow_datasets, get_data_augmentation_model
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
 from utils.rstr import rstr
@@ -228,7 +229,7 @@ def main():
 
         with train_strategy.scope():
             model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, image_shape=image_shape,
-                                       data_augmentation_model=get_data_augmentation_model() if augment_on_gpu else None)
+                                       data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
             model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
             loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
