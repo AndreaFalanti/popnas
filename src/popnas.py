@@ -220,7 +220,7 @@ class Popnas:
             writer.writerow(data)
 
     def initialize_predictors(self, train_strategy: tf.distribute.Strategy):
-        acc_col = 'best val accuracy'
+        acc_col = 'best val accuracy' if self.score_objective == 'accuracy' else 'val F1 score'
         acc_domain = (0, 1)
         predictors_log_path = log_service.build_path('predictors')
         catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
