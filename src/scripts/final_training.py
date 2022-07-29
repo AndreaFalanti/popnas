@@ -11,8 +11,8 @@ from tensorflow.keras import callbacks, models, metrics
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
-from datasets.augmentation import get_image_data_augmentation_model
-from datasets.generator import generate_train_val_datasets
+from dataset.augmentation import get_image_data_augmentation_model
+from dataset.generator import generate_train_val_datasets
 from model import ModelGenerator
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx

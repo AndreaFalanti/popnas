@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from datasets.augmentation import get_image_data_augmentation_model
+from dataset.augmentation import get_image_data_augmentation_model
 
 
 class SplitType(Enum):

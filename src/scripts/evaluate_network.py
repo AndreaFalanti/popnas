@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import metrics, models
 
 import log_service
-from datasets.generator import generate_test_dataset
+from dataset.generator import generate_test_dataset
 from model import ModelGenerator
 from utils.func_utils import parse_cell_structures
 from utils.rstr import rstr

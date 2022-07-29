@@ -3,7 +3,7 @@ from typing import Optional
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from datasets.preprocessing.data_preprocessor import DataPreprocessor
+from dataset.preprocessing.data_preprocessor import DataPreprocessor
 
 AUTOTUNE = tf.data.AUTOTUNE
 

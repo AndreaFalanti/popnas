@@ -15,9 +15,9 @@ from tensorflow.keras import Model
 from tensorflow.keras.utils import plot_model
 
 import log_service
-from datasets.augmentation import get_image_data_augmentation_model
-from datasets.generator import generate_train_val_datasets
-from datasets.utils import generate_balanced_weights_for_classes
+from dataset.augmentation import get_image_data_augmentation_model
+from dataset.generator import generate_train_val_datasets
+from dataset.utils import generate_balanced_weights_for_classes
 from model import ModelGenerator
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator

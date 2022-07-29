@@ -10,8 +10,8 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, Sequential
 from tensorflow.keras.utils import image_dataset_from_directory
 
-from datasets.augmentation import get_image_data_augmentation_model
-from datasets.preprocessing import ImagePreprocessor, DataPreprocessor
+from dataset.augmentation import get_image_data_augmentation_model
+from dataset.preprocessing import ImagePreprocessor, DataPreprocessor
 
 AUTOTUNE = tf.data.AUTOTUNE
 
