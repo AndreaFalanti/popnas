@@ -156,6 +156,8 @@ class KerasPredictor(Predictor):
         cells = list(cells)
         rewards = list(rewards)
 
+        self._logger.info('Starting Keras predictor ensemble training...')
+
         # TODO: could use test in some way. PNAS ensemble simply trains on 4/5 of the dataset
         # train and test are array of indexes
         for fold_index, (train, test) in enumerate(KFold(n_splits=splits, shuffle=True).split(cells, rewards)):
@@ -192,6 +194,7 @@ class KerasPredictor(Predictor):
             create_empty_folder(self._model_log_folder)
 
         train_callbacks = self._get_callbacks(self._model_log_folder)
+        self._logger.info('Starting Keras predictor training')
 
         if self.hp_tuning:
             tuner_callbacks = [callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)]

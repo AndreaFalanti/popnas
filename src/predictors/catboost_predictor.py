@@ -63,6 +63,8 @@ class CatBoostPredictor(Predictor):
         if self.feature_names is None:
             self.__setup_features_data(dataset_df)
 
+        self._logger.info('Starting Catboost predictor training...')
+
         train_pool = catboost.Pool(dataset, delimiter=',', has_header=True, column_description=self.column_desc_path)
         train_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
         create_empty_folder(train_log_folder)
@@ -95,11 +97,13 @@ class CatBoostPredictor(Predictor):
             self._logger.info('CatBoost training complete')
 
         if self.perform_feature_analysis:
+            self._logger.info('Writing feature analysis plots...')
             result_pairs = self.model.get_feature_importance(train_pool, prettified=True)  # type: pd.DataFrame
             result_pairs.to_csv(os.path.join(train_log_folder, 'feature_importance.csv'))
 
             features_df = dataset_df.drop(columns=self.drop_columns)
             save_feature_analysis_plots(self.model, features_df, train_log_folder, save_pred_every=60)
+            self._logger.info('Feature analysis complete')
 
     def predict(self, x: list) -> float:
         # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)

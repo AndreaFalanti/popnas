@@ -98,6 +98,8 @@ class ControllerManager:
             time_predictor = self.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
 
+        self._logger.info('Predictors training complete')
+
     def __generate_model_estimations(self, batched_models: 'list[tuple]', models_count: int, time_predictor: Predictor, acc_predictor: Predictor):
         model_estimations = []  # type: list[ModelEstimate]
 
@@ -256,7 +258,7 @@ class ControllerManager:
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
         _save_model_estimates_to_csv_file(f'predictions_B{self.current_b}.csv', model_estimations)
 
-        self._logger.info('Models evaluation completed')
+        self._logger.info('Models performance estimation completed')
 
         # Pareto front is built only in POPNAS, while it is skipped in PNAS mode
         # Same for exploration Pareto front, if it is needed
