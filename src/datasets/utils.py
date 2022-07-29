@@ -1,6 +1,7 @@
 from collections import Counter
 from enum import Enum
 
+import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
@@ -49,7 +50,7 @@ def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
     label_counter = Counter()
 
     for (x, y) in ds:
-        label_counter.update(y)
+        label_counter.update(np.argmax(y, axis=-1))
 
     percentages_dict = {}
     for (k, v) in label_counter.items():
