@@ -1,5 +1,6 @@
 import csv
 import gc
+import sys
 from typing import Callable, Any
 
 import numpy as np
@@ -106,7 +107,8 @@ class ControllerManager:
         # use as total the actual predictions to make, but manually iterate on the batches with custom pbar update to reflect actual prediction speed
         pbar = tqdm(iterable=None,
                     unit='model', desc='Estimating models: ',
-                    total=models_count)
+                    total=models_count,
+                    file=sys.stdout)
 
         # iterate through all the possible cells for next B step and predict their score and time
         with pbar:
