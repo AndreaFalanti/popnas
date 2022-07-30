@@ -2,6 +2,7 @@ import csv
 import os
 import pickle
 import statistics
+import warnings
 from timeit import default_timer as timer
 from typing import Any
 
@@ -20,6 +21,11 @@ from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
 from utils.nn_utils import TrainingResults
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
+
+# Disable warning triggered at every training. get_config is actually implemented for each custom layer of ops module.
+# Responsible of this annoying warning: tensorflow\python\keras\utils\generic_utils.py, line 494
+warnings.filterwarnings(action='ignore',
+                        message='Custom mask layers require a config and must override get_config. When loading, the custom mask layer must be passed to the custom_objects argument.')
 
 
 class Popnas:
