@@ -75,7 +75,7 @@ class CatBoostPredictor(Predictor):
         # NOTE: task type = 'GPU' is very slow in our case, because it uses ordered sampling on datasets with few samples (< 10k).
         #  CPU is very fast and the models between GPU and CPU seems to not have so much different results
         self.model = catboost.CatBoostRegressor(iterations=2500, early_stopping_rounds=50, train_dir=train_log_folder, task_type=self.task_type,
-                                                feature_weights=feature_weights)
+                                                feature_weights=feature_weights, verbose=False)
 
         # train the model with random search
         if self.use_random_search:
@@ -88,7 +88,7 @@ class CatBoostPredictor(Predictor):
                 # 'grow_policy': ['SymmetricTree', 'Depthwise', 'Lossguide']
             }
 
-            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=40, train_size=0.8)
+            results_dict = self.model.randomized_search(param_grid, train_pool, cv=5, n_iter=40, train_size=0.8, verbose=False)
             self._logger.info('CatBoost random search complete')
             self._logger.info('Best parameters: %s', str(results_dict['params']))
         # else simply train the model with default parameters
