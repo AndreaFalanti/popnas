@@ -42,7 +42,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, train_strategy: tf.distribute.Strategy,
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, score_objective: str, train_strategy: tf.distribute.Strategy,
                  save_network_weights: bool, save_as_onnx: bool):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
@@ -61,7 +61,8 @@ class NetworkManager:
         self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
         self.num_child = 0  # SUMMARY
-        self.best_reward = 0.0
+        self.best_score = 0.0
+        self.score_objective = score_objective
 
         # setup dataset. Batches variables are used for displaying progress during training
         self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = \
@@ -260,11 +261,12 @@ class NetworkManager:
 
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
-        if save_best_model and accuracy > self.best_reward:
-            self.best_reward = accuracy
+        score = accuracy if self.score_objective == 'accuracy' else f1_score
+        if save_best_model and score > self.best_score:
+            self.best_score = score
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
-            model.save(log_service.build_path('best_model', 'saved_model.h5'), save_format='h5')
+            model.save(log_service.build_path('best_model', 'tf_model'))
             save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
             self._logger.info('Model saved successfully')
 

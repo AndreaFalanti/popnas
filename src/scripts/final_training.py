@@ -207,7 +207,7 @@ def main():
     if args.load:
         logger.info('Loading best model from provided folder...')
         with train_strategy.scope():
-            model = models.load_model(os.path.join(args.p, 'best_model'))  # type: models.Model
+            model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))  # type: models.Model
 
         last_cell_index = 7     # TODO
         logger.info('Model loaded successfully')

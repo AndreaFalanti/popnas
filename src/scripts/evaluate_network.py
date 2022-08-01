@@ -60,8 +60,8 @@ def main():
 
     # Generate the model
     if args.search_model:
-        model = models.load_model(os.path.join(args.p, 'best_model', 'saved_model.h5'))
-        logger.info('Model loaded successfully from H5 file')
+        model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))
+        logger.info('Model loaded successfully from TF model files')
     else:
         cell_spec = get_model_cell_spec(model_path)
         logger.info('Cell specification:')
