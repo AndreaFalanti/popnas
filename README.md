@@ -66,12 +66,12 @@ and mount POPNAS source code.
 
 To build the image, open the terminal into the root folder and execute this command:
 ```
-docker build -f docker/Dockerfile -t andreafalanti/popnas:tf2.7.0 .
+docker build -f docker/Dockerfile -t andreafalanti/popnas:tf2.7.3 .
 ```
 
 POPNASv2 can then be launched with command (set arguments as you like):
 ```
-docker run -it --rm -v %cd%:/exp --name popnas falanti/popnas:tf2.7.0gpu python run.py -j configs/run_debug.json
+docker run -it --name popnas andreafalanti/popnas:tf2.7.3 python run.py -j configs/run_debug.json
 ```
 
 ## Run configuration

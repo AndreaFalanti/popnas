@@ -8,7 +8,7 @@ license = "Apache-2.0"
 [tool.poetry.dependencies]
 # tested on 3.7.4 on windows, docker use 3.8.10
 python = ">=3.7.0, <3.9.0"
-tensorflow = "2.7.0"
+tensorflow = "2.7.3"
 scikit-learn = "1.0.1"
 pandas = "1.1.5"
 tqdm = "4.62.0"
