@@ -70,7 +70,7 @@ class Popnas:
         self.search_space = SearchSpace(ss_config, max_cells)
 
         # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, train_strategy,
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_objective, train_strategy,
                                           others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         plotter.initialize_logger()
