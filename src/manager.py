@@ -16,8 +16,7 @@ from tensorflow.keras.utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.generator import generate_train_val_datasets
-from dataset.utils import generate_balanced_weights_for_classes
+from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
 from model import ModelGenerator
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
@@ -65,8 +64,8 @@ class NetworkManager:
         self.score_objective = score_objective
 
         # setup dataset. Batches variables are used for displaying progress during training
-        self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = \
-            generate_train_val_datasets(dataset_config, self._logger)
+        dataset_generator = dataset_generator_factory(dataset_config)
+        self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = dataset_generator.generate_train_val_datasets()
         self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if self.balance_class_losses else None
@@ -165,7 +164,6 @@ class NetworkManager:
         # remove useless directory
         shutil.rmtree(fake_tb_logdir, ignore_errors=True)
         self._logger.info('Dummy training complete, training time should now be unaffected by dataset lazy initialization')
-
 
     def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''

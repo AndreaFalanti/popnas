@@ -45,6 +45,7 @@
         "multi_output": false
     },
     "dataset": {
+        "type": "image_classification",
         "name": "cifar10",
         "path": null,
         "classes_count": 10,

@@ -1,17 +1,11 @@
 from collections import Counter
-from enum import Enum
 
 import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
 from dataset.augmentation import get_image_data_augmentation_model
-
-
-class SplitType(Enum):
-    TRAINING: 1
-    VALIDATION: 2
-    TEST: 3
+from dataset.generators import *
 
 
 def test_data_augmentation(ds: tf.data.Dataset):
@@ -69,3 +63,15 @@ def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, flo
         class_weights_dict[cl] = 1 / (num_classes * perc)
 
     return class_weights_dict
+
+
+def dataset_generator_factory(ds_config: dict) -> BaseDatasetGenerator:
+    '''
+    Return the right dataset generator, based on task type.
+    '''
+    task_type = ds_config['type']
+
+    if task_type == 'image_classification':
+        return ImageClassificationDatasetGenerator(ds_config)
+    else:
+        raise ValueError('Dataset task type is not supported by POPNAS or invalid')
