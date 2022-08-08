@@ -73,5 +73,7 @@ def dataset_generator_factory(ds_config: dict) -> BaseDatasetGenerator:
 
     if task_type == 'image_classification':
         return ImageClassificationDatasetGenerator(ds_config)
+    elif task_type == 'time_series_classification':
+        return TimeSeriesClassificationDatasetGenerator(ds_config)
     else:
         raise ValueError('Dataset task type is not supported by POPNAS or invalid')
