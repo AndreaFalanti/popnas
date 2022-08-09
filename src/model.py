@@ -7,7 +7,7 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks
 
 import log_service
 import ops
-from utils.func_utils import to_int_tuple, list_flatten
+from utils.func_utils import list_flatten
 from utils.nn_utils import compute_tensor_byte_size
 
 
@@ -45,11 +45,10 @@ class ModelGenerator:
     Class used to build a CNN Keras model, given a cell specification.
     '''
 
-    # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported. Also, lookforward is not supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, image_shape: 'tuple[int, int, int]',
+    # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, input_shape: 'tuple[int, int, int]',
                  data_augmentation_model: Sequential = None, save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
-        self.op_regexes = self.__compile_op_regexes()
 
         self.concat_only_unused = arc_params['concat_only_unused_blocks']
         self.motifs = arc_params['motifs']
@@ -57,7 +56,7 @@ class ModelGenerator:
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         self.multi_output = arc_params['multi_output']
         self.output_classes_count = output_classes_count
-        self.image_shape = image_shape
+        self.input_shape = input_shape
 
         self.lr = cnn_hp['learning_rate']
         self.filters = cnn_hp['filters']
@@ -77,6 +76,9 @@ class ModelGenerator:
         # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
         self.data_augmentation_model = data_augmentation_model
 
+        # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
+        self.op_instantiator = ops.OpInstantiator(len(input_shape), weight_reg=self.l2_weight_reg)
+
         # attributes defined below are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
 
@@ -89,19 +91,6 @@ class ModelGenerator:
         # noinspection PyTypeChecker
         self.network_build_info = None  # type: NetworkBuildInfo
         self.output_layers = {}
-
-    def __compile_op_regexes(self):
-        '''
-        Build a dictionary with compiled regexes for each parametrized supported operation.
-
-        Returns:
-            (dict): Regex dictionary
-        '''
-        return {'conv': re.compile(r'(\d+)x(\d+) conv'),
-                'dconv': re.compile(r'(\d+)x(\d+) dconv'),
-                'tconv': re.compile(r'(\d+)x(\d+) tconv'),
-                'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
-                'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
 
     def __compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
         input_tensors_size = 0
@@ -123,16 +112,13 @@ class ModelGenerator:
         Returns:
             (list<tf.Tensor>): Usable inputs for next cell
         '''
-
-        stride = (2, 2) if reduction else (1, 1)
-
         # this check avoids building cells not used in actual final model (cells not linked to output), also removing the problem of multi-branch
         # models in case of multi-output models without -1 lookback usage (it was like training parallel uncorrelated models for each branch)
         if self.cell_index in self.network_build_info.used_cell_indexes:
             input_name = 'input' if self.cell_index == 0 else f'cell_{self.prev_cell_index}'
             partitions_dict[f'{input_name} -> cell_{self.cell_index}'] = self.__compute_partition_size(inputs)
 
-            cell_output = self.__build_cell(filters, stride, inputs)
+            cell_output = self.__build_cell(filters, reduction, inputs)
             self.prev_cell_index = self.cell_index
 
             if self.multi_output:
@@ -149,7 +135,7 @@ class ModelGenerator:
 
     def __generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0):
         name_suffix = f'_c{self.cell_index}' if self.cell_index < self.total_cells else ''  # don't add suffix in single output model
-        gap = layers.GlobalAveragePooling2D(name=f'GAP{name_suffix}')(input_tensor)
+        gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
         output = layers.Dense(self.output_classes_count, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
@@ -187,7 +173,7 @@ class ModelGenerator:
         self.block_index = 0
         self.prev_cell_index = 0
 
-        model_input = layers.Input(shape=self.image_shape)
+        model_input = layers.Input(shape=self.input_shape)
 
         # define inputs usable by blocks
         # last_output will be the input image at start, while skip_output is set to None to trigger
@@ -199,6 +185,7 @@ class ModelGenerator:
             data_augmentation = self.data_augmentation_model(model_input)
             cell_inputs = [data_augmentation, data_augmentation]  # [skip, last]
 
+        # TODO: adapt it for 1D (time-series)
         # if stem is used, it will add a conv layer + 2 reduction cells at the start of the network
         if add_imagenet_stem:
             stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
@@ -230,14 +217,14 @@ class ModelGenerator:
             output = self.__generate_output(last_output, self.dropout_prob)
             return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
 
-    def __build_cell(self, filters, stride, inputs):
+    def __build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
         Generate cell from action list. Following PNAS paper, addition is used to combine block results.
 
         Args:
-            filters (int): Initial filters to use
-            stride (tuple<int, int>): (1, 1) for normal cells, (2, 2) for reduction cells
-            inputs (list<tf.tensor>): Possible tensors to use as input (based on action_list index value)
+            filters: Amount of filters to use
+            reduction: if it's a reduction cell or not
+            inputs: Tensors that can be used as input (lookback inputs, inputs from previous cells or dataset samples)
 
         Returns:
             (tf.Tensor): output tensor of the cell
@@ -251,7 +238,7 @@ class ModelGenerator:
         total_inputs = inputs  # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i, block in enumerate(self.network_build_info.cell_specification):
             self.block_index = i
-            block_out = self.__build_block(block, filters, stride, total_inputs)
+            block_out = self.__build_block(block, filters, reduction, total_inputs)
 
             # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
@@ -273,62 +260,60 @@ class ModelGenerator:
                 concat_layer = layers.Concatenate(axis=-1)(sdp)
             else:
                 concat_layer = layers.Concatenate(axis=-1)(block_outputs)
-            x = ops.Convolution(filters, (1, 1), (1, 1))
-            x._name = f'concat_pointwise_conv_c{self.cell_index}'
+            x = self.op_instantiator.generate_pointwise_conv(filters, strided=False, name=f'concat_pointwise_conv_c{self.cell_index}')
             return x(concat_layer)
-        # avoids also concatenation, since it is unnecessary
+        # avoids concatenation, since it is unnecessary
         else:
             return block_outputs[0]
 
     def __normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int):
         '''
         Normalize tensor dimensions between -2 and -1 inputs if they diverge (both spatial and depth normalization is applied).
-        In actual architecture the normalization should happen only if -2 is a normal cell output and -1 is instead the output
+        In actual architecture, the normalization should happen only if -2 is a normal cell output and -1 is instead the output
         of a reduction cell.
 
         Args:
             inputs (list<tf.Tensor>): -2 and -1 input tensors
 
         Returns:
-            [list<tf.Tensor>]: updated tensor list (input list could be unchanged, but the list will be returned anyway)
+            (list[tf.Tensor]): updated tensor list
         '''
 
         # uniform the depth and spatial dimension between the two inputs, using a pointwise convolution
         self._logger.debug("Normalizing inputs' spatial dims (cell %d)", self.cell_index)
-        x = ops.Convolution(filters, (1, 1), strides=(2, 2))
-        x._name = f'pointwise_conv_input_c{self.cell_index}'
+        x = self.op_instantiator.generate_pointwise_conv(filters, strided=True, name=f'pointwise_conv_input_c{self.cell_index}')
         # override input with the normalized one
         inputs[-2] = x(inputs[-2])
 
         return inputs
 
-    def __build_block(self, block_spec: tuple, filters: int, stride: 'tuple(int, int)', inputs: 'list[tf.Tensor]'):
+    def __build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
         Generate a block, following PNAS conventions.
 
         Args:
-            block_spec: [description]
-            filters: [description]
-            stride: [description]
-            inputs: [description]
+            block_spec: block specification (in1, op1, in2, op2)
+            filters: amount of filters to use in layers
+            reduction: if the block belongs to a reduction cell
+            inputs: tensors that can be used as inputs for this block
 
         Returns:
             (tf.tensor): Output of Add keras layer
         '''
         input_L, op_L, input_R, op_R = block_spec
 
-        # in reduction cell, still use stride (1, 1) if not using "original inputs" (-1, -2, no reduction for other blocks' outputs)
-        stride_L = stride if input_L < 0 else (1, 1)
-        stride_R = stride if input_R < 0 else (1, 1)
+        # in reduction cells, stride only on lookback inputs (first level of cell DAG)
+        # normal cells instead never use stride
+        strided_L = reduction and input_L < 0
+        strided_R = reduction and input_R < 0
 
-        input_L_depth = inputs[input_L].shape.as_list()[3]
-        input_R_depth = inputs[input_R].shape.as_list()[3]
+        input_L_depth = inputs[input_L].shape.as_list()[-1]
+        input_R_depth = inputs[input_R].shape.as_list()[-1]
 
-        # parse_action returns a custom layer model, that is then called with chosen input
-        left_layer = self.__build_layer(filters, op_L, input_L_depth, strides=stride_L, tag='L')(inputs[input_L])
-        right_layer = self.__build_layer(filters, op_R, input_R_depth, strides=stride_R, tag='R')(inputs[input_R])
-
+        # instantiate a Keras layer for operator, called with the respective input
         name_suffix = f'_c{self.cell_index}b{self.block_index}'
+        left_layer = self.op_instantiator.build_op_layer(op_L, filters, input_L_depth, f'{name_suffix}L', strided=strided_L)(inputs[input_L])
+        right_layer = self.op_instantiator.build_op_layer(op_R, filters, input_R_depth, f'{name_suffix}R', strided=strided_R)(inputs[input_R])
 
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
@@ -339,90 +324,6 @@ class ModelGenerator:
             return layers.Add(name=f'add{name_suffix}')(sdp)
         else:
             return layers.Add(name=f'add{name_suffix}')([left_layer, right_layer])
-
-    def __build_layer(self, filters, operator, input_filters, strides=(1, 1), tag='L'):
-        '''
-        Generate a custom Keras layer for the provided operator and parameter. Certain operations are handled in a different way
-        when used in reduction cells, compared to the normal cells, to handle the tensor shape changes and allow addition at the end of a block.
-
-        # Args:
-            filters: number of filters
-            operator: operator to use
-            adapt_depth (bool): adapt depth of operators that don't alter it
-            strides: stride to reduce spatial size
-            tag (string): either L or R, identifying the block operation
-
-        # Returns:
-            (tf.keras.Model): The custom layer corresponding to the action (see ops.py)
-        '''
-
-        adapt_depth = filters != input_filters
-        block_info_suffix = f'_c{self.cell_index}b{self.block_index}{tag}'
-
-        # check non parametrized operations first since they don't require a regex and are faster
-        if operator == 'identity':
-            # 'identity' action case, if using (2, 2) stride it's actually handled as a pointwise convolution
-            if strides == (2, 2) or adapt_depth:
-                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it has been disabled, reverting to pointwise convolution
-                # layer_name = f'identity_reshaper{block_info_suffix}'
-                # x = ops.IdentityReshaper(filters, input_filters, strides, name=layer_name)
-                layer_name = f'pointwise_id{block_info_suffix}'
-                x = ops.Convolution(filters, (1, 1), strides, weight_reg=self.l2_weight_reg, name=layer_name)
-                return x
-            else:
-                # else just submits a linear layer if shapes match
-                layer_name = f'identity{block_info_suffix}'
-                x = ops.Identity(name=layer_name)
-                return x
-
-        # check for separable conv
-        match = self.op_regexes['dconv'].match(operator)  # type: re.Match
-        if match:
-            layer_name = f'{match.group(1)}x{match.group(2)}_dconv{block_info_suffix}'
-            x = ops.SeparableConvolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                         name=layer_name, weight_reg=self.l2_weight_reg)
-            return x
-
-        # check for transpose conv
-        match = self.op_regexes['tconv'].match(operator)  # type: re.Match
-        if match:
-            layer_name = f'{match.group(1)}x{match.group(2)}_tconv{block_info_suffix}'
-            x = ops.TransposeConvolutionStack(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                              name=layer_name, weight_reg=self.l2_weight_reg)
-            return x
-
-        # check for stacked conv operation
-        match = self.op_regexes['stack_conv'].match(operator)  # type: re.Match
-        if match:
-            f = [filters, filters]
-            k = [to_int_tuple(match.group(1, 2)), to_int_tuple(match.group(3, 4))]
-            s = [strides, (1, 1)]
-
-            layer_name = f'{match.group(1)}x{match.group(2)}-{match.group(3)}x{match.group(4)}_conv{block_info_suffix}'
-            x = ops.StackedConvolution(f, k, s, name=layer_name, weight_reg=self.l2_weight_reg)
-            return x
-
-        # check for standard conv
-        match = self.op_regexes['conv'].match(operator)  # type: re.Match
-        if match:
-            layer_name = f'{match.group(1)}x{match.group(2)}_conv{block_info_suffix}'
-            x = ops.Convolution(filters, kernel=to_int_tuple(match.group(1, 2)), strides=strides,
-                                name=layer_name, weight_reg=self.l2_weight_reg)
-            return x
-
-        # check for pooling
-        match = self.op_regexes['pool'].match(operator)  # type: re.Match
-        if match:
-            size = to_int_tuple(match.group(1, 2))
-            pool_type = match.group(3)
-
-            layer_name = f'{match.group(1)}x{match.group(2)}_{pool_type}pool{block_info_suffix}'
-            x = ops.PoolingConv(filters, pool_type, size, strides, name=layer_name, weight_reg=self.l2_weight_reg) if adapt_depth \
-                else ops.Pooling(pool_type, size, strides, name=layer_name)
-
-            return x
-
-        raise ValueError('Operation not covered by POPNAS algorithm')
 
     def define_callbacks(self, tb_logdir: str):
         '''

@@ -228,7 +228,7 @@ def main():
             f.write(cell_spec_to_str(cell_spec))
 
         with train_strategy.scope():
-            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, image_shape=image_shape,
+            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=image_shape,
                                        data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
             model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
