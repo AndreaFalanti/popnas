@@ -12,7 +12,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.generator import generate_train_val_datasets
+from dataset.utils import dataset_generator_factory
 from model import ModelGenerator
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
@@ -200,7 +200,8 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_folds, classes_count, image_shape, train_batches, val_batches = generate_train_val_datasets(config['dataset'], logger)
+    dataset_generator = dataset_generator_factory(config['dataset'])
+    dataset_folds, classes_count, input_shape, train_batches, val_batches = dataset_generator.generate_train_val_datasets()
     logger.info('Datasets generated successfully')
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
@@ -228,7 +229,7 @@ def main():
             f.write(cell_spec_to_str(cell_spec))
 
         with train_strategy.scope():
-            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=image_shape,
+            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
                                        data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
             model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 

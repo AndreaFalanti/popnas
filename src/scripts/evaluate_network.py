@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import metrics, models
 
 import log_service
-from dataset.generator import generate_test_dataset
+from dataset.utils import dataset_generator_factory
 from model import ModelGenerator
 from utils.func_utils import parse_cell_structures
 from utils.rstr import rstr
@@ -55,7 +55,8 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    test_ds, classes_count, image_shape, test_batches = generate_test_dataset(config['dataset'], logger)
+    dataset_generator = dataset_generator_factory(config['dataset'])
+    test_ds, classes_count, image_shape, test_batches = dataset_generator.generate_test_dataset()
     logger.info('Datasets generated successfully')
 
     # Generate the model

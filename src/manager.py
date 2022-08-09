@@ -65,18 +65,18 @@ class NetworkManager:
 
         # setup dataset. Batches variables are used for displaying progress during training
         dataset_generator = dataset_generator_factory(dataset_config)
-        self.dataset_folds, ds_classes, image_shape, self.train_batches, self.validation_batches = dataset_generator.generate_train_val_datasets()
+        self.dataset_folds, ds_classes, input_shape, self.train_batches, self.validation_batches = dataset_generator.generate_train_val_datasets()
         self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if self.balance_class_losses else None
 
         self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
-                                        output_classes_count=self.dataset_classes_count, input_shape=image_shape,
+                                        output_classes_count=self.dataset_classes_count, input_shape=input_shape,
                                         data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                         save_weights=save_network_weights)
 
         # TODO: if not needed here, just generate it in train to pass it in controller
-        self.graph_gen = GraphGenerator(cnn_config, arc_config, image_shape, self.dataset_classes_count)
+        self.graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, self.dataset_classes_count)
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + \
