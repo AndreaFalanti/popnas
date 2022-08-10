@@ -3,8 +3,9 @@ import os.path
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sktime import datasets as sktdata
 
-from dataset.augmentation import get_image_data_augmentation_model
 from dataset.generators.base import BaseDatasetGenerator
 from dataset.preprocessing import TimeSeriesPreprocessor
 
@@ -15,10 +16,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
 
-
     def generate_train_val_datasets(self) -> 'tuple[list[tf.data.Dataset, tf.data.Dataset], int, tuple, int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
-        data_augmentation = get_image_data_augmentation_model() if self.use_data_augmentation else None
 
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
@@ -26,8 +25,21 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
             # Custom dataset, loaded from numpy arrays
             if self.dataset_path is not None:
-                x_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'X.npy'))
-                y_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'Y.npy'))
+                # numpy case
+                if os.path.exists(os.path.join(self.dataset_path, 'numpy_training', 'X.npy')):
+                    x_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'X.npy'))
+                    y_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'Y.npy'))
+                # ts (sktime) case
+                elif os.path.exists(os.path.join(self.dataset_path, 'train.ts')):
+                    x_train, y_train = sktdata.load_from_tsfile(os.path.join(self.dataset_path, 'train.ts'), return_data_type='numpy3d')
+                    # don't know why, but seems they prefer (num_series, ts_length) as format instead of CONV1D required (ts_length, num_series)
+                    # swap the axis
+                    x_train = np.swapaxes(x_train, -2, -1)
+                    # cast to int, in case str is used (need intermediate conversion to float)
+                    y_train = y_train.astype(np.float).astype(np.int32)
+                else:
+                    raise ValueError('No supported dataset format recognized at path provided in configuration')
+
                 # make a plain list to perform one_hot correctly in preprocessor
                 y_train = np.squeeze(y_train)
 
@@ -36,8 +48,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 input_shape = np.shape(x_train)[1:]
 
                 if self.samples_limit is not None:
-                    x_train = x_train[:self.samples_limit]
-                    y_train = y_train[:self.samples_limit]
+                    # also shuffle, since .ts files are usually ordered by class. Without shuffle, entire classes could be dropped.
+                    x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit)
 
                 # create a validation set for evaluation of the child models
                 x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, stratify=y_train)
