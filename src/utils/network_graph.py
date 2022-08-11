@@ -1,22 +1,22 @@
-# NetworkGraph involves some logic duplication with the ModelGenerator, since it must support
-# the same exact structure. This means that any change to the ModelGenerator must also be reflected
-# in this module.
-
+'''
+NetworkGraph involves some logic duplication with the ModelGenerator, since it must support the same exact structure.
+This means that any change to the ModelGenerator must also be reflected in this module.
+TODO WORKAROUND: to support 1D operators, tensor shapes have been kept in 3D but setting 'w' to 1, it should work fine
+ but a refactor could make the code more clear.
+'''
 import re
 from collections import namedtuple
 from typing import Union
 
 from igraph import *
 
-from utils.func_utils import list_flatten, chunks
+from utils.func_utils import list_flatten, chunks, to_int_tuple, prod
 
+# in case the operators are 1D, if w is set to 1 it still works correctly.
+# the only important thing for computing correctly the params is that c is always mapped to the number of filters.
+# TODO: could be expanded to (h, w, d, c) to support volumes (3D operators)
 TensorShape = namedtuple('TensorShape', 'h, w, c')
 
-op_regex_dict = {'conv': re.compile(r'(\d+)x(\d+) conv'),
-                 'dconv': re.compile(r'(\d+)x(\d+) dconv'),
-                 'tconv': re.compile(r'(\d+)x(\d+) tconv'),
-                 'stack_conv': re.compile(r'(\d+)x(\d+)-(\d+)x(\d+) conv'),
-                 'pool': re.compile(r'(\d+)x(\d+) (max|avg)pool')}
 reduction_shape_transform = (0.5, 0.5, 2)
 
 
@@ -24,20 +24,23 @@ def compute_batch_norm_params(filters: int):
     return 4 * filters
 
 
-def compute_conv_params(kernel_h: Union[int, str], kernel_w: Union[int, str], input_shape: TensorShape, output_shape: TensorShape):
+def compute_conv_params(kernel: 'tuple[Union[str, int], ...]', input_shape: TensorShape, output_shape: TensorShape):
     ''' Actually is convolution + batch normalization, since a convolution is always followed by bn in the model. '''
     # +1 is bias term
-    return (int(kernel_h) * int(kernel_w) * input_shape.c + 1) * output_shape.c + compute_batch_norm_params(output_shape.c)
+    kernel = to_int_tuple(kernel)  # cast to int in case are elements are str
+    return (prod(kernel) * input_shape.c + 1) * output_shape.c + compute_batch_norm_params(output_shape.c)
 
 
-def compute_dconv_params(kernel_h: Union[int, str], kernel_w: Union[int, str], input_shape: TensorShape, output_shape: TensorShape):
+def compute_dconv_params(kernel: 'tuple[Union[str, int], ...]', input_shape: TensorShape, output_shape: TensorShape):
     ''' Depthwise separable convolution + batch norm. '''
-    # bias term is used only in pointwise for unknown reasons, also has no batch normalization so it is computed without "compute_conv_params"
-    return (int(kernel_h) * int(kernel_w) * input_shape.c) + \
-           compute_conv_params(1, 1, input_shape, output_shape)
+    # bias term is used only in pointwise for unknown reasons, also it has no batch normalization,
+    # so it is computed separately without "compute_conv_params" function.
+    kernel = to_int_tuple(kernel)  # cast to int in case are elements are str
+    return (prod(kernel) * input_shape.c) + \
+           compute_conv_params((1, 1), input_shape, output_shape)
 
 
-def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorShape):
+def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorShape, op_regex_dict: 'dict[str, re.Pattern]'):
     preserve_shape = input_shape == output_shape
     # this operators can't have parameters in any case
     no_params_operators = ['add', 'concat', 'input', 'gap']
@@ -47,28 +50,30 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
 
     # if identity need to change shape, then it becomes a pointwise convolution
     if op == 'identity':
-        return 0 if preserve_shape else compute_conv_params(1, 1, input_shape, output_shape)
+        return 0 if preserve_shape else compute_conv_params((1, 1), input_shape, output_shape)
 
     # single convolution case
     match = op_regex_dict['conv'].match(op)  # type: re.Match
     if match:
-        return compute_conv_params(match.group(1), match.group(2), input_shape, output_shape)
+        return compute_conv_params(match.groups(), input_shape, output_shape)
 
-    # pooling case, if needs to change shape, then it is followed by a pointwise convolution
+    # pooling case, if it needs to change shape, then it is followed by a pointwise convolution
     match = op_regex_dict['pool'].match(op)  # type: re.Match
     if match:
-        return 0 if preserve_shape else compute_conv_params(1, 1, input_shape, output_shape)
+        return 0 if preserve_shape else compute_conv_params((1, 1), input_shape, output_shape)
 
     # stacked convolution case, both use batch normalization and only the first one modifies the shape
     match = op_regex_dict['stack_conv'].match(op)  # type: re.Match
     if match:
-        return compute_conv_params(match.group(1), match.group(2), input_shape, output_shape) + \
-               compute_conv_params(match.group(3), match.group(4), output_shape, output_shape)
+        # half groups are the first kernel, the last half the second one
+        g_size = len(match.groups())
+        return compute_conv_params(match.groups()[:g_size // 2], input_shape, output_shape) + \
+               compute_conv_params(match.groups()[g_size // 2:], output_shape, output_shape)
 
     # depthwise separable convolution case
     match = op_regex_dict['dconv'].match(op)  # type: re.Match
     if match:
-        return compute_dconv_params(match.group(1), match.group(2), input_shape, output_shape)
+        return compute_dconv_params(match.groups(), input_shape, output_shape)
 
     match = op_regex_dict['tconv'].match(op)  # type: re.Match
     if match:
@@ -87,7 +92,7 @@ def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: i
 
     for cell_index in range(cells_count):
         if cell_index in reduction_cell_indices:
-            output_shape = TensorShape(*(math.floor(a * b) for a, b in zip(output_shape, reduction_shape_transform)))
+            output_shape = TensorShape(*(math.ceil(a * b) for a, b in zip(output_shape, reduction_shape_transform)))
 
         output_shapes.append(output_shape)
 
@@ -140,7 +145,7 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
             'cell_index': [cell_index] * 2,
             'block_index': [-1] * 2,
             'connect_lookback': [-100, -100],
-            'params': [0, compute_conv_params(1, 1, concat_shape, output_shape)]
+            'params': [0, compute_conv_params((1, 1), concat_shape, output_shape)]
         }
 
         g.add_vertices(2, attributes=v_attributes)
@@ -161,14 +166,14 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
     return g
 
 
-def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int, str]]',
-                 lookback_shapes: 'list[TensorShape]', output_shape: TensorShape, cell_index: int):
+def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int, str]]', lookback_shapes: 'list[TensorShape]',
+                 output_shape: TensorShape, cell_index: int, op_regex_dict: 'dict[str, re.Pattern]'):
     # if shapes differ (and are not related to original input), then -2 lookback must be reshaped to the same dimension of -1 lookback
     # only height is checked since only one dimension is necessary to diverge to trigger the reshaping
     if not lookback_shapes[-1].h == lookback_shapes[-2].h and not lookback_indexes[-2] == 'input':
         layer_name = f'rs_{lookback_indexes[-2]}'
 
-        main_g.add_vertex(layer_name, op='1x1 conv', params=compute_conv_params(1, 1, lookback_shapes[-2], lookback_shapes[-1]),
+        main_g.add_vertex(layer_name, op='1x1 conv', params=compute_conv_params((1, 1), lookback_shapes[-2], lookback_shapes[-1]),
                           cell_index=cell_index, block_index=-1)
         main_g.add_edge(lookback_indexes[-2], layer_name,
                         tensor_h=lookback_shapes[-2].h, tensor_w=lookback_shapes[-2].w, tensor_c=lookback_shapes[-2].c)
@@ -181,9 +186,9 @@ def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int
     internal_vs = cell_g.vs.select(connect_lookback_ge=0)
 
     # compute parameters of all operations of the cell
-    lb1_vs['params'] = [compute_op_params(op, lookback_shapes[-1], output_shape) for op in lb1_vs['op']]
-    lb2_vs['params'] = [compute_op_params(op, lookback_shapes[-2], output_shape) for op in lb2_vs['op']]
-    internal_vs['params'] = [compute_op_params(op, output_shape, output_shape) for op in internal_vs['op']]
+    lb1_vs['params'] = [compute_op_params(op, lookback_shapes[-1], output_shape, op_regex_dict) for op in lb1_vs['op']]
+    lb2_vs['params'] = [compute_op_params(op, lookback_shapes[-2], output_shape, op_regex_dict) for op in lb2_vs['op']]
+    internal_vs['params'] = [compute_op_params(op, output_shape, output_shape, op_regex_dict) for op in internal_vs['op']]
 
     g = main_g.disjoint_union(cell_g)  # type: Graph
 
@@ -214,9 +219,11 @@ class NetworkGraph:
 
     It is also useful to estimate very fast the amount of memory required by the neural network.
     '''
-    def __init__(self, cell_spec: list, input_shape: 'tuple[int, int, int]', filters: int,
-                 num_classes: int, motifs: int, normals_per_motif: int) -> None:
+
+    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int,
+                 num_classes: int, motifs: int, normals_per_motif: int, op_regex_dict: 'dict[str, re.Pattern]') -> None:
         super().__init__()
+        self.op_regex_dict = op_regex_dict
 
         flat_inputs = list_flatten(cell_spec)[::2]
         cells_count = motifs * (normals_per_motif + 1) - 1
@@ -227,7 +234,11 @@ class NetworkGraph:
 
         reduction_cell_indices = list(range(normals_per_motif, cells_count, normals_per_motif + 1))
 
-        input_shape = TensorShape(*input_shape)
+        if len(input_shape) <= 3:
+            input_shape = TensorShape(*input_shape) if len(input_shape) == 3 else TensorShape(input_shape[0], 1, input_shape[1])
+        else:
+            raise ValueError(f'Too much input dimensions ({len(input_shape)}), not supported by graph generator')
+
         target_shapes = compute_target_shapes(input_shape, cells_count, filters, reduction_cell_indices)
 
         # initialize the graph with only the input node
@@ -246,7 +257,7 @@ class NetworkGraph:
         for cell_index, output_shape in enumerate(target_shapes):
             if cell_index in used_cell_indices:
                 cell_g = create_cell_graph(cell_spec, cell_index, output_shape)
-                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, output_shape, cell_index)
+                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, output_shape, cell_index, op_regex_dict)
 
             # move -1 lookback to -2 position, than add new cell output as -1 lookback
             lookback_vertex_indices[-2] = lookback_vertex_indices[-1]
@@ -266,6 +277,7 @@ class NetworkGraph:
         }
         g.add_vertices(2, attributes=v_attributes)
 
+        # TODO: adapt t
         # connect last cell to GAP and GAP to Softmax
         edge_attributes = {
             'tensor_h': [1, 1],
@@ -300,4 +312,3 @@ class NetworkGraph:
                 return i
 
         return 0
-

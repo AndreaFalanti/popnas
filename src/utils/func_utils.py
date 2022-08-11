@@ -1,4 +1,6 @@
+import functools
 import json
+import operator
 import os
 import re
 import shutil
@@ -148,3 +150,8 @@ def instantiate_search_space_from_logs(log_folder_path: str):
 
 def cell_spec_to_str(cell_spec: list):
     return f"[{';'.join(map(str, cell_spec))}]"
+
+
+def prod(it: Iterable):
+    ''' Poor men's math.prod, for supporting python < 3.8. '''
+    return functools.reduce(operator.mul, it, 1)
