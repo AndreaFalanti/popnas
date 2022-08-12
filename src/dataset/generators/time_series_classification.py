@@ -26,9 +26,9 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             # Custom dataset, loaded from numpy arrays
             if self.dataset_path is not None:
                 # numpy case
-                if os.path.exists(os.path.join(self.dataset_path, 'numpy_training', 'X.npy')):
-                    x_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'X.npy'))
-                    y_train = np.load(os.path.join(self.dataset_path, 'numpy_training', 'Y.npy'))
+                if os.path.exists(os.path.join(self.dataset_path, 'numpy_training', 'train.npz')):
+                    train_npz = np.load(os.path.join(self.dataset_path, 'numpy_training', 'train.npz'))
+                    x_train, y_train = train_npz['x'], train_npz['y']
                 # ts (sktime) case
                 elif os.path.exists(os.path.join(self.dataset_path, 'train.ts')):
                     x_train, y_train = sktdata.load_from_tsfile(os.path.join(self.dataset_path, 'train.ts'), return_data_type='numpy3d')
