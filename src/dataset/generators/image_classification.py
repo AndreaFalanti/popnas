@@ -9,10 +9,8 @@ from tensorflow.keras import datasets
 from tensorflow.keras.utils import image_dataset_from_directory
 
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.generators.base import BaseDatasetGenerator
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy
 from dataset.preprocessing import ImagePreprocessor
-
-AUTOTUNE = tf.data.AUTOTUNE
 
 
 class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
@@ -69,7 +67,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         return train_ds, val_ds, info
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tf.data.Dataset, tf.data.Dataset], int, tuple, int, int]':
+    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
         data_augmentation = get_image_data_augmentation_model() if self.use_data_augmentation else None
 
@@ -78,7 +76,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         #  Folds right now are never used, if this feature become relevant check that folds are actually stochastic, or use K-fold et simila.
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
-            shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+            shard_policy = AutoShardPolicy.DATA
 
             # Custom dataset, loaded with Keras utilities
             if self.dataset_path is not None:
@@ -120,7 +118,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                         val_ds = val_ds.take(val_samples)
 
                 # TODO: sharding should be set to FILE here? or not?
-                shard_policy = tf.data.experimental.AutoShardPolicy.FILE
+                shard_policy = AutoShardPolicy.FILE
 
                 classes = self.dataset_classes_count
                 image_shape = self.resize_dim + (3,)
@@ -168,7 +166,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         return dataset_folds, classes, image_shape, train_batches, val_batches
 
     def generate_test_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple, int]':
-        shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        shard_policy = AutoShardPolicy.DATA
 
         # Custom dataset, loaded with Keras utilities
         if self.dataset_path is not None:
@@ -180,7 +178,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                                                    image_size=self.resize_dim, batch_size=self.batch_size)
 
             # TODO: sharding should be set to FILE here? or not?
-            shard_policy = tf.data.experimental.AutoShardPolicy.FILE
+            shard_policy = AutoShardPolicy.FILE
 
             classes = self.dataset_classes_count
             image_shape = self.resize_dim + (3,)

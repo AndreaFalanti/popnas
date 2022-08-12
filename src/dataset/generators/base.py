@@ -8,6 +8,7 @@ import log_service
 from dataset.preprocessing import DataPreprocessor
 
 AUTOTUNE = tf.data.AUTOTUNE
+AutoShardPolicy = tf.data.experimental.AutoShardPolicy
 
 
 class BaseDatasetGenerator(ABC):
@@ -15,6 +16,7 @@ class BaseDatasetGenerator(ABC):
     Abstract class defining the interface for dataset generator factory pattern.
     The right subclass should be instantiated from the task type given in configuration (e.g. image classification).
     '''
+
     def __init__(self, dataset_config: dict):
         self._logger = log_service.get_logger(__name__)
 
@@ -32,8 +34,8 @@ class BaseDatasetGenerator(ABC):
         self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
 
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
-                           data_augmentation: Optional[Sequential],
-                           shard_policy: tf.data.experimental.AutoShardPolicy = tf.data.experimental.AutoShardPolicy.DATA):
+                          data_augmentation: Optional[Sequential],
+                          shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
         Basically apply batch, preprocessing, cache, data augmentation (only to training set) and prefetch.
@@ -48,7 +50,7 @@ class BaseDatasetGenerator(ABC):
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
-            ds = ds.batch(batch_size)
+            ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
         # PREPROCESSING
         ds = preprocessor.apply_preprocessing(ds)
@@ -64,7 +66,7 @@ class BaseDatasetGenerator(ABC):
         return ds.prefetch(AUTOTUNE), len(ds)
 
     @abstractmethod
-    def generate_train_val_datasets(self) -> 'tuple[list[tf.data.Dataset, tf.data.Dataset], int, tuple, int, int]':
+    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         '''
             Generates training and validation tensorflow datasets for each fold to perform, based on the provided configuration parameters.
 

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import tensorflow as tf
 
+AUTOTUNE = tf.data.AUTOTUNE
+
 
 class DataPreprocessor(ABC):
     '''

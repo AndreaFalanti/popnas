@@ -6,22 +6,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sktime import datasets as sktdata
 
-from dataset.generators.base import BaseDatasetGenerator
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy
 from dataset.preprocessing import TimeSeriesPreprocessor
-
-AUTOTUNE = tf.data.AUTOTUNE
 
 
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tf.data.Dataset, tf.data.Dataset], int, tuple, int, int]':
+    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
-            shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+            shard_policy = AutoShardPolicy.DATA
 
             # Custom dataset, loaded from numpy arrays
             if self.dataset_path is not None:
@@ -70,7 +68,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         return dataset_folds, classes, input_shape, train_batches, val_batches
 
     def generate_test_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple, int]':
-        shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        shard_policy = AutoShardPolicy.DATA
 
         raise NotImplementedError('Test set is not supported yet')
 
