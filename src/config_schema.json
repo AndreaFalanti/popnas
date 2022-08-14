@@ -1,0 +1,301 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "search_space": {
+            "type": "object",
+            "properties": {
+                "blocks": {
+                    "type": "integer"
+                },
+                "lookback_depth": {
+                    "type": "integer"
+                },
+                "operators": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": [
+                "blocks",
+                "lookback_depth",
+                "operators"
+            ]
+        },
+        "search_strategy": {
+            "type": "object",
+            "properties": {
+                "max_children": {
+                    "type": "integer"
+                },
+                "max_exploration_children": {
+                    "type": "integer"
+                },
+                "score_metric": {
+                    "type": "string",
+                    "enum": [
+                        "accuracy",
+                        "f1_score"
+                    ]
+                },
+                "additional_pareto_objectives": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "time",
+                            "params"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "max_children",
+                "max_exploration_children",
+                "score_metric",
+                "additional_pareto_objectives"
+            ]
+        },
+        "cnn_hp": {
+            "type": "object",
+            "properties": {
+                "epochs": {
+                    "type": "integer"
+                },
+                "learning_rate": {
+                    "type": "number"
+                },
+                "filters": {
+                    "type": "integer"
+                },
+                "weight_reg": {
+                    "type": "number"
+                },
+                "use_adamW": {
+                    "type": "boolean"
+                },
+                "drop_path_prob": {
+                    "type": "number"
+                },
+                "cosine_decay_restart": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "period_in_epochs": {
+                            "type": "integer"
+                        },
+                        "t_mul": {
+                            "type": "number"
+                        },
+                        "m_mul": {
+                            "type": "number"
+                        },
+                        "alpha": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "enabled",
+                        "period_in_epochs",
+                        "t_mul",
+                        "m_mul",
+                        "alpha"
+                    ]
+                },
+                "softmax_dropout": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "epochs",
+                "learning_rate",
+                "filters",
+                "weight_reg",
+                "use_adamW",
+                "drop_path_prob",
+                "cosine_decay_restart",
+                "softmax_dropout"
+            ]
+        },
+        "architecture_parameters": {
+            "type": "object",
+            "properties": {
+                "motifs": {
+                    "type": "integer"
+                },
+                "normal_cells_per_motif": {
+                    "type": "integer"
+                },
+                "concat_only_unused_blocks": {
+                    "type": "boolean"
+                },
+                "multi_output": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "motifs",
+                "normal_cells_per_motif",
+                "concat_only_unused_blocks",
+                "multi_output"
+            ]
+        },
+        "dataset": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "image_classification",
+                        "time_series_classification"
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "classes_count": {
+                    "type": "integer"
+                },
+                "batch_size": {
+                    "type": "integer"
+                },
+                "inference_batch_size": {
+                    "type": "integer"
+                },
+                "validation_size": {
+                    "oneOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "cache": {
+                    "type": "boolean"
+                },
+                "folds": {
+                    "type": "integer"
+                },
+                "samples": {
+                    "oneOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "balance_class_losses": {
+                    "type": "boolean"
+                },
+                "resize": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "width": {
+                            "type": "integer"
+                        },
+                        "height": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "enabled",
+                        "width",
+                        "height"
+                    ]
+                },
+                "data_augmentation": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "perform_on_gpu": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": [
+                        "enabled",
+                        "perform_on_gpu"
+                    ]
+                }
+            },
+            "required": [
+                "type",
+                "name",
+                "path",
+                "classes_count",
+                "batch_size",
+                "inference_batch_size",
+                "validation_size",
+                "cache",
+                "folds",
+                "samples",
+                "balance_class_losses",
+                "data_augmentation"
+            ]
+        },
+        "others": {
+            "type": "object",
+            "properties": {
+                "accuracy_predictor_ensemble_units": {
+                    "type": "integer"
+                },
+                "predictions_batch_size": {
+                    "type": "integer"
+                },
+                "save_children_weights": {
+                    "type": "boolean"
+                },
+                "save_children_as_onnx": {
+                    "type": "boolean"
+                },
+                "pnas_mode": {
+                    "type": "boolean"
+                },
+                "train_strategy": {
+                    "type": "string",
+                    "enum": [
+                        "CPU",
+                        "GPU",
+                        "TPU"
+                    ]
+                }
+            },
+            "required": [
+                "accuracy_predictor_ensemble_units",
+                "predictions_batch_size",
+                "save_children_weights",
+                "save_children_as_onnx",
+                "pnas_mode",
+                "train_strategy"
+            ]
+        }
+    },
+    "required": [
+        "search_space",
+        "search_strategy",
+        "cnn_hp",
+        "architecture_parameters",
+        "dataset",
+        "others"
+    ]
+}

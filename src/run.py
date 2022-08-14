@@ -5,24 +5,8 @@ import sys
 
 import log_service
 from popnas import Popnas
+from utils.config_validator import validate_config_json
 from utils.nn_utils import initialize_train_strategy
-
-
-def validate_pareto_objectives(objectives: 'list[str]'):
-    # TODO: config structure check should be done in entirety in a single place, think about it in the future
-    valid_pareto_objectives = ['accuracy', 'f1_score', 'time', 'params']
-
-    if len(objectives) <= 1:
-        raise ValueError('You must provide at least two objectives to optimize (see config search_strategy.pareto_objectives)')
-    # TODO: actually we need to have at least one metric for prediction quality (accuracy, f1score, ecc..) to have meaningful results.
-    #  Other metrics should be included in future.
-    # XNOR basically
-    if ('accuracy' not in objectives and 'f1_score' not in objectives) or ('accuracy' in objectives and 'f1_score' in objectives):
-        raise ValueError('Accuracy or F1 score must always be included in Pareto objectives, but not both at the same time')
-
-    for obj in objectives:
-        if obj not in valid_pareto_objectives:
-            raise ValueError(f'Invalid Pareto objective provided ({obj})')
 
 
 def main():
@@ -52,11 +36,13 @@ def main():
     # Handle uncaught exception in a special log file
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
+    # check that the config is correct
+    validate_config_json(run_config)
+
     # DEBUG: To find out which devices your operations and tensors are assigned to
     # tf.debugging.set_log_device_placement(True)
 
     train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
-    validate_pareto_objectives(run_config['search_strategy']['pareto_objectives'])
 
     popnas = Popnas(run_config, train_strategy)
     popnas.start()
