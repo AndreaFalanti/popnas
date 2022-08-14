@@ -155,3 +155,7 @@ def cell_spec_to_str(cell_spec: list):
 def prod(it: Iterable):
     ''' Poor men's math.prod, for supporting python < 3.8. '''
     return functools.reduce(operator.mul, it, 1)
+
+
+def intersection(iter1: Iterable, iter2: Iterable) -> list:
+    return list(set(iter1) & set(iter2))

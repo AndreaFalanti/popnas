@@ -14,6 +14,7 @@ import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory
 from model import ModelGenerator
+from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
 from utils.rstr import rstr
@@ -216,8 +217,7 @@ def main():
         if args.spec is None:
             logger.info('Getting best cell specification found during POPNAS run...')
             # find best model found during search and log some relevant info
-            metric = 'best val accuracy' if run_config.get('search_strategy') and 'accuracy' in run_config['search_strategy']['pareto_objectives'] \
-                else 'val F1 score'
+            metric = metrics_fields_dict[config['search_strategy']['score_metric']].real_column
             cell_spec, best_score = get_best_cell_spec(args.p, metric)
             log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
         else:

@@ -16,7 +16,7 @@ from manager import NetworkManager
 from predictors import *
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names, \
-    generate_time_features, generate_acc_features
+    generate_time_features, generate_acc_features, metrics_fields_dict
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
 from utils.nn_utils import TrainingResults
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
@@ -44,8 +44,8 @@ class Popnas:
         # search strategy parameters
         sstr_config = run_config['search_strategy']
         self.children_max_size = sstr_config['max_children']
-        self.pareto_objectives = sstr_config['pareto_objectives']
-        self.score_objective = 'accuracy' if 'accuracy' in self.pareto_objectives else 'f1_score'
+        self.score_metric = sstr_config['score_metric']
+        self.pareto_objectives = [self.score_metric] + sstr_config['additional_pareto_objectives']
 
         # dataset parameters
         ds_config = run_config['dataset']
@@ -70,7 +70,7 @@ class Popnas:
         self.search_space = SearchSpace(ss_config, max_cells)
 
         # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_objective, train_strategy,
+        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
                                           others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         plotter.initialize_logger()
@@ -165,7 +165,7 @@ class Popnas:
         times, scores = [], []
         for train_res in train_results:
             times.append(train_res.training_time)
-            scores.append(train_res.accuracy if self.score_objective == 'accuracy' else train_res.f1_score)
+            scores.append(getattr(train_res, self.score_metric))
 
         with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
             writer = csv.writer(f)
@@ -195,7 +195,7 @@ class Popnas:
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
         full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
-        score = train_res.accuracy if self.score_objective else train_res.f1_score
+        score = getattr(train_res, self.score_metric)
 
         acc_rows = [[score] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
@@ -226,7 +226,7 @@ class Popnas:
             writer.writerow(data)
 
     def initialize_predictors(self, train_strategy: tf.distribute.Strategy):
-        acc_col = 'best val accuracy' if self.score_objective == 'accuracy' else 'val F1 score'
+        acc_col = metrics_fields_dict[self.score_metric].real_column
         acc_domain = (0, 1)
         predictors_log_path = log_service.build_path('predictors')
         catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')

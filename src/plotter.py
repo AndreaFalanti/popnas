@@ -12,7 +12,8 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 
 import log_service
-from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape
+from utils.feature_utils import metrics_fields_dict
+from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape, intersection
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
@@ -24,21 +25,8 @@ __logger = None  # type: logging.Logger
 plt.set_loglevel('WARNING')
 # warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
-
-# define utility namedtuple for mapping a metric to the respective columns in the csv produced during POPNAS run, so that is possible to
-# easily access them without typos during plot class. Make also easier to change the names in the future.
-class MetricDfFields(NamedTuple):
-    pred_column: str
-    real_column: str
-    units: Optional[str] = None
-
-
-metrics_fields_dict = {
-    'time': MetricDfFields('time', 'training time(seconds)', 'seconds'),
-    'accuracy': MetricDfFields('val score', 'best val accuracy'),
-    'params': MetricDfFields('params', 'total params'),
-    'f1_score': MetricDfFields('val score', 'val F1 score'),
-}
+# Pareto objectives which require a predictor for estimation
+predictor_objectives = ['time', 'accuracy', 'f1_score']
 
 
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
@@ -559,12 +547,9 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: '
         __plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
                                      f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
 
-    score_metric = 'accuracy' if 'accuracy' in pareto_objectives else 'f1_score'
     # write plots about each Pareto metric associated to a predictor
-    if not pnas_mode and 'time' in pareto_objectives:
-        plot_prediction_errors_for_metric('time')
-
-    plot_prediction_errors_for_metric(score_metric)
+    for p_obj in intersection(pareto_objectives, predictor_objectives):
+        plot_prediction_errors_for_metric(p_obj)
 
     __logger.info("Prediction error overview plots written successfully")
 

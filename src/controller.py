@@ -71,7 +71,7 @@ class ControllerManager:
 
         self.T = np.inf     # TODO: add it to sstr_config if actually necessary, for now we have never used the time constraint
 
-        self.pareto_objectives = sstr_config['pareto_objectives']
+        self.pareto_objectives = sstr_config['additional_pareto_objectives']
         self.predictions_batch_size = others_config['predictions_batch_size']
 
         self.get_time_predictor = get_time_predictor
