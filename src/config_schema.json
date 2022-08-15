@@ -6,14 +6,17 @@
             "type": "object",
             "properties": {
                 "blocks": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "lookback_depth": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "operators": {
                     "type": "array",
-                    "items": {"type": "string"}
+                    "items": {"type": "string"},
+                    "minItems": 2
                 }
             },
             "required": [
@@ -26,10 +29,12 @@
             "type": "object",
             "properties": {
                 "max_children": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "max_exploration_children": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "score_metric": {
                     "type": "string",
@@ -60,22 +65,28 @@
             "type": "object",
             "properties": {
                 "epochs": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "learning_rate": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                 },
                 "filters": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "weight_reg": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                 },
                 "use_adamW": {
                     "type": "boolean"
                 },
                 "drop_path_prob": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
                 },
                 "cosine_decay_restart": {
                     "type": "object",
@@ -84,7 +95,8 @@
                             "type": "boolean"
                         },
                         "period_in_epochs": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
                         "t_mul": {
                             "type": "number"
@@ -105,7 +117,9 @@
                     ]
                 },
                 "softmax_dropout": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
                 }
             },
             "required": [
@@ -123,10 +137,12 @@
             "type": "object",
             "properties": {
                 "motifs": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 2
                 },
                 "normal_cells_per_motif": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "concat_only_unused_blocks": {
                     "type": "boolean"
@@ -169,10 +185,12 @@
                     "type": "integer"
                 },
                 "batch_size": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 2
                 },
                 "inference_batch_size": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 2
                 },
                 "validation_size": {
                     "oneOf": [
@@ -188,7 +206,8 @@
                     "type": "boolean"
                 },
                 "folds": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "samples": {
                     "oneOf": [
@@ -210,10 +229,12 @@
                             "type": "boolean"
                         },
                         "width": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 8
                         },
                         "height": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 8
                         }
                     },
                     "required": [
@@ -257,10 +278,12 @@
             "type": "object",
             "properties": {
                 "accuracy_predictor_ensemble_units": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "predictions_batch_size": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 32
                 },
                 "save_children_weights": {
                     "type": "boolean"
