@@ -9,18 +9,7 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, Ma
     BatchNormalization, Layer
 from tensorflow.keras.regularizers import Regularizer
 
-from utils.func_utils import to_int_tuple
-import operator
-import random
-import re
-from abc import abstractmethod, ABC
-
-import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, GlobalAveragePooling2D, \
-    Conv1D, Conv1DTranspose, SeparableConv1D, MaxPooling1D, AveragePooling1D, GlobalAveragePooling1D, \
-    BatchNormalization, Layer
-from tensorflow.keras.regularizers import Regularizer
-
+from cvt import CVTStage
 from utils.func_utils import to_int_tuple
 
 # TODO: it could be nice to import only the correct ones and rename them so that are recognized by layers,
@@ -40,6 +29,7 @@ class OpInstantiator:
     Class that takes care of building and returning valid Keras layers for the operators and input shape considered.
     Based on input shape, 1D or 2D operators are used.
     '''
+
     def __init__(self, input_dims: int, reduction_stride_factor: int = 2, weight_reg: Regularizer = None):
         self.weight_reg = weight_reg
 
@@ -50,6 +40,10 @@ class OpInstantiator:
         self.gap = op_dim_selector['gap'][self.op_dims]
 
         self.op_regexes = self.__compile_op_regexes()
+
+        # enable Convolutional Vision Transformer only for images
+        if input_dims == 3:
+            self.op_regexes['cvt'] = re.compile(r'(\d+)h-(\d+)b cvt')
 
     def __compile_op_regexes(self):
         '''
@@ -155,6 +149,13 @@ class OpInstantiator:
             return PoolingConv(filters, pool_type, to_int_tuple(pool_size), strides, name=layer_name, weight_reg=self.weight_reg) if adapt_depth \
                 else Pooling(pool_type, to_int_tuple(pool_size), strides, name=layer_name)
 
+        if self.op_dims == 2:
+            match = self.op_regexes['cvt'].match(op_name)  # type: re.Match
+            if match:
+                layer_name = f'{match.group(1)}h-{match.group(2)}b_cvt{layer_name_suffix}'
+                return CVTStage(emb_dim=filters, emb_kernel=3, emb_stride=strides[0], mlp_mult=2,
+                                heads=int(match.group(1)), ct_blocks=int(match.group(2)), name=layer_name)
+
         raise ValueError(f'Operator malformed or not covered by POPNAS algorithm: {op_name}')
 
 
@@ -256,7 +257,7 @@ class Convolution(OpBatchActivation):
 
         conv = op_dim_selector['conv'][len(kernel)]
         self.op = conv(filters, kernel, strides=strides, padding='same',
-                         kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+                       kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
 
 
 class TransposeConvolution(OpBatchActivation):
@@ -268,7 +269,7 @@ class TransposeConvolution(OpBatchActivation):
 
         tconv = op_dim_selector['tconv'][len(kernel)]
         self.op = tconv(filters, kernel, strides, padding='same',
-                                  kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+                        kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
 
 
 class TransposeConvolutionStack(Layer):

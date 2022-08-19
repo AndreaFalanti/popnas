@@ -30,6 +30,7 @@ lightgbm = "3.3.2"
 optuna = "2.10.1"
 sktime = "0.13.0"
 jsonschema = "4.9.1"
+einops = "0.4.1"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
