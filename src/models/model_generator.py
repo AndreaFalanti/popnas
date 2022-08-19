@@ -6,7 +6,8 @@ import tensorflow_addons as tfa
 from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model, Sequential
 
 import log_service
-import ops
+import models.operators as ops
+from models.op_instantiator import OpInstantiator
 from utils.func_utils import list_flatten
 from utils.nn_utils import compute_tensor_byte_size
 
@@ -77,7 +78,7 @@ class ModelGenerator:
         self.data_augmentation_model = data_augmentation_model
 
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
-        self.op_instantiator = ops.OpInstantiator(len(input_shape), weight_reg=self.l2_weight_reg)
+        self.op_instantiator = OpInstantiator(len(input_shape), weight_reg=self.l2_weight_reg)
 
         # attributes defined below are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.

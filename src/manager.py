@@ -17,7 +17,7 @@ from tensorflow.keras.utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
-from model import ModelGenerator
+from models.model_generator import ModelGenerator
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \

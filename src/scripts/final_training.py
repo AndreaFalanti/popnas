@@ -13,7 +13,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory
-from model import ModelGenerator
+from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
@@ -37,10 +37,8 @@ def create_log_folder(log_path: str):
 
 def save_trimmed_json_config(config: dict, save_path: str):
     # remove useless keys (config is a subset of search algorithm config)
-    deletable_keys = []
-    for key in config.keys():
-        if key not in ['cnn_hp', 'architecture_parameters', 'dataset']:
-            deletable_keys.append(key)
+    keep_keys = ['cnn_hp', 'architecture_parameters', 'dataset', 'search_strategy']
+    deletable_keys = [k for k in config.keys() if k not in keep_keys]
 
     for key in deletable_keys:
         del config[key]

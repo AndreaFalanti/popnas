@@ -8,7 +8,7 @@ from tensorflow.keras import metrics, models
 
 import log_service
 from dataset.utils import dataset_generator_factory
-from model import ModelGenerator
+from models.model_generator import ModelGenerator
 from utils.func_utils import parse_cell_structures
 from utils.rstr import rstr
 
@@ -21,9 +21,10 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 def get_model_cell_spec(log_folder_path: str):
     with open(os.path.join(log_folder_path, 'cell_spec.txt'), 'r') as f:
-       cell_spec = f.read()
+        cell_spec = f.read()
 
     return parse_cell_structures([cell_spec])[0]
+
 
 # This script can be used to evaluate the final model trained on a test set.
 # It needs a saved model, which could be the one found during search or the one produced by final_training script (spec + checkpoint)
@@ -34,7 +35,8 @@ def main():
     parser.add_argument('-j', metavar='JSON_PATH', type=str,
                         help='path to config json with training parameters (used to instantiate dataset)', default=None)
     parser.add_argument('--search_model', help='use best model found in search, with weights found on proxy training', action='store_true')
-    parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)', default='best_model_training')
+    parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)',
+                        default='best_model_training')
     args = parser.parse_args()
 
     model_path = os.path.join(args.p, 'best_model') if args.search_model else os.path.join(args.p, args.f)

@@ -1,10 +1,6 @@
-'''
-Prototype for the Convolutional Vision Transformer "stage", presented in the paper: https://arxiv.org/abs/2103.15808.
-The implementation is inspired from: https://github.com/taki0112/vit-tensorflow/blob/main/vit_tensorflow/cvt.py,
-but heavily refactored to simplify the implementation and integration in POPNAS.
-TODO: still under inspection, since some implementation logic is unclear. Should be better integrated in model too
- (more parametrization in JSON config or dynamically tune the heads / block based on depth).
-'''
+# TODO: still under inspection, since some implementation logic is unclear. Should be better integrated in model too
+#  (more parametrization in JSON config or dynamically tune the heads / block based on depth).
+
 
 import tensorflow as tf
 from einops import rearrange
@@ -127,17 +123,14 @@ class ConvolutionalTransformerBlock(Layer):
 
 
 class CVTStage(Layer):
-    def __init__(self,
-                 emb_dim: int = 64,
-                 emb_kernel: int = 7,
-                 emb_stride: int = 4,
-                 proj_kernel: int = 3,
-                 kv_proj_stride: int = 2,
-                 heads: int = 1,
-                 ct_blocks: int = 1,
-                 mlp_mult: int = 4,
-                 dropout: float = 0.0,
-                 name: str = 'cvt'):
+    '''
+    Prototype for the Convolutional Vision Transformer "stage", presented in the paper: https://arxiv.org/abs/2103.15808.
+    The implementation is inspired from: https://github.com/taki0112/vit-tensorflow/blob/main/vit_tensorflow/cvt.py,
+    but heavily refactored to simplify the implementation and integration in POPNAS.
+    '''
+    def __init__(self, emb_dim: int = 64, emb_kernel: int = 7, emb_stride: int = 4,
+                 proj_kernel: int = 3, kv_proj_stride: int = 2, heads: int = 1,
+                 ct_blocks: int = 1, mlp_mult: int = 4, dropout: float = 0.0, name: str = 'cvt'):
         super().__init__(name=name)
 
         self.conv_token_embedding = Conv2D(filters=emb_dim, kernel_size=emb_kernel, padding='same', strides=emb_stride)
