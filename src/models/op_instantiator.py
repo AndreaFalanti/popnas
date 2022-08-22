@@ -138,6 +138,7 @@ class OpInstantiator:
             if match:
                 layer_name = f'{match.group(1)}h-{match.group(2)}b_cvt{layer_name_suffix}'
                 return CVTStage(emb_dim=filters, emb_kernel=3, emb_stride=strides[0], mlp_mult=2,
-                                heads=int(match.group(1)), ct_blocks=int(match.group(2)), name=layer_name)
+                                heads=int(match.group(1)), dim_head=filters, ct_blocks=int(match.group(2)),
+                                weight_reg=self.weight_reg, name=layer_name)
 
         raise ValueError(f'Operator malformed or not covered by POPNAS algorithm: {op_name}')
