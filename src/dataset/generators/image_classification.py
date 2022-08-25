@@ -156,7 +156,8 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
             # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
             batch_len = None if using_custom_ds else self.batch_size
-            train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor, data_augmentation, shard_policy=shard_policy)
+            train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor, data_augmentation,
+                                                             shuffle=True, shard_policy=shard_policy)
             val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, None, shard_policy=shard_policy)
             dataset_folds.append((train_ds, val_ds))
 

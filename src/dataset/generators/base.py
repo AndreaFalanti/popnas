@@ -34,7 +34,7 @@ class BaseDatasetGenerator(ABC):
         self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
 
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
-                          data_augmentation: Optional[Sequential],
+                          data_augmentation: Optional[Sequential], shuffle: bool = False,
                           shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
@@ -48,6 +48,10 @@ class BaseDatasetGenerator(ABC):
         options.experimental_distribute.auto_shard_policy = shard_policy
         ds = ds.with_options(options)
 
+        # shuffle samples to avoid batches of same class (if samples are ordered)
+        if shuffle:
+            ds = ds.shuffle(len(ds))
+
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
@@ -58,6 +62,10 @@ class BaseDatasetGenerator(ABC):
         # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
         if self.cache:
             ds = ds.cache()
+
+        # shuffle batches at each epoch
+        if shuffle:
+            ds = ds.shuffle(len(ds), reshuffle_each_iteration=True)
 
         # if data augmentation is performed on CPU, map it before prefetch
         if data_augmentation is not None and not self.augment_on_gpu:

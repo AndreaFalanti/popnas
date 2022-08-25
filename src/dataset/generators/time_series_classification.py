@@ -33,17 +33,17 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def _get_numpy_split(self, split_name: str):
         # numpy case
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):
-            x_train, y_train = _load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'))
+            x, y = _load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'))
         # ts (sktime) case
         elif os.path.exists(os.path.join(self.dataset_path, f'{split_name}.ts')):
-            x_train, y_train = _load_ts(os.path.join(self.dataset_path, f'{split_name}.ts'))
+            x, y = _load_ts(os.path.join(self.dataset_path, f'{split_name}.ts'))
         else:
             raise ValueError('No supported dataset format recognized at path provided in configuration')
 
         # make a plain list to perform one_hot correctly in preprocessor
-        y_train = np.squeeze(y_train)
+        y = np.squeeze(y)
 
-        return x_train, y_train
+        return x, y
 
     def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
@@ -75,7 +75,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError()
 
             preprocessor = TimeSeriesPreprocessor(to_one_hot=classes)
-            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, None)
+            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, None, shuffle=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor, None)
             dataset_folds.append((train_ds, val_ds))
 
