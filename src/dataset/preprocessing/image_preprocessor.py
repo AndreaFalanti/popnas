@@ -13,7 +13,7 @@ class ImagePreprocessor(DataPreprocessor):
         self.rescaling = rescaling
         self.to_one_hot = to_one_hot
 
-    def apply_preprocessing(self, ds: tf.data.Dataset):
+    def apply_preprocessing(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         if self.resize_dim is not None:
             ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
 

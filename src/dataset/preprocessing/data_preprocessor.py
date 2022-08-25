@@ -13,5 +13,5 @@ class DataPreprocessor(ABC):
         pass
 
     @abstractmethod
-    def apply_preprocessing(self, ds: tf.data.Dataset):
+    def apply_preprocessing(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         pass
