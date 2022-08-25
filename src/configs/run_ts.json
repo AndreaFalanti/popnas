@@ -1,0 +1,72 @@
+{
+    "search_space": {
+        "blocks": 5,
+        "lookback_depth": 2,
+        "operators": [
+            "identity",
+            "3 dconv",
+            "7 dconv",
+            "15 dconv",
+            "3 conv",
+            "7 conv",
+            "15 conv",
+            "2 maxpool",
+            "2 avgpool"
+        ]
+    },
+    "search_strategy": {
+        "max_children": 256,
+        "max_exploration_children": 16,
+        "score_metric": "accuracy",
+        "additional_pareto_objectives": ["time"]
+    },
+    "cnn_hp": {
+        "epochs": 21,
+        "learning_rate": 0.008,
+        "filters": 24,
+        "weight_reg": 5e-4,
+        "use_adamW": true,
+        "drop_path_prob": 0.0,
+        "cosine_decay_restart": {
+            "enabled": true,
+            "period_in_epochs": 3,
+            "t_mul": 2.0,
+            "m_mul": 1.0,
+            "alpha": 0.0
+        },
+        "softmax_dropout": 0.0
+    },
+    "architecture_parameters": {
+        "motifs": 3,
+        "normal_cells_per_motif": 2,
+        "concat_only_unused_blocks": true,
+        "multi_output": false
+    },
+    "dataset": {
+        "type": "time_series_classification",
+        "name": "custom-dataset",
+        "path": "insert-path",
+        "classes_count": 10,
+        "batch_size": 64,
+        "inference_batch_size": 16,
+        "validation_size": 0.1,
+        "cache": true,
+        "folds": 1,
+        "samples": null,
+        "balance_class_losses": false,
+        "normalize": false,
+        "rescale": false,
+        "data_augmentation": {
+            "enabled": false,
+            "perform_on_gpu": false
+        }
+    },
+    "others": {
+        "accuracy_predictor_ensemble_units": 5,
+        "predictions_batch_size": 1024,
+        "save_children_weights": false,
+        "save_children_as_onnx": false,
+        "pnas_mode": false,
+        "train_strategy": "GPU"
+    }
+}

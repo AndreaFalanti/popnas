@@ -30,6 +30,9 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
 
+        self.rescale = dataset_config['rescale']
+        self.normalize = dataset_config['normalize']
+
     def _get_numpy_split(self, split_name: str):
         # numpy case
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):
@@ -54,6 +57,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             # Custom datasets
             if self.dataset_path is not None:
                 x_train, y_train = self._get_numpy_split('train')
+                q_x = np.quantile(x_train, q=0.98) if self.rescale else 1
 
                 classes = len(np.unique(y_train))
                 # discard first dimension since is the number of samples
@@ -74,7 +78,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             else:
                 raise NotImplementedError()
 
-            preprocessor = TimeSeriesPreprocessor(to_one_hot=classes)
+            # TODO: rescale and normalize must be set from configuration, not hardcoded like now
+            preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, None, shuffle=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor, None)
             dataset_folds.append((train_ds, val_ds))
@@ -88,6 +93,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         # Custom datasets
         if self.dataset_path is not None:
             x_test, y_test = self._get_numpy_split('test')
+            q_x = np.quantile(x_test, q=0.98) if self.rescale else 1
 
             classes = len(np.unique(y_test))
             # discard first dimension since is the number of samples
@@ -97,7 +103,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         else:
             raise NotImplementedError()
 
-        preprocessor = TimeSeriesPreprocessor(to_one_hot=classes)
+        preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
         test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, preprocessor, None)
 
         self._logger.info('Test dataset built successfully')
