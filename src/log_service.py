@@ -72,7 +72,11 @@ def create_critical_logger():
     logger = logging.getLogger(__name__)
     file_handler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
     file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setFormatter(logging.Formatter("%(message)s"))
+
     logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     return logger
 
