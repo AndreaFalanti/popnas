@@ -47,7 +47,7 @@ class ModelGenerator:
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, input_shape: 'tuple[int, int, int]',
+    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, input_shape: 'tuple[int, ...]',
                  data_augmentation_model: Sequential = None, save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
 
