@@ -124,8 +124,8 @@ class MultiHeadSelfAttention(Layer):
 
         self.softmax_attn_rescaler = Softmax()
 
-        self.to_q = CustomSeparableConv2D(inner_dim, proj_kernel, stride=1, bias=False)
-        self.to_kv = CustomSeparableConv2D(inner_dim * 2, proj_kernel, stride=kv_proj_stride, bias=False)
+        self.to_q = CustomSeparableConv2D(inner_dim, proj_kernel, stride=1, bias=False, weight_reg=weight_reg)
+        self.to_kv = CustomSeparableConv2D(inner_dim * 2, proj_kernel, stride=kv_proj_stride, bias=False, weight_reg=weight_reg)
 
         # TODO: this is a dense layer in official implementation.
         self.out_conv = Conv2D(filters=dim, kernel_size=1, strides=1, kernel_regularizer=weight_reg)
@@ -139,7 +139,7 @@ class MultiHeadSelfAttention(Layer):
         kv = self.to_kv(x, training=training)
         k, v = tf.split(kv, num_or_size_splits=2, axis=-1)
         qkv = (q, k, v)
-        # h is the number of heads
+        # h is the number of heads, make them scalars (flatten)
         q, k, v = map(lambda t: rearrange(t, 'b x y (h d) -> (b h) (x y) d', h=h), qkv)
 
         attention_scores = einsum('b i d, b j d -> b i j', q, k) * self.scale
@@ -165,7 +165,7 @@ class MultiHeadSelfAttention(Layer):
         return config
 
 
-class ConvolutionalTransformerBlock(Layer):
+class ConvolutionalTransformerBlockStack(Layer):
     def __init__(self, filters, proj_kernel, kv_proj_stride, num_blocks, heads, dim_head=64, mlp_mult=4, dropout=0.0, weight_reg=None):
         super().__init__()
         self.filters = filters
@@ -178,16 +178,13 @@ class ConvolutionalTransformerBlock(Layer):
         self.dropout = dropout
         self.weight_reg = weight_reg
 
-        self.layers = []
-        for _ in range(num_blocks):
-            self.layers.append([
-                PreNorm(MultiHeadSelfAttention(filters, proj_kernel=proj_kernel, kv_proj_stride=kv_proj_stride,
-                                               heads=heads, dim_head=dim_head, dropout=dropout)),
-                PreNorm(MLP(filters, mlp_mult, dropout=dropout))
-            ])
+        self.layers = [(
+            PreNorm(MultiHeadSelfAttention(filters, proj_kernel, kv_proj_stride, heads, dim_head, dropout=dropout, weight_reg=weight_reg)),
+            PreNorm(MLP(filters, mlp_mult, dropout=dropout))
+        )] * num_blocks
 
     def call(self, x, training=None, **kwargs):
-        for _, (mhsa, mlp) in enumerate(self.layers):
+        for mhsa, mlp in self.layers:
             x = mhsa(x, training=training) + x
             x = mlp(x, training=training) + x
 
@@ -234,10 +231,10 @@ class CVTStage(Layer):
         self.conv_token_embedding = Conv2D(filters=emb_dim, kernel_size=emb_kernel, padding='same', strides=emb_stride,
                                            kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
         self.layer_norm = LayerNormalization(epsilon=1e-5)
-        self.conv_transformer_block = ConvolutionalTransformerBlock(filters=emb_dim, proj_kernel=proj_kernel,
-                                                                    kv_proj_stride=kv_proj_stride, num_blocks=ct_blocks,
-                                                                    heads=heads, dim_head=dim_head, mlp_mult=mlp_mult,
-                                                                    dropout=dropout)
+        self.conv_transformer_block = ConvolutionalTransformerBlockStack(filters=emb_dim, proj_kernel=proj_kernel,
+                                                                         kv_proj_stride=kv_proj_stride, num_blocks=ct_blocks,
+                                                                         heads=heads, dim_head=dim_head, mlp_mult=mlp_mult,
+                                                                         dropout=dropout, weight_reg=weight_reg)
 
     def call(self, inputs, training=None, **kwargs):
         x = self.conv_token_embedding(inputs, training=training)
@@ -256,6 +253,53 @@ class CVTStage(Layer):
             'dim_head': self.dim_head,
             'ct_blocks': self.ct_blocks,
             'mlp_mult': self.mlp_mult,
+            'dropout': self.dropout,
+            'weight_reg': self.weight_reg
+        })
+        return config
+
+
+class SimplifiedCVT(Layer):
+    '''
+    Simplification of CvT, stripped of MLP, basically using (conv_embedding, norm, mhsa), with single head.
+    This unit can be used in POPNAS networks without incurring in extremely large time overheads.
+    '''
+    def __init__(self, emb_dim: int = 64, emb_kernel: int = 7, emb_stride: int = 4,
+                 proj_kernel: int = 3, kv_proj_stride: int = 2, heads: int = 1, dim_head: int = 64,
+                 dropout: float = 0.0, weight_reg: Optional[Regularizer] = None, name: str = 'simple_cvt'):
+        super().__init__(name=name)
+        self.emb_dim = emb_dim
+        self.emb_kernel = emb_kernel
+        self.emb_stride = emb_stride
+        self.proj_kernel = proj_kernel
+        self.kv_proj_stride = kv_proj_stride
+        self.heads = heads
+        self.dim_head = dim_head
+        self.dropout = dropout
+        self.weight_reg = weight_reg
+
+        self.conv_token_embedding = Conv2D(filters=emb_dim, kernel_size=emb_kernel, padding='same', strides=emb_stride,
+                                           kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+        self.layer_norm = LayerNormalization(epsilon=1e-5)
+        self.mhsa = MultiHeadSelfAttention(dim=emb_dim, proj_kernel=proj_kernel,
+                                           kv_proj_stride=kv_proj_stride, heads=heads,
+                                           dim_head=dim_head, dropout=dropout, weight_reg=weight_reg)
+
+    def call(self, inputs, training=None, **kwargs):
+        x = self.conv_token_embedding(inputs, training=training)
+        x = self.layer_norm(x, training=training)
+        return self.mhsa(x, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'emb_dim': self.emb_dim,
+            'emb_kernel': self.emb_kernel,
+            'emb_stride': self.emb_stride,
+            'proj_kernel': self.proj_kernel,
+            'kv_proj_stride': self.kv_proj_stride,
+            'heads': self.heads,
+            'dim_head': self.dim_head,
             'dropout': self.dropout,
             'weight_reg': self.weight_reg
         })

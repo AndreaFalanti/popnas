@@ -27,7 +27,8 @@ class OpInstantiator:
 
         # enable Convolutional Vision Transformer only for images
         if input_dims == 3:
-            self.op_regexes['cvt'] = re.compile(r'(\d+)h-(\d+)b cvt')
+            self.op_regexes['cvt'] = re.compile(r'(\d+)k-(\d+)h-(\d+)b cvt')
+            self.op_regexes['scvt'] = re.compile(r'(\d+)k-(\d+)h scvt')
 
     def __compile_op_regexes(self):
         '''
@@ -136,9 +137,15 @@ class OpInstantiator:
         if self.op_dims == 2:
             match = self.op_regexes['cvt'].match(op_name)  # type: re.Match
             if match:
-                layer_name = f'{match.group(1)}h-{match.group(2)}b_cvt{layer_name_suffix}'
-                return CVTStage(emb_dim=filters, emb_kernel=3, emb_stride=strides[0], mlp_mult=2,
-                                heads=int(match.group(1)), dim_head=filters, ct_blocks=int(match.group(2)),
+                layer_name = f'{match.group(1)}k-{match.group(2)}h-{match.group(3)}b_cvt{layer_name_suffix}'
+                return CVTStage(emb_dim=filters, emb_kernel=int(match.group(1)), emb_stride=strides[0], mlp_mult=2,
+                                heads=int(match.group(2)), dim_head=filters, ct_blocks=int(match.group(3)),
                                 weight_reg=self.weight_reg, name=layer_name)
 
-        raise ValueError(f'Operator malformed or not covered by POPNAS algorithm: {op_name}')
+            match = self.op_regexes['scvt'].match(op_name)  # type: re.Match
+            if match:
+                layer_name = f'{match.group(1)}k-{match.group(2)}h_scvt{layer_name_suffix}'
+                return SimplifiedCVT(emb_dim=filters, emb_kernel=int(match.group(1)), emb_stride=strides[0],
+                                     heads=int(match.group(2)), dim_head=filters, weight_reg=self.weight_reg, name=layer_name)
+
+        raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')
