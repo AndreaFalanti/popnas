@@ -135,6 +135,7 @@ class MultiHeadSelfAttention(Layer):
         # y is needed for rearrange operations
         _, _, y, _ = x.shape
         h = self.heads
+
         q = self.to_q(x, training=training)
         kv = self.to_kv(x, training=training)
         k, v = tf.split(kv, num_or_size_splits=2, axis=-1)

@@ -34,7 +34,9 @@ class GraphGenerator:
                 'dconv': re.compile(rf'{op_kernel_groups} dconv'),
                 'tconv': re.compile(rf'{op_kernel_groups} tconv'),
                 'stack_conv': re.compile(rf'{op_kernel_groups}-{op_kernel_groups} conv'),
-                'pool': re.compile(rf'{op_kernel_groups} (max|avg)pool')}
+                'pool': re.compile(rf'{op_kernel_groups} (max|avg)pool'),
+                'cvt': re.compile(r'(\d+)k-(\d+)h-(\d+)b cvt'),
+                'scvt': re.compile(r'(\d+)k-(\d+)h scvt')}
 
     def generate_network_graph(self, cell_spec: list):
         return NetworkGraph(cell_spec, self.input_shape, self.filters, self.num_classes,
