@@ -77,8 +77,7 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
 
     match = op_regex_dict['tconv'].match(op)  # type: re.Match
     if match:
-        # TODO
-        raise NotImplementedError('TODO, tconv is not used in recent experiments even if supported')
+        return compute_conv_params(match.groups(), input_shape, output_shape) + compute_conv_params(match.groups(), output_shape, output_shape)
 
     raise AttributeError(f'Unsupported operator "{op}"')
 
