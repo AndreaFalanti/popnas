@@ -144,6 +144,13 @@
                     "type": "integer",
                     "minimum": 1
                 },
+                "block_join_operator": {
+                    "type": "string",
+                    "enum": [
+                        "add",
+                        "avg"
+                    ]
+                },
                 "concat_only_unused_blocks": {
                     "type": "boolean"
                 },
@@ -154,6 +161,7 @@
             "required": [
                 "motifs",
                 "normal_cells_per_motif",
+                "block_join_operator",
                 "concat_only_unused_blocks",
                 "multi_output"
             ]

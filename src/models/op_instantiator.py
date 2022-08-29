@@ -1,6 +1,6 @@
 import re
 
-from tensorflow.keras.layers import Layer, GlobalAveragePooling2D, GlobalAveragePooling1D
+from tensorflow.keras.layers import Layer, GlobalAveragePooling2D, GlobalAveragePooling1D, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
 from utils.func_utils import to_int_tuple
@@ -13,7 +13,7 @@ class OpInstantiator:
     Based on input shape, 1D or 2D operators are used.
     '''
 
-    def __init__(self, input_dims: int, reduction_stride_factor: int = 2, weight_reg: Regularizer = None):
+    def __init__(self, input_dims: int, block_op_join: str, reduction_stride_factor: int = 2, weight_reg: Regularizer = None):
         self.weight_reg = weight_reg
 
         self.op_dims = input_dims - 1
@@ -22,6 +22,9 @@ class OpInstantiator:
 
         gap_selector = {1: GlobalAveragePooling1D, 2: GlobalAveragePooling2D}
         self.gap = gap_selector[self.op_dims]
+
+        self.block_join_op_selector = {'add': Add, 'avg': Average}
+        self.block_op_join = block_op_join
 
         self.op_regexes = self.__compile_op_regexes()
 
@@ -47,6 +50,9 @@ class OpInstantiator:
                 'tconv': re.compile(rf'{op_kernel_groups} tconv'),
                 'stack_conv': re.compile(rf'{op_kernel_groups}-{op_kernel_groups} conv'),
                 'pool': re.compile(rf'{op_kernel_groups} (max|avg)pool')}
+
+    def generate_block_join_operator(self, name_suffix: str):
+        return self.block_join_op_selector[self.block_op_join](name=f'{self.block_op_join}{name_suffix}')
 
     def generate_pointwise_conv(self, filters: int, strided: bool, name: str):
         '''

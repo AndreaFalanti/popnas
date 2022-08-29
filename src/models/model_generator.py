@@ -78,7 +78,7 @@ class ModelGenerator:
         self.data_augmentation_model = data_augmentation_model
 
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
-        self.op_instantiator = OpInstantiator(len(input_shape), weight_reg=self.l2_weight_reg)
+        self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
 
         # attributes defined below are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
@@ -322,9 +322,9 @@ class ModelGenerator:
 
             sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps,
                                         name=f'sdp{name_suffix}')([left_layer, right_layer])
-            return layers.Add(name=f'add{name_suffix}')(sdp)
+            return self.op_instantiator.generate_block_join_operator(name_suffix)(sdp)
         else:
-            return layers.Add(name=f'add{name_suffix}')([left_layer, right_layer])
+            return self.op_instantiator.generate_block_join_operator(name_suffix)([left_layer, right_layer])
 
     def define_callbacks(self, tb_logdir: str, score_metric: str):
         '''
