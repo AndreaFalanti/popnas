@@ -65,7 +65,7 @@ def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list,
     logger.info('*' * 60)
 
 
-def define_callbacks(cdr_enabled: bool, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
+def define_callbacks(cdr_enabled: bool, score_metric: str, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
     '''
     Define callbacks used in model training.
 
@@ -73,8 +73,8 @@ def define_callbacks(cdr_enabled: bool, multi_output: bool, last_cell_index: int
         (tf.keras.Callback[]): Keras callbacks
     '''
     # Save best weights
-    target_metric = f'val_Softmax_c{last_cell_index}_accuracy' if multi_output else 'val_accuracy'
-    ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_vacc{' + target_metric + ':.4f}.ckpt'
+    target_metric = f'val_Softmax_c{last_cell_index}_{score_metric}' if multi_output else f'val_{score_metric}'
+    ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_v' + score_metric[:2] + '{' + target_metric + ':.4f}.ckpt'
     ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
                                               save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
     # By default shows losses and metrics for both training and validation
@@ -196,6 +196,7 @@ def main():
     # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
     cnn_config['epochs'] = epochs
     save_trimmed_json_config(config, save_path)
+    score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -215,7 +216,7 @@ def main():
         if args.spec is None:
             logger.info('Getting best cell specification found during POPNAS run...')
             # find best model found during search and log some relevant info
-            metric = metrics_fields_dict[config['search_strategy']['score_metric']].real_column
+            metric = metrics_fields_dict[score_metric].real_column
             cell_spec, best_score = get_best_cell_spec(args.p, metric)
             log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
         else:

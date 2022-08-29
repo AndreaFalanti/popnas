@@ -139,7 +139,7 @@ class NetworkManager:
             save_keras_model_to_onnx(model, os.path.join(tb_logdir, 'model.onnx'))
             self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
-        return model, self.model_gen.define_callbacks(tb_logdir), partition_dict
+        return model, self.model_gen.define_callbacks(tb_logdir, self.score_objective), partition_dict
 
     def bootstrap_dataset_lazy_initialization(self):
         '''

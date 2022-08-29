@@ -326,7 +326,7 @@ class ModelGenerator:
         else:
             return layers.Add(name=f'add{name_suffix}')([left_layer, right_layer])
 
-    def define_callbacks(self, tb_logdir: str):
+    def define_callbacks(self, tb_logdir: str, score_metric: str):
         '''
         Define callbacks used in model training.
 
@@ -338,8 +338,8 @@ class ModelGenerator:
 
         if self.save_weights:
             # Save best weights, using as metric the last output in case of multi-output models
-            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_accuracy'\
-                if self.multi_output and self.network_build_info.blocks > 0 else 'val_accuracy'
+            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}'\
+                if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.ckpt'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
