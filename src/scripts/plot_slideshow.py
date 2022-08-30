@@ -39,8 +39,6 @@ def generate_slide_save_path(log_folder):
 def display_plot_overview(plot_paths: 'list[str]', columns: int, rows: int, title: str = None, save: bool = False, save_name: str = None):
     assert len(plot_paths) <= (columns * rows)
 
-    # force TkAgg for maximizing the window with code below
-    plt.switch_backend('TkAgg')
     # basically use an aspect ratio of 16:9, figsize is in inches and pixels for inches are given by dpi
     fig, ax = plt.subplots(nrows=rows, ncols=columns, figsize=(16, 9), dpi=100)  # type: plt.Figure, np.ndarray[plt.Axes]
     fig.tight_layout(pad=2.0)
@@ -64,7 +62,7 @@ def display_plot_overview(plot_paths: 'list[str]', columns: int, rows: int, titl
 
     # if in save mode, just save plot to file
     if save:
-        fig.savefig(save_name, bbox_inches='tight', dpi=120)
+        fig.savefig(save_name, bbox_inches='tight', dpi=150)
     # if not in save mode, display the plot on screen
     else:
         # maximize graph (TKAgg backend)
@@ -117,6 +115,10 @@ def main():
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     parser.add_argument('--save', help="save slides into a folder, instead of displaying them", action="store_true")
     args = parser.parse_args()
+
+    if not args.save:
+        # force TkAgg backend for getting an interactive interface and maximizing the window
+        plt.switch_backend('TkAgg')
 
     gen_paths = path_closure(args.p)
     gen_save_path = generate_slide_save_path(args.p) if args.save else iter(())
