@@ -224,10 +224,11 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
 
 
 def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int, str]]', lookback_shapes: 'list[TensorShape]',
-                 output_shape: TensorShape, cell_index: int, op_regex_dict: 'dict[str, re.Pattern]'):
+                 lookback_reshape: bool, output_shape: TensorShape, cell_index: int, op_regex_dict: 'dict[str, re.Pattern]'):
     # if shapes differ (and are not related to original input), then -2 lookback must be reshaped to the same dimension of -1 lookback
     # only height is checked since only one dimension is necessary to diverge to trigger the reshaping
-    if not lookback_shapes[-1].h == lookback_shapes[-2].h and not lookback_indexes[-2] == 'input':
+    # avoid it in case lookback_reshape is set to false in configuration
+    if lookback_reshape and (not lookback_shapes[-1].h == lookback_shapes[-2].h and not lookback_indexes[-2] == 'input'):
         layer_name = f'rs_{lookback_indexes[-2]}'
 
         main_g.add_vertex(layer_name, op='1x1 conv', params=compute_conv_params((1, 1), lookback_shapes[-2].c, lookback_shapes[-1].c),
@@ -277,8 +278,8 @@ class NetworkGraph:
     It is also useful to estimate very fast the amount of memory required by the neural network.
     '''
 
-    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int,
-                 num_classes: int, motifs: int, normals_per_motif: int, op_regex_dict: 'dict[str, re.Pattern]') -> None:
+    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int,
+                 motifs: int, normals_per_motif: int, lookback_reshape: bool, op_regex_dict: 'dict[str, re.Pattern]') -> None:
         super().__init__()
         self.op_regex_dict = op_regex_dict
 
@@ -314,7 +315,7 @@ class NetworkGraph:
         for cell_index, output_shape in enumerate(target_shapes):
             if cell_index in used_cell_indices:
                 cell_g = create_cell_graph(cell_spec, cell_index, output_shape)
-                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, output_shape, cell_index, op_regex_dict)
+                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, lookback_reshape, output_shape, cell_index, op_regex_dict)
 
             # move -1 lookback to -2 position, than add new cell output as -1 lookback
             lookback_vertex_indices[-2] = lookback_vertex_indices[-1]

@@ -1,3 +1,4 @@
+import math
 import os.path
 import re
 
@@ -52,6 +53,7 @@ class ModelGenerator:
         self._logger = log_service.get_logger(__name__)
 
         self.concat_only_unused = arc_params['concat_only_unused_blocks']
+        self.lookback_reshape = arc_params['lookback_reshape']
         self.motifs = arc_params['motifs']
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
@@ -77,6 +79,9 @@ class ModelGenerator:
         # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
         self.data_augmentation_model = data_augmentation_model
 
+        # compute output shapes of each cell, to enable easier tensor shape management
+        self.cell_output_shapes = self.__compute_cell_output_shapes()
+
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
         self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
 
@@ -92,6 +97,27 @@ class ModelGenerator:
         # noinspection PyTypeChecker
         self.network_build_info = None  # type: NetworkBuildInfo
         self.output_layers = {}
+
+    def __compute_cell_output_shapes(self):
+        output_shapes = []
+        current_shape = list(self.input_shape)
+        current_shape[-1] = self.filters
+        reduction_tx = [0.5] * (len(self.input_shape) - 1) + [2]
+
+        for motif_index in range(self.motifs):
+            # add N times a normal cell
+            for _ in range(self.normal_cells_per_motif):
+                output_shapes.append(current_shape)
+
+            # add 1 time a reduction cell, except for last motif
+            if motif_index + 1 < self.motifs:
+                current_shape = [math.ceil(val * tx) for val, tx in zip(current_shape, reduction_tx)]
+                output_shapes.append(current_shape)
+
+        return output_shapes
+
+    def __cur_target_shape(self):
+        return self.cell_output_shapes[self.cell_index]
 
     def __compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
         input_tensors_size = 0
@@ -231,7 +257,7 @@ class ModelGenerator:
             (tf.Tensor): output tensor of the cell
         '''
         # normalize inputs if necessary (different spatial dimension of at least one input, from the one expected by the actual cell)
-        if self.cell_index in self.network_build_info.need_input_norm_indexes:
+        if self.lookback_reshape and self.cell_index in self.network_build_info.need_input_norm_indexes:
             inputs = self.__normalize_inputs(inputs, filters)
 
         # else concatenate all the intermediate blocks that compose the cell
@@ -302,14 +328,22 @@ class ModelGenerator:
             (tf.tensor): Output of Add keras layer
         '''
         input_L, op_L, input_R, op_R = block_spec
+        input_L_shape = inputs[input_L].shape.as_list()
+        input_R_shape = inputs[input_R].shape.as_list()
+        cur_cell_target_output_shape = self.__cur_target_shape()  # has no batch dimension, contrary to inputs
 
         # in reduction cells, stride only on lookback inputs (first level of cell DAG)
-        # normal cells instead never use stride
         strided_L = reduction and input_L < 0
         strided_R = reduction and input_R < 0
 
-        input_L_depth = inputs[input_L].shape.as_list()[-1]
-        input_R_depth = inputs[input_R].shape.as_list()[-1]
+        # New option to avoid input shape regularization with pointwise conv, when -2 refers to a normal cell and -1 to a reduction cell
+        # normal cells can use stride if a "skip" lookback has a bigger dimension than cell target output
+        if not self.lookback_reshape:
+            strided_L = strided_L or (input_L < -1 and input_L_shape[1] != cur_cell_target_output_shape[0])
+            strided_R = strided_R or (input_R < -1 and input_R_shape[1] != cur_cell_target_output_shape[0])
+
+        input_L_depth = input_L_shape[-1]
+        input_R_depth = input_R_shape[-1]
 
         # instantiate a Keras layer for operator, called with the respective input
         name_suffix = f'_c{self.cell_index}b{self.block_index}'

@@ -14,6 +14,7 @@ class GraphGenerator:
         self.num_classes = output_classes_count
         self.motifs = arc_config['motifs']  # type: int
         self.normals_per_motif = arc_config['normal_cells_per_motif']  # type: int
+        self.lookback_reshape = arc_config['lookback_reshape'] # type: bool
 
         self.op_regex_dict = self.__compile_op_regexes()
 
@@ -39,5 +40,5 @@ class GraphGenerator:
                 'scvt': re.compile(r'(\d+)k-(\d+)h scvt')}
 
     def generate_network_graph(self, cell_spec: list):
-        return NetworkGraph(cell_spec, self.input_shape, self.filters, self.num_classes,
-                            self.motifs, self.normals_per_motif, self.op_regex_dict)
+        return NetworkGraph(cell_spec, self.input_shape, self.filters, self.num_classes, self.motifs, self.normals_per_motif,
+                            self.lookback_reshape, self.op_regex_dict)

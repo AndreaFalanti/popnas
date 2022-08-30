@@ -151,6 +151,9 @@
                         "avg"
                     ]
                 },
+                "lookback_reshape": {
+                    "type": "boolean"
+                },
                 "concat_only_unused_blocks": {
                     "type": "boolean"
                 },
@@ -162,6 +165,7 @@
                 "motifs",
                 "normal_cells_per_motif",
                 "block_join_operator",
+                "lookback_reshape",
                 "concat_only_unused_blocks",
                 "multi_output"
             ]
