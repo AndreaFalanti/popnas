@@ -125,7 +125,7 @@ def main():
         run_config = json.load(f)
 
     sstr_config = run_config['search_strategy']
-    score_metric = 'accuracy' if 'accuracy' in sstr_config['pareto_objectives'] else 'f1_score'
+    score_metric = sstr_config['score_metric']
 
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
                           2, 2, title='Specular mono blocks (input -1) overview', save=args.save, save_name=next(gen_save_path, None))
@@ -158,7 +158,7 @@ def main():
         display_plot_overview(gen_paths(multi_output_plot_paths), cols, rows, title='Val accuracy overview per output', save=args.save,
                               save_name=next(gen_save_path, None))
 
-    display_plot_overview(gen_paths(['train_time_overview.png', 'train_acc_overview.png', 'train_time_boxplot.png', 'val_acc_boxplot.png']),
+    display_plot_overview(gen_paths(['val_acc_boxplot.png', 'val_f1_score_boxplot.png', 'train_time_boxplot.png']),
                           2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))
 
     time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.endswith('_time_corr.png')]

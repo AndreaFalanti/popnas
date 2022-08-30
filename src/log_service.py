@@ -42,7 +42,7 @@ def initialize_log_folders(folder_name: str = None):
     os.mkdir(os.path.join(log_path, 'restore'))  # create folder for additional files used in restore mode
 
     # additional folders for different plot formats
-    os.mkdir(os.path.join(log_path, 'plots', 'eps'))
+    # os.mkdir(os.path.join(log_path, 'plots', 'eps'))
     os.mkdir(os.path.join(log_path, 'plots', 'pdf'))
 
 

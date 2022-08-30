@@ -353,9 +353,9 @@ def plot_cnn_train_boxplots_per_block(B: int):
     for b in x:
         b_df = df[df['# blocks'] == b]
 
-        acc_per_block.append(b_df['best val accuracy'])
-        times_per_block.append(b_df['training time(seconds)'])
-        f1_scores_per_block.append(b_df['val F1 score'])
+        acc_per_block.append(b_df[metrics_fields_dict['accuracy'].real_column])
+        times_per_block.append(b_df[metrics_fields_dict['time'].real_column])
+        f1_scores_per_block.append(b_df[metrics_fields_dict['f1_score'].real_column])
 
     __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
     __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
