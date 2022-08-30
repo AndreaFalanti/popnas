@@ -249,7 +249,7 @@ def main():
     train_dataset, validation_dataset = dataset_folds[0]
 
     # Define callbacks
-    train_callbacks = define_callbacks(cdr_enabled, multi_output, last_cell_index)
+    train_callbacks = define_callbacks(cdr_enabled, score_metric, multi_output, last_cell_index)
     time_cb = TimingCallback()
     train_callbacks.append(time_cb)
 
