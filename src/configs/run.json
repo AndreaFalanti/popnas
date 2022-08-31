@@ -43,6 +43,7 @@
         "motifs": 3,
         "normal_cells_per_motif": 2,
         "block_join_operator": "add",
+        "lookback_reshape": true,
         "concat_only_unused_blocks": true,
         "multi_output": false
     },
