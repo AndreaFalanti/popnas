@@ -374,7 +374,7 @@ class ModelGenerator:
             # Save best weights, using as metric the last output in case of multi-output models
             target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}'\
                 if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
-            model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.ckpt'),
+            model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.h5'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
         # TODO: if you want to use early stopping, training time should be rescaled for predictor
@@ -405,11 +405,8 @@ class ModelGenerator:
                                                                    self.cdr_config['m_mul'], self.cdr_config['alpha'])
         # if cosine decay restart is not enabled, use plain learning rate
         else:
-            lr_schedule = self.lr
-            wd_schedule = self.wr
-
-        # schedule_2 = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
-        # sgdr_optimizer = optimizers.SGD(learning_rate=schedule_2, momentum=0.9)
+            lr_schedule = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
+            wd_schedule = optimizers.schedules.CosineDecay(self.wr, self.training_steps_per_epoch * self.epochs)
 
         optimizer = tfa.optimizers.AdamW(wd_schedule, lr_schedule) if self.use_adamW else optimizers.Adam(learning_rate=lr_schedule)
 
