@@ -108,9 +108,11 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
   (except the first step, which trains all possible cells).
 - **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
-- **pareto_objectives**: defines the objectives considered during the search for optimizing the selection of the neural network architectures to
-  train. Currently supported values are [accuracy, time, params], at least two of them must be provided and accuracy must always be set to have
-  meaningful results.
+- **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
+  Currently supported: [accuracy, f1_score].
+- **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
+  the selection of the neural network architectures to train. Currently supported values are [time, params],
+  POPNAS requires at least one of them.
   
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
@@ -121,7 +123,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **drop_path_prob**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
   then _scheduled drop path_ is not used.
 - **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
-  - **enabled**: if _true_ use cosine decay restart, _false_ instead for using a plain learning rate schedule
+  - **enabled**: if _true_ use cosine decay restart schedule, _false_ instead for using a cosine decay schedule.
   - **period_in_epochs**: first decay period in epochs, changes at each period based on _m_mul_ value.
   - **[t_mul, m_mul, alpha]**:
     see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts).
@@ -133,6 +135,11 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **motifs**: number of motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell,
   here instead it is used to indicate a stack of N normal cells followed by a single reduction cell.
 - **normal_cells_per_motif**: normal cells to stack in each motif.
+- **block_join_operator**: defines the operator used to join the tensors produced by the two operators of a block.
+  Supported values: [add, avg].
+- **lookback_reshape**: if _true_, when a skip lookback (-2) has a different shape from the one expected by the current cell, it is reshaped
+  with a pointwise convolution, similar to what was done in PNAS, before passing it to block operators. If _false_, the skip lookbacks are instead
+  passed directly to block operators requesting them, which would operate like as reduction cell case when the shape diverge from expected one.
 - **concat_only_unused_blocks**: if _true_, only blocks' output not used internally by the cell
   will be used in final concatenation cell output, following PNAS and NASNet.
   If set to _false_, all blocks' output will be concatenated in final cell output.
@@ -159,6 +166,8 @@ Here it's presented a list of the configuration sections and fields, with a brie
 [//]: # (- **cells**: total LSTM cells of the model.)
 
 **Dataset**:
+- **type**: specifies the problem domain of the provided data. Processing pipeline and other parameters depends on the
+  addressed task. Supported values: [image_classification, time_series_classification].
 - **name**: used to identify and load a Keras or TFDS dataset supported by POPNAS.
   Can be _null_ if the path of a custom dataset is provided.
 - **path**: path to a folder containing a custom dataset.
@@ -178,16 +187,23 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **balance_class_losses**: if _true_, the class losses will be weighted proportionally to the number of samples.
   The exact formula for computing the weight of each class is:
   w<sub>class</sub> = 1 / (classes_count * samples_fraction<sub>class</sub>).
-- **resize**: dictionary with parameters related to image resizing.
-  - **enabled**: _true_ for using resizing, _false_ otherwise.
-  - **width**: target image width in pixels.
-  - **height**: target image height in pixels.
 - **data_augmentation**: dictionary with parameters related to data augmentation.
   - **enabled**: _true_ for using data augmentation, _false_ otherwise.
   - **perform_on_gpu**: perform data augmentation directly on GPU (through Keras experimental layers).
     Usually advised only if CPU is very slow, since CPU prepares the images while the GPU trains the network
     (asynchronous prefetch), instead performing data augmentation on the GPU will make the process sequential,
     always causing delays even if it's faster to perform on GPU.
+- ...extra parameters depending on dataset type, see next sections.
+
+**Dataset(_image_classification_ only)**:
+- **resize**: dictionary with parameters related to image resizing.
+  - **enabled**: _true_ for using resizing, _false_ otherwise.
+  - **width**: target image width in pixels.
+  - **height**: target image height in pixels.
+
+**Dataset(_time_series_classification_ only)**:
+- **rescale**: if _true_ the values will be rescaled with a factor based on 98 percentile of the entire input values.
+- **normalize**: if _true_, sample values will be shifted and scaled into a distribution centered around 0 with standard deviation 1.
 
 **Others**:
 - **accuracy_predictor_ensemble_units**: defines the number of models used in the accuracy predictor (ensemble).
@@ -258,13 +274,13 @@ Close a plot overview to visualize the next one, the program terminates after sh
 If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
 
 If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder,
-also their output plots will be visualized in additional slides at the end.
+their plots will be appended in additional slides.
 
 
 ### Tensorboard
 Trained CNNs have a callback for saving info to tensorboard log files. To access the training data associated to all
 neural networks sampled during the search process, run the command:
 ```
-tensorboard --logdir {path_to_log_folder}/tensorboard_cnn --port 6096
+tensorboard --logdir {path_to_log_folder}/tensorboard_cnn
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
