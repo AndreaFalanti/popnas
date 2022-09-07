@@ -159,3 +159,9 @@ def prod(it: Iterable):
 
 def intersection(iter1: Iterable, iter2: Iterable) -> list:
     return list(set(iter1) & set(iter2))
+
+
+def to_one_hot(cat_value: int, one_hot_dim: int):
+    one_hot = [0] * one_hot_dim
+    one_hot[cat_value] = 1
+    return one_hot
