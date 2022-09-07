@@ -403,7 +403,7 @@ class ModelGenerator:
             # weight decay for adamW, if used
             wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config['t_mul'],
                                                                    self.cdr_config['m_mul'], self.cdr_config['alpha'])
-        # if cosine decay restart is not enabled, use plain learning rate
+        # if cosine decay restart is not enabled, use cosine decay restart
         else:
             lr_schedule = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
             wd_schedule = optimizers.schedules.CosineDecay(self.wr, self.training_steps_per_epoch * self.epochs)
