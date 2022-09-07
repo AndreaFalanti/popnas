@@ -38,6 +38,7 @@ hyperopt = "0.2.5"
 eli5 = "0.13.0"
 dgl-cu111 = "^0.6.1"
 dglgo = "^0.0.2"
+spektral = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "*"

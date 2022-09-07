@@ -187,7 +187,9 @@ class KerasPredictor(Predictor):
         # only at the end
         self.model_ensemble = None
 
-        train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
+        batch_size = 8
+        train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
+                                                  use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         if self._model_log_folder is None:
             b_max = len(cells[-1])
             self._model_log_folder = os.path.join(self.log_folder, f'B{b_max}')
@@ -228,7 +230,7 @@ class KerasPredictor(Predictor):
             self.model.save_weights(os.path.join(self._model_log_folder, 'weights'))
 
     def predict(self, x: list) -> float:
-        pred_dataset, _ = self._build_tf_dataset([x], validation_split=False, shuffle=False)
+        pred_dataset, _ = self._build_tf_dataset([x], batch_size=1, validation_split=False, shuffle=False)
 
         # predict using a single model
         if self.model_ensemble is None:

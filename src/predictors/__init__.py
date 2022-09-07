@@ -12,7 +12,7 @@ from conv1d_predictor import Conv1DPredictor
 from conv1d1i_predictor import Conv1D1IPredictor
 from rnn_attention_predictor import AttentionRNNPredictor
 from lgbm_predictor import LGBMPredictor
-from gcn_predictor_dgl import GCNPredictor
+from gcn_predictor_spektral import GCNPredictor
 
 __all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'RNNPredictor', 'KerasPredictor',
            'Conv1DPredictor', 'Conv1D1IPredictor', 'AttentionRNNPredictor', 'LGBMPredictor', 'GCNPredictor']
