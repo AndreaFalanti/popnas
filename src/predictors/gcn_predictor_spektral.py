@@ -7,7 +7,7 @@ import spektral.layers as g_layers
 import tensorflow as tf
 from spektral.data import Graph, BatchLoader
 from spektral.transforms import GCNFilter
-from tensorflow.keras import activations, layers, Model
+from tensorflow.keras import activations, regularizers, layers, Model
 
 from encoder import SearchSpace
 from keras_predictor import KerasPredictor
@@ -16,7 +16,6 @@ from utils.func_utils import alternative_dict_to_string, list_flatten, chunks, t
 
 def build_adjacency_matrix(edges: 'Iterable[tuple[int, int]]', num_nodes: int):
     adj_matrix = np.zeros((num_nodes, num_nodes), dtype=np.float)
-
     for i, j in edges:
         adj_matrix[i][j] = 1
 
@@ -98,8 +97,7 @@ def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: list, y_la
 
     adj = build_adjacency_matrix(zip(edges_out, edges_in), num_nodes=num_nodes)  # shape: [num_nodes, num_nodes]
 
-    g = Graph(x=node_features, a=adj, y=y_label)
-    return g
+    return Graph(x=node_features, a=adj, y=y_label)
 
 
 class CellGraphDataset(spektral.data.Dataset):
@@ -113,31 +111,8 @@ class CellGraphDataset(spektral.data.Dataset):
     def read(self):
         return [cell_spec_to_spektral_graph(self.search_space, cell_spec, reward) for cell_spec, reward in zip(self.cell_specs, self.rewards)]
 
+    # data is always local and passed directly to __init__, no need to implement this
     def download(self):
-        pass
-
-
-class GNNModel(Model):
-    def __init__(self, f1: int, f2: int, **kwargs):
-        super().__init__(**kwargs)
-
-        self.gconv1 = g_layers.GCNConv(f1, activation=activations.swish)
-        self.gconv2 = g_layers.GCNConv(f2, activation=activations.swish)
-        self.dense = layers.Dense(100, activation=activations.swish)
-        self.out = layers.Dense(1, activation=activations.sigmoid)
-
-    def call(self, inputs, training=None, mask=None):
-        # destructure inputs into node_features and adjacency_matrix
-        x, a = inputs
-
-        x = self.gconv1([x, a])
-        x = self.gconv2([x, a])
-        # use only last node features
-        x = self.dense(x)
-        return self.out(x)
-
-    # TODO
-    def get_config(self):
         pass
 
 
@@ -158,30 +133,36 @@ class GCNPredictor(KerasPredictor):
         max_lookback_abs = abs(self.search_space.input_lookback_depth)
         self.num_features = num_operators + max_lookback_abs + 2
 
-    # TODO
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'wr': 1e-5,
-            'use_er': False,
-            'er': 0,
-            'cells': 48,
-            'embedding_dim': 10,
-            'rnn_type': 'lstm'
+            'f1': 20,
+            'f2': 30,
+            'dense_units': 100
         })
 
-    # TODO
     def _get_hp_search_space(self):
         hp = super()._get_hp_search_space()
         hp.Float('wr', 1e-7, 1e-4, sampling='log')
-        hp.Boolean('use_er')
-        hp.Float('er', 1e-7, 1e-4, sampling='log', parent_name='use_er', parent_values=[True])
-        hp.Int('cells', 20, 100, sampling='linear')
-        hp.Int('embedding_dim', 10, 100, sampling='linear')
+        hp.Int('f1', 10, 100, sampling='linear')
+        hp.Int('f2', 10, 100, sampling='linear')
+        hp.Int('dense_units', 10, 100, sampling='linear')
 
         return hp
 
     def _build_model(self, config: dict):
-        return GNNModel(f1=20, f2=30)
+        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+
+        # TODO: None are for num_nodes, necessary also for batches?
+        node_features = layers.Input(shape=(None, self.num_features))
+        adj_matrix = layers.Input(shape=(None, None))
+
+        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish)([node_features, adj_matrix])
+        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish)([gconv1, adj_matrix])
+        dense = layers.Dense(100, activation=activations.swish)(gconv2)
+        score = layers.Dense(1, activation=activations.sigmoid)(dense)
+
+        return Model(inputs=(node_features, adj_matrix), outputs=score)
 
     def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True):
@@ -191,6 +172,8 @@ class GCNPredictor(KerasPredictor):
         if cell_specs[0] == []:
             cell_specs = cell_specs[1:]
             rewards = None if rewards is None else rewards[1:]
+
+        # TODO: shuffle together cell_specs and rewards, if good for performances. Should not be required.
 
         if validation_split:
             # TODO
