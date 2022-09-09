@@ -189,7 +189,7 @@ def main():
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    epochs = (2 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
     cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
