@@ -5,7 +5,8 @@ import numpy as np
 import spektral
 import spektral.layers as g_layers
 import tensorflow as tf
-from spektral.data import Graph, BatchLoader
+from einops import rearrange
+from spektral.data import Graph, PackedBatchLoader
 from spektral.transforms import GCNFilter
 from tensorflow.keras import activations, regularizers, layers, Model
 
@@ -135,9 +136,11 @@ class GCNPredictor(KerasPredictor):
 
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
+            'lr': 5e-4,
             'wr': 1e-5,
             'f1': 20,
             'f2': 30,
+            'f3': 40,
             'dense_units': 100
         })
 
@@ -146,6 +149,7 @@ class GCNPredictor(KerasPredictor):
         hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Int('f1', 10, 100, sampling='linear')
         hp.Int('f2', 10, 100, sampling='linear')
+        hp.Int('f3', 10, 100, sampling='linear')
         hp.Int('dense_units', 10, 100, sampling='linear')
 
         return hp
@@ -153,16 +157,34 @@ class GCNPredictor(KerasPredictor):
     def _build_model(self, config: dict):
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
 
+        class LastNodeFeatures(layers.Layer):
+            def __init__(self, name='last_node_feat', **kwargs):
+                '''
+                Take only last node features from features produced by a Spektral graph layer, reshaping it to squeeze dimensions.
+                Encapsulating the operation in a Keras layer allows to plot it during plot_model(), otherwise could be used without the layer.
+                '''
+                super().__init__(name=name, **kwargs)
+
+            def call(self, inputs, training=None, mask=None):
+                return rearrange(inputs[:, -1:, :], 'b n f -> b (n f)', n=1, f=config['f3'])
+
+            def get_config(self):
+                return super().get_config()
+
         # TODO: None are for num_nodes, necessary also for batches?
         node_features = layers.Input(shape=(None, self.num_features))
         adj_matrix = layers.Input(shape=(None, None))
 
         gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish)([node_features, adj_matrix])
         gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish)([gconv1, adj_matrix])
-        dense = layers.Dense(100, activation=activations.swish)(gconv2)
+        gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish)([gconv2, adj_matrix])
+        # get only features of exit node (also note that einops and tf functions consider also batch, while Keras functional API (Inputs) does not)
+        last_node_features = LastNodeFeatures()(gconv3)
+        dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg)(last_node_features)
         score = layers.Dense(1, activation=activations.sigmoid)(dense)
 
         return Model(inputs=(node_features, adj_matrix), outputs=score)
+        # return Model(inputs={'x': node_features, 'a': adj_matrix}, outputs={'y': score})
 
     def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True):
@@ -182,4 +204,4 @@ class GCNPredictor(KerasPredictor):
             train_gds = CellGraphDataset(self.search_space, cell_specs, rewards)
             train_gds.apply(GCNFilter())
             # shuffle should not be applied here, it gives a warning
-            return BatchLoader(train_gds, batch_size=batch_size, shuffle=False).load(), None
+            return PackedBatchLoader(train_gds, batch_size=batch_size, shuffle=False, node_level=False).load(), None
