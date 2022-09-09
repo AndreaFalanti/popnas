@@ -189,7 +189,7 @@ def main():
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    epochs = (2 if cdr_enabled else 300) if args.same else cnn_config['epochs']
     cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
@@ -249,7 +249,7 @@ def main():
     train_dataset, validation_dataset = dataset_folds[0]
 
     # Define callbacks
-    train_callbacks = define_callbacks(cdr_enabled, score_metric, multi_output, last_cell_index)
+    train_callbacks = define_callbacks(cdr_enabled, score_metric, False, last_cell_index)
     time_cb = TimingCallback()
     train_callbacks.append(time_cb)
 
@@ -263,7 +263,7 @@ def main():
                      callbacks=train_callbacks)     # type: callbacks.History
 
     training_time = sum(time_cb.logs)
-    log_final_training_results(logger, hist, training_time, arc_config['multi_output'])
+    log_final_training_results(logger, hist, training_time, False)
 
     logger.info('Converting trained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))

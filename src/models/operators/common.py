@@ -254,3 +254,22 @@ class PoolingConv(Layer):
             'weight_reg': self.weight_reg
         })
         return config
+
+
+class ScalarMult(Layer):
+    def __init__(self, scalar: float, name='scalar_mult', **kwargs):
+        '''
+        Multiply tensor for a scalar. Wrapper of tf.math.scalar_mul.
+        '''
+        super().__init__(name=name, **kwargs)
+        self.scalar = scalar
+
+    def call(self, inputs, training=None, mask=None):
+        return tf.math.scalar_mul(self.scalar, inputs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'scalar': self.scalar,
+        })
+        return config

@@ -1,6 +1,5 @@
 import math
 import os.path
-import re
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -165,9 +164,9 @@ class ModelGenerator:
         gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes_count, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
+        output = layers.Dense(self.output_classes_count, name=f'Prob{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
 
-        self.output_layers.update({f'Softmax{name_suffix}': output})
+        self.output_layers.update({f'Prob{name_suffix}': output})
         return output
 
     def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False):
@@ -238,11 +237,18 @@ class ModelGenerator:
 
         # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
         if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, \
+            # sum the multi-exits together, using a weighted sum and a single exit
+            scaled_exits = [ops.ScalarMult(1 / (2 ** (self.total_cells - i)), name=f'scalar_mult_{i}')(out_val)
+                            for i, out_val in enumerate(self.output_layers.values())]
+            multi_exit_sum = layers.Add()(scaled_exits)
+            out = layers.Softmax()(multi_exit_sum)
+
+            return Model(inputs=model_input, outputs=out), partitions_dict, \
                    max(self.network_build_info.used_cell_indexes, default=0)
         else:
             output = self.__generate_output(last_output, self.dropout_prob)
-            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
+            out = layers.Softmax()(output)
+            return Model(inputs=model_input, outputs=out), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
 
     def __build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
@@ -372,8 +378,7 @@ class ModelGenerator:
 
         if self.save_weights:
             # Save best weights, using as metric the last output in case of multi-output models
-            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}'\
-                if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
+            target_metric = f'val_{score_metric}'
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.h5'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
@@ -383,16 +388,8 @@ class ModelGenerator:
         return model_callbacks
 
     def define_training_hyperparams_and_metrics(self):
-        if self.multi_output and len(self.output_layers) > 1:
-            loss = {}
-            loss_weights = {}
-            for key in self.output_layers:
-                index = int(re.match(r'Softmax_c(\d+)', key).group(1))
-                loss.update({key: losses.CategoricalCrossentropy()})
-                loss_weights.update({key: 1 / (2 ** (self.total_cells - index))})
-        else:
-            loss = losses.CategoricalCrossentropy()
-            loss_weights = None
+        loss = losses.CategoricalCrossentropy()
+        loss_weights = None
 
         metrics = ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
 
@@ -403,7 +400,7 @@ class ModelGenerator:
             # weight decay for adamW, if used
             wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config['t_mul'],
                                                                    self.cdr_config['m_mul'], self.cdr_config['alpha'])
-        # if cosine decay restart is not enabled, use plain learning rate
+        # if cosine decay restart is not enabled, use standard cosine decay
         else:
             lr_schedule = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
             wd_schedule = optimizers.schedules.CosineDecay(self.wr, self.training_steps_per_epoch * self.epochs)
