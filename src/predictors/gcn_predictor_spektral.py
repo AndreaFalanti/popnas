@@ -195,6 +195,11 @@ class GCNPredictor(KerasPredictor):
             cell_specs = cell_specs[1:]
             rewards = None if rewards is None else rewards[1:]
 
+        # TODO: WORKAROUND -> predict case, avoid loader and use numpy directly, to avoid bug with keras model predict
+        if len(cell_specs) == 1:
+            g = cell_spec_to_spektral_graph(self.search_space, cell_specs[0], None)
+            return (np.expand_dims(g['x'], axis=0), np.expand_dims(g['a'], axis=0)), None
+
         # TODO: shuffle together cell_specs and rewards, if good for performances. Should not be required.
 
         if validation_split:
