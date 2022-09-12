@@ -136,12 +136,12 @@ class GCNPredictor(KerasPredictor):
 
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
-            'lr': 5e-4,
+            'lr': 1e-3,
             'wr': 1e-5,
             'f1': 20,
             'f2': 30,
             'f3': 40,
-            'dense_units': 100
+            'dense_units': 50
         })
 
     def _get_hp_search_space(self):
@@ -164,26 +164,29 @@ class GCNPredictor(KerasPredictor):
                 Encapsulating the operation in a Keras layer allows to plot it during plot_model(), otherwise could be used without the layer.
                 '''
                 super().__init__(name=name, **kwargs)
+                self.sort_pool = g_layers.SortPool(1)
 
             def call(self, inputs, training=None, mask=None):
-                return rearrange(inputs[:, -1:, :], 'b n f -> b (n f)', n=1, f=config['f3'])
+                last_node_feat = self.sort_pool(inputs)
+                return rearrange(last_node_feat, 'b n f -> b (n f)', n=1, f=config['f2'])
 
             def get_config(self):
                 return super().get_config()
 
-        # TODO: None are for num_nodes, necessary also for batches?
+        # None refers to num_nodes, since they can vary between graphs
         node_features = layers.Input(shape=(None, self.num_features))
         adj_matrix = layers.Input(shape=(None, None))
 
-        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish)([node_features, adj_matrix])
-        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish)([gconv1, adj_matrix])
-        gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish)([gconv2, adj_matrix])
+        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg)([node_features, adj_matrix])
+        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv1, adj_matrix])
+        # gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv2, adj_matrix])
         # get only features of exit node (also note that einops and tf functions consider also batch, while Keras functional API (Inputs) does not)
-        last_node_features = LastNodeFeatures()(gconv3)
-        dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg)(last_node_features)
+        # global_feat = LastNodeFeatures()(gconv2)
+        global_feat = g_layers.GlobalAvgPool()(gconv2)
+        dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg)(global_feat)
         score = layers.Dense(1, activation=activations.sigmoid)(dense)
 
-        return Model(inputs=(node_features, adj_matrix), outputs=score)
+        return Model(inputs=[node_features, adj_matrix], outputs=score)
         # return Model(inputs={'x': node_features, 'a': adj_matrix}, outputs={'y': score})
 
     def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
