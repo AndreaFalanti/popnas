@@ -11,6 +11,28 @@ from utils.nn_utils import TrainingResults
 tf.get_logger().setLevel(logging.ERROR)
 
 
+class GraphProxy:
+    def __init__(self, bench: benchmarking.NATSbench, arch_index: int) -> None:
+        super().__init__()
+        self.bench = bench
+        self.arch_index = arch_index
+
+    def get_total_params(self):
+        # always done on cifar10, since parameters do not vary between datasets
+        return self.bench.api.get_cost_info(self.arch_index, dataset='cifar10', hp="200")['params']
+
+
+class GraphGeneratorProxy:
+    def __init__(self, bench: benchmarking.NATSbench) -> None:
+        super().__init__()
+        self.bench = bench
+
+    def generate_network_graph(self, cell_spec: list):
+        arch = self.bench.map_cell_spec_to_nas_bench_201(cell_spec)
+        arch_index = self.bench.api.query_index_by_arch(arch)
+        return GraphProxy(self.bench, arch_index)
+
+
 class NetworkBenchManager:
     '''
     Proxy class to get training results of an architecture by querying NAS-bench-201.
@@ -28,11 +50,11 @@ class NetworkBenchManager:
         # self.epochs = cnn_config['epochs']
         self.dataset_name = dataset_config['name']
 
-        # avoids problems with Controller, even if not used
-        self.graph_gen = None
-
         bench_path = dataset_config['path']
         self.nas_bench = benchmarking.NATSbench(bench_path)
+
+        # make possible for controller to retrieve params
+        self.graph_gen = GraphGeneratorProxy(self.nas_bench)
 
     def bootstrap_dataset_lazy_initialization(self):
         '''

@@ -70,12 +70,15 @@ class NATSbench:
         self._logger.info('The architecture-index is: %d', arch_index)
 
         validation_accuracy, latency, time_cost, current_total_time_cost = self.api.simulate_train_eval(arch_index, dataset_name, hp=hp)
+        # get architecture info about flops and params
+        cost_info = self.api.get_cost_info(arch_index, dataset_name, hp=hp)
+
         # convert accuracy value to [0, 1] interval (probability instead of percentage)
         validation_accuracy /= 100
 
         self._logger.info('Cumulative current GPU seconds dedicated to NN training: %0.4f', current_total_time_cost)
 
-        return TrainingResults(cell_spec, validation_accuracy, validation_accuracy, time_cost, latency, 0, 0)
+        return TrainingResults(cell_spec, validation_accuracy, validation_accuracy, time_cost, latency, cost_info['params'], cost_info['flops'])
 
     def simulate_testing_on_nas_bench_201(self, cell_spec: list, dataset_name: str):
         architecture_spec = self.map_cell_spec_to_nas_bench_201(cell_spec)

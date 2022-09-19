@@ -27,12 +27,11 @@ def generate_popnas_bench_config(dataset_name: str, bench_path: str):
                 '3x3 avgpool'
             ]
         },
-        # TODO: params objective currently not supported, but could be fetched too from NAS-Bench-201
         'search_strategy': {
             'max_children': 128,
             'max_exploration_children': 0,
             'score_metric': 'accuracy',
-            'additional_pareto_objectives': ['time']
+            'additional_pareto_objectives': ['time', 'params']
         },
         'cnn_hp': {
             'epochs': 200,
