@@ -161,7 +161,7 @@ def main():
             test_accuracies.append(test_acc * 100)
 
         val_mean, test_mean = np.mean(val_accuracies), np.mean(test_accuracies)
-        val_variance, test_variance = np.var(val_accuracies), np.var(val_accuracies)
+        val_variance, test_variance = np.var(val_accuracies), np.var(test_accuracies)
         with open(os.path.join('logs', main_folder, f'{dataset}.txt'), 'w') as f:
             f.write(f'DATASET: {dataset}\n')
             f.write(f'Validation accuracies: {val_accuracies} -> {val_mean:0.2f}+-({val_variance:0.2f})\n')
