@@ -16,7 +16,7 @@ class SearchSpace:
     for various use cases.
     '''
 
-    def __init__(self, ss_config: 'dict[str, Any]', cell_stack_depth: int):
+    def __init__(self, ss_config: 'dict[str, Any]', cell_stack_depth: int, benchmarking: bool = False):
         '''
         Constructs a search space which models the NASNet and PNAS papers, producing encodings for blocks and cells.
         The encodings are useful to store architecture information, from which the models can be generated.
@@ -33,6 +33,7 @@ class SearchSpace:
             cell_stack_depth: maximum cell depth that the networks can achieve
         '''
         self._logger = log_service.get_logger(__name__)
+        self.benchmarking = benchmarking
 
         self.children = []
         self.intermediate_children = []
@@ -175,6 +176,11 @@ class SearchSpace:
 
         search_space = (allowed_input_values, self.operator_values)
         new_search_space = list(self.__construct_permutations(search_space))
+
+        # NAS-bench-201 supports two blocks, but second block can't have both inputs as 0 (first block output), since it is not
+        # supported by NAS-Bench-201 network structure.
+        if self.benchmarking:
+            new_search_space = [block for block in new_search_space for in1, _, in2, _ in block if not (in1 == 0 and in2 == 0)]
 
         def generate_models():
             '''

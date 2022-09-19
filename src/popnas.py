@@ -13,6 +13,7 @@ import plotter
 from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
+from manager_bench_proxy import NetworkBenchManager
 from predictors import *
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names, \
@@ -30,7 +31,7 @@ warnings.filterwarnings(action='ignore',
 
 class Popnas:
 
-    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy):
+    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy, benchmarking: bool = False):
         ''' Configure and set up POPNASv2 algorithm for execution. Use start() function to start the NAS procedure. '''
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
@@ -67,11 +68,14 @@ class Popnas:
         self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
 
         # build a search space
-        self.search_space = SearchSpace(ss_config, max_cells)
+        self.search_space = SearchSpace(ss_config, max_cells, benchmarking=benchmarking)
 
         # create the Network Manager
-        self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
-                                          others_config['save_children_weights'], others_config['save_children_as_onnx'])
+        if benchmarking:
+            self.cnn_manager = NetworkBenchManager(ds_config)
+        else:
+            self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
+                                              others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         plotter.initialize_logger()
 
