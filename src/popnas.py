@@ -283,8 +283,9 @@ class Popnas:
         total_time = self._compute_total_time()
 
         training_results_path = log_service.build_path('csv', 'training_results.csv')
+        # the number of lines in csv is equivalent to the number of networks trained during the run (-1 for headers line)
         with open(training_results_path) as f:
-            trained_cnn_count = len(f.readlines())
+            trained_cnn_count = len(f.readlines()) - 1
 
         self._logger.info('%s', '*' * 40 + ' RUN RESULTS ' + '*' * 40)
         self._logger.info('Trained networks: %d', trained_cnn_count)
