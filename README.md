@@ -284,3 +284,15 @@ neural networks sampled during the search process, run the command:
 tensorboard --logdir {path_to_log_folder}/tensorboard_cnn
 ```
 In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
+
+
+### NAS-Bench-201
+The _run_bench.py_ script defines a run configuration and extra utilities to map POPNAS architectures into NAS-Bench-201 genotype.
+
+POPNAS use the latest API provided by NATS-bench (topology search space is equivalent to NAS-Bench-201), but requires to download the bench files
+(see the instructions at: https://github.com/D-X-Y/NATS-Bench/blob/main/README.md, download the tss bench file).
+
+The experiment can be run with command:
+```
+python ./run_bench.py -p {path_to_folder_with_NATS_bench_files}
+```

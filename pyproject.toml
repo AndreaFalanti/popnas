@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "popnas"
-version = "2.5.4"
+version = "2.6.0"
 description = "POPNAS algorithm"
 authors = ["AndreaFalanti <a.falanti@gmail.com>"]
 license = "Apache-2.0"
