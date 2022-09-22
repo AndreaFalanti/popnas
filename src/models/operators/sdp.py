@@ -6,6 +6,8 @@ from tensorflow.keras.layers import Layer
 
 # TODO: Seems to work correctly now, but it is written for easier debug and it's surely inefficient right now.
 #  Investigate on better usage of TF API and rewrite it with performance in mind.
+# TODO: if in future will be used on residual units, make sure to not include the skip connection (original input) inside the input array,
+#  since you don't want to drop the element making the residual work as such!
 class ScheduledDropPath(Layer):
     '''
     This scheduled drop path implementation is inspired by the one implemented in Tensorflow for PNASNetV5 in these links:
@@ -62,7 +64,9 @@ class ScheduledDropPath(Layer):
             mask_random_index = random.randrange(len(inputs))
             binary_tensors[mask_random_index] = tf.add(binary_tensors[mask_random_index], ensure_path_tensor)
 
-            keep_prob_inv = tf.cast(1.0 / keep_prob, dtype=input_dtype)
+            # keep_prob_inv = tf.cast(1.0 / keep_prob, dtype=input_dtype)
+            # new rescaling factor: n_inputs / n_survived_inputs, no rescale if no input is dropped.
+            keep_prob_inv = tf.cast(len(inputs) / tf.math.add_n(binary_tensors), dtype=input_dtype)
             # increment current_step, keep track of how much training steps have been executed to scale the probability correctly
             self.current_step.assign_add(delta=1)
 
