@@ -12,7 +12,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.utils import dataset_generator_factory
+from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
@@ -85,9 +85,10 @@ def define_callbacks(cdr_enabled: bool, score_metric: str, multi_output: bool, l
 
     # if using plain lr, adapt it with reduce learning rate on plateau
     # NOTE: for unknown reasons, activating plateau callback when cdr is present will also cause an error at the end of the first epoch
-    if not cdr_enabled:
-        train_callbacks.append(callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max'))
-        train_callbacks.append(callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max'))
+    # TODO: right now, if cdr is disabled the lr is scheduled with cosine decay, so reduceLROnPlateau could be not optimal.
+    # if not cdr_enabled:
+    #     train_callbacks.append(callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max'))
+    #     train_callbacks.append(callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max'))
 
     return train_callbacks
 
@@ -202,6 +203,11 @@ def main():
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
     dataset_folds, classes_count, input_shape, train_batches, val_batches = dataset_generator.generate_train_val_datasets()
+
+    # produce weights for balanced loss if option is enabled in database config
+    balance_class_losses = config['dataset'].get('balance_class_losses', False)
+    balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in dataset_folds] \
+        if balance_class_losses else None
     logger.info('Datasets generated successfully')
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
@@ -260,6 +266,7 @@ def main():
                      steps_per_epoch=train_batches,
                      validation_data=validation_dataset,
                      validation_steps=val_batches,
+                     class_weight=balanced_class_weights[0] if balance_class_losses else None,
                      callbacks=train_callbacks)     # type: callbacks.History
 
     training_time = sum(time_cb.logs)
