@@ -164,8 +164,8 @@ def __plot_scatter(x, y, x_label, y_label, title, save_name, legend_labels: Opti
     save_and_finalize_plot(fig, title, save_name)
 
 
-def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
-                                 plot_reference: bool = True, legend_labels: Optional['list[str]'] = None, value_range: Optional[tuple] = None):
+def plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name: str = None,
+                               plot_reference: bool = True, legend_labels: Optional['list[str]'] = None, value_range: Optional[tuple] = None):
     fig, ax = plt.subplots()
 
     # list of lists with same dimensions are required, or also flat lists with same dimensions
@@ -200,7 +200,10 @@ def __plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name,
 
         ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
 
-    save_and_finalize_plot(fig, title, save_name)
+    if save_name is not None:
+        save_and_finalize_plot(fig, title, save_name)
+    else:
+        return fig
 
 
 def __plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[list], labels: 'list[str]', title: str, save_name: str):
@@ -544,7 +547,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: '
                                   f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_overview')
         __plot_boxplot(errors, x, 'Blocks', f'{capitalized_metric} error{units_str}',
                        f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_boxplot')
-        __plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
+        plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
                                      f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
 
     # write plots about each Pareto metric associated to a predictor
