@@ -31,14 +31,12 @@ optuna = "2.10.1"
 sktime = "0.13.0"
 jsonschema = "4.9.1"
 einops = "0.4.1"
+spektral = "^1.2.0"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
 hyperopt = "0.2.5"
 eli5 = "0.13.0"
-dgl-cu111 = "^0.6.1"
-dglgo = "^0.0.2"
-spektral = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "*"
