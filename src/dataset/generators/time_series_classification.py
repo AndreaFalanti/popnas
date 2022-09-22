@@ -78,7 +78,6 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             else:
                 raise NotImplementedError()
 
-            # TODO: rescale and normalize must be set from configuration, not hardcoded like now
             preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, None, shuffle=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor, None)
