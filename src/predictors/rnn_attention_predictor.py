@@ -1,25 +1,10 @@
-from logging import Logger
-
-import tensorflow as tf
 from tensorflow.keras import layers, regularizers, Model
 
-from encoder import SearchSpace
 from keras_predictor import KerasPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
 
 
 class AttentionRNNPredictor(KerasPredictor):
-    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy,
-                 logger: Logger, log_folder: str, name: str = None, override_logs: bool = True,
-                 save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
-        super().__init__(y_col, y_domain, train_strategy, logger, log_folder, name, override_logs, save_weights, hp_config, hp_tuning)
-
-        self.search_space = search_space
-        self.supported_rnn_classes = {
-            'lstm': layers.LSTM,
-            'gru': layers.GRU
-        }
-
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'wr': 1e-5,
@@ -46,9 +31,14 @@ class AttentionRNNPredictor(KerasPredictor):
         return hp
 
     def _build_model(self, config: dict):
+        supported_rnn_classes = {
+            'lstm': layers.LSTM,
+            'gru': layers.GRU
+        }
+        rnn = supported_rnn_classes[config['rnn_type']]
+
         weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
         embedding_reg = regularizers.l2(config['er']) if config['use_er'] else None
-        rnn = self.supported_rnn_classes[config['rnn_type']]
 
         # two inputs: one tensor for cell inputs, one for cell operators
         inputs = layers.Input(shape=(self.search_space.B, 2))

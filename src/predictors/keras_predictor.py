@@ -13,6 +13,7 @@ from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
+from encoder import SearchSpace
 from predictors import Predictor
 from utils.func_utils import parse_cell_structures, create_empty_folder, alternative_dict_to_string
 from utils.nn_utils import get_optimized_steps_per_execution
@@ -20,7 +21,7 @@ from utils.rstr import rstr
 
 
 class KerasPredictor(Predictor, ABC):
-    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger, log_folder: str,
+    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger, log_folder: str,
                  name: str = None, override_logs: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
         # generate a relevant name if not set
         if name is None:
@@ -28,6 +29,9 @@ class KerasPredictor(Predictor, ABC):
             name = f'{self.__class__.__name__}_{config_subfix}_{"tune" if hp_tuning else "manual"}'
 
         super().__init__(logger, log_folder, name, override_logs)
+
+        # often used for generating features from the possible operators and inputs
+        self.search_space = search_space
 
         self.hp_config = self._get_default_hp_config()
         if hp_config is not None:
