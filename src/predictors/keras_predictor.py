@@ -1,5 +1,5 @@
 import os
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from logging import Logger
 from statistics import mean
 from typing import Union, Any, Optional
@@ -13,16 +13,25 @@ from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
+from encoder import SearchSpace
 from predictors import Predictor
-from utils.func_utils import parse_cell_structures, create_empty_folder
+from utils.func_utils import parse_cell_structures, create_empty_folder, alternative_dict_to_string
 from utils.nn_utils import get_optimized_steps_per_execution
 from utils.rstr import rstr
 
 
-class KerasPredictor(Predictor):
-    def __init__(self, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger, log_folder: str,
+class KerasPredictor(Predictor, ABC):
+    def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger, log_folder: str,
                  name: str = None, override_logs: bool = True, save_weights: bool = False, hp_config: dict = None, hp_tuning: bool = False):
+        # generate a relevant name if not set
+        if name is None:
+            config_subfix = "default" if hp_config is None else alternative_dict_to_string(hp_config)
+            name = f'{self.__class__.__name__}_{config_subfix}_{"tune" if hp_tuning else "manual"}'
+
         super().__init__(logger, log_folder, name, override_logs)
+
+        # often used for generating features from the possible operators and inputs
+        self.search_space = search_space
 
         self.hp_config = self._get_default_hp_config()
         if hp_config is not None:
@@ -78,7 +87,7 @@ class KerasPredictor(Predictor):
     def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True) -> 'tuple[tf.data.Dataset, tf.data.Dataset]':
         '''
-        Build a dataset to be used in the RNN controller.
+        Build a dataset to be used in the Keras predictor.
 
         Args:
             cell_specs: List of lists of inputs and operators, specification of cells in value form (no encoding).
@@ -87,7 +96,7 @@ class KerasPredictor(Predictor):
             batch_size: Dataset batch size
             use_data_augmentation: flag for enabling data augmentation. Data augmentation simply insert in the dataset some equivalent cell
                 representation, aimed to make the neural network to generalize better.
-            validation_split: set it to False to use all samples for training, without generating a validation set.
+            validation_split: True to reserve 10% of samples for validation purposes, False to not use validation.
             shuffle: shuffle the dataset. Set it to False in prediction to maintain order.
 
         Returns:
@@ -135,7 +144,7 @@ class KerasPredictor(Predictor):
         results_df = pd.read_csv(file_path)
         cells = parse_cell_structures(results_df['cell structure'])
 
-        return list(zip(cells, results_df['best val accuracy'].to_list()))
+        return list(zip(cells, results_df[self.y_col].to_list()))
 
     # TODO: currently not used, need adjustments for ensemble and new folder structure
     def restore_weights(self):
@@ -174,7 +183,6 @@ class KerasPredictor(Predictor):
             self._logger.info('Model %d training complete', fold_index + 1)
 
         self.model_ensemble = model_ensemble
-        self._model_log_folder = None
 
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # get samples for file path string
@@ -182,15 +190,16 @@ class KerasPredictor(Predictor):
             dataset = self._get_training_data_from_file(dataset)
 
         cells, rewards = zip(*dataset)
-        actual_b = len(cells[-1])
+        actual_b = max(len(cell) for cell in cells)
         # erase ensemble in case single training is used. If called from train_ensemble, the ensemble is local to the function and written
         # only at the end
         self.model_ensemble = None
 
-        train_ds, val_ds = self._build_tf_dataset(cells, rewards, use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
+        batch_size = 8
+        train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
+                                                  use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         if self._model_log_folder is None:
-            b_max = len(cells[-1])
-            self._model_log_folder = os.path.join(self.log_folder, f'B{b_max}')
+            self._model_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
             create_empty_folder(self._model_log_folder)
 
         train_callbacks = self._get_callbacks(self._model_log_folder)
@@ -227,8 +236,10 @@ class KerasPredictor(Predictor):
         if self.save_weights:
             self.model.save_weights(os.path.join(self._model_log_folder, 'weights'))
 
+        self._model_log_folder = None
+
     def predict(self, x: list) -> float:
-        pred_dataset, _ = self._build_tf_dataset([x], validation_split=False, shuffle=False)
+        pred_dataset, _ = self._build_tf_dataset([x], batch_size=1, validation_split=False, shuffle=False)
 
         # predict using a single model
         if self.model_ensemble is None:

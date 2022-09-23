@@ -3,11 +3,10 @@ from abc import ABC, abstractmethod
 from logging import Logger
 from typing import Union, Optional
 
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import numpy as np
 from sklearn.metrics import r2_score
 
+from plotter import plot_squared_scatter_chart
 from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coefficient, create_empty_folder
 
 
@@ -47,36 +46,18 @@ class Predictor(ABC):
             self._spearman.append(compute_spearman_rank_correlation_coefficient(x_b, y_b))
             self._r_squared.append(r2_score(x_b, y_b))
 
-    def save_scatter_plot(self, pred_label: str, save_path: str = None, plot_reference=True):
-        fig, ax = plt.subplots()
-
+    def save_scatter_plot(self, pred_label: str, save_path: str = None):
         legend_labels = [f'B{i + 2} (MAPE: {mape:.3f}%, R^2: {r2:.3f} ρ: {spearman:.3f})'
                          for i, (mape, r2, spearman) in enumerate(zip(self._mape, self._r_squared, self._spearman))]
 
-        colors = cm.rainbow(np.linspace(0, 1, len(self._x_real)))
-        for xs, ys, color, lab in zip(self._x_real, self._y_pred, colors, legend_labels):
-            plt.scatter(xs, ys, marker='.', color=color, label=lab)
+        x_label = f'Real {pred_label}'
+        y_label = f'Predicted {pred_label}'
 
-        plt.xlabel(f'Real {pred_label}')
-        plt.ylabel(f'Predicted {pred_label}')
-        plt.gca().set_aspect('equal', adjustable='box')
-
-        plt.legend(fontsize='x-small')
-
-        # add reference line (bisector line x = y)
-        if plot_reference:
-            ax_lims = [
-                np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-                np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-            ]
-
-            ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
+        fig = plot_squared_scatter_chart(self._x_real, self._y_pred, x_label, y_label, self.name, legend_labels=legend_labels)
 
         if save_path is None:
             save_path = os.path.join(self.log_folder, 'results')
 
-        # Latex formats
-        plt.savefig(save_path + '.eps', bbox_inches='tight')
         plt.savefig(save_path + '.pdf', bbox_inches='tight')
 
         plt.title(self.name)

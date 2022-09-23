@@ -32,6 +32,7 @@ sktime = "0.13.0"
 jsonschema = "4.9.1"
 einops = "0.4.1"
 nats-bench = "1.7"
+spektral = "^1.2.0"
 # aMLLibrary only
 xgboost = "1.4.2"
 mlxtend = "0.18.0"
@@ -39,9 +40,9 @@ hyperopt = "0.2.5"
 eli5 = "0.13.0"
 
 [tool.poetry.dev-dependencies]
-autopep8 = "^1.5.7"
-pylint = "^2.9.6"
-flake8 = "^3.9.2"
+autopep8 = "*"
+pylint = "*"
+flake8 = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
