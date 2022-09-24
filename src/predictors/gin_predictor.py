@@ -1,14 +1,10 @@
 import spektral.layers as g_layers
-from spektral.transforms import GCNFilter
 from tensorflow.keras import activations, regularizers, layers, Model
 
 from predictors.spektral_predictor import SpektralPredictor
 
 
-class GCNPredictor(SpektralPredictor):
-    def _setup_data_transforms(self) -> list:
-        return [GCNFilter()]
-
+class GINPredictor(SpektralPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'lr': 1e-3,
@@ -37,9 +33,9 @@ class GCNPredictor(SpektralPredictor):
         node_features = layers.Input(shape=(None, self.num_node_features))
         adj_matrix = layers.Input(shape=(None, None))
 
-        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg)([node_features, adj_matrix])
-        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv1, adj_matrix])
-        gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv2, adj_matrix])
+        gconv1 = g_layers.GINConvBatch(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg)([node_features, adj_matrix])
+        gconv2 = g_layers.GINConvBatch(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv1, adj_matrix])
+        gconv3 = g_layers.GINConvBatch(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv2, adj_matrix])
         # get only features of exit node (also note that einops and tf functions consider also batch, while Keras functional API (Inputs) does not)
         # global_feat = ExtractLastNodeFeatures(config['f3'])(gconv3)
         global_feat = g_layers.GlobalAvgPool()(gconv3)

@@ -14,6 +14,8 @@ from rnn_attention_predictor import AttentionRNNPredictor
 from lgbm_predictor import LGBMPredictor
 from spektral_predictor import SpektralPredictor
 from gcn_predictor import GCNPredictor
+from gin_predictor import GINPredictor
 
-__all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'RNNPredictor', 'KerasPredictor',
-           'Conv1DPredictor', 'Conv1D1IPredictor', 'AttentionRNNPredictor', 'LGBMPredictor', 'GCNPredictor', 'SpektralPredictor']
+__all__ = ['Predictor', 'AMLLibraryPredictor', 'CatBoostPredictor', 'KerasPredictor', 'RNNPredictor',
+           'Conv1DPredictor', 'Conv1D1IPredictor', 'AttentionRNNPredictor', 'LGBMPredictor',
+           'SpektralPredictor', 'GCNPredictor', 'GINPredictor']
