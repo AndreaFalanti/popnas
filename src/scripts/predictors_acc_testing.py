@@ -4,6 +4,7 @@ import os
 import log_service
 from predictors import *
 from utils.feature_analysis import generate_dataset_correlation_heatmap
+from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import instantiate_search_space_from_logs
 from utils.nn_utils import initialize_train_strategy
 
@@ -42,12 +43,14 @@ def main():
     log_path = setup_folders(args.p)
     logger = create_logger(__name__, log_path)
 
+    metric = 'f1_score'
+
     csv_path = os.path.join(args.p, 'csv')
     amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'regressors_hyperopt.ini')
     training_acc_csv_path = os.path.join(csv_path, 'training_score.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_acc.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')
-    nn_y_col = 'best val accuracy'
+    nn_y_col = metrics_fields_dict[metric].real_column
     nn_y_domain = (0, 1)
 
     # compute dataset correlation
@@ -62,18 +65,19 @@ def main():
         # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
         # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path),
-        # AttentionRNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        # RNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False, name='RNN'),
-        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
+        # AttentionRNNPredictor(search_space, nn_y_col, nn_y_domain, t_strategy, logger, log_path, hp_tuning=False),
+        # RNNPredictor(search_space, nn_y_col, nn_y_domain, t_strategy, logger, log_path, hp_tuning=False),
+        # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, t_strategy, logger, log_path, hp_tuning=False),
+        # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, t_strategy, logger, log_path, hp_tuning=False),
         GCNPredictor(search_space, nn_y_col, nn_y_domain, t_strategy, logger, log_path, hp_tuning=False)
     ]  # type: 'list[Predictor]'
 
+    ensemble_units = 1   # set it to 1 to use a single model (no ensemble)
     for p in predictors_to_test:
         dataset_path = nn_training_data_path if isinstance(p, KerasPredictor) else training_acc_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
-        p.perform_prediction_test(dataset_path, 'accuracy')
+        p.perform_prediction_test(dataset_path, metric, ensemble_count=ensemble_units)
         logger.info('%s', '*' * 100)
 
     logger.info('Script completed successfully')
