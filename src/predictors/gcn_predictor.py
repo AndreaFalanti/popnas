@@ -1,10 +1,14 @@
 import spektral.layers as g_layers
+from spektral.transforms import GCNFilter
 from tensorflow.keras import activations, regularizers, layers, Model
 
 from predictors.spektral_predictor import SpektralPredictor, ExtractLastNodeFeatures
 
 
 class GCNPredictor(SpektralPredictor):
+    def _setup_data_transforms(self) -> list:
+        return [GCNFilter()]
+
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'lr': 1e-3,

@@ -5,13 +5,13 @@ from typing import Union, Iterable, Optional
 
 import keras_tuner as kt
 import numpy as np
+import sklearn
 import spektral
 import tensorflow as tf
 from einops import rearrange
 from sklearn.model_selection import train_test_split
 from spektral import layers as g_layers
 from spektral.data import Loader, Graph, PackedBatchLoader
-from spektral.transforms import GCNFilter
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.utils import plot_model
@@ -30,7 +30,7 @@ def build_adjacency_matrix(edges: 'Iterable[tuple[int, int]]', num_nodes: int):
     return adj_matrix
 
 
-def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: list, y_label: float):
+def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: list, y_label: Optional[float]):
     # address empty cell case (0 blocks), doesn't work
     # if len(cell_spec) == 0:
     #     return Graph(x=[], a=[], y=y_label)
@@ -150,14 +150,34 @@ class SpektralPredictor(KerasPredictor, ABC):
     def __init__(self, search_space: SearchSpace, y_col: str, y_domain: 'tuple[float, float]', train_strategy: tf.distribute.Strategy, logger: Logger,
                  log_folder: str, name: str = None, override_logs: bool = True, save_weights: bool = False,
                  hp_config: dict = None, hp_tuning: bool = False):
-        super().__init__(y_col, y_domain, train_strategy, logger, log_folder, name, override_logs, save_weights, hp_config, hp_tuning)
+        super().__init__(search_space, y_col, y_domain, train_strategy, logger, log_folder, name, override_logs, save_weights, hp_config, hp_tuning)
 
         self.search_space = search_space
+        # Spektral transformations to apply on GraphDataset to satisfy eventual model requirements or improvements
+        # (e.g. GCNFilter for GCN conv based models)
+        # They can be used on datasets with .apply(tx) or directly to a Graph object (apply simply iterates over dataset graphs).
+        self.data_transforms = self._setup_data_transforms()
+
         # node features are (in order): operators as one-hot categorical, lookbacks, block_add and (cell_concat + pointwise conv)
         # features are a one-hot vector, which should work well for GCN.
         num_operators = len(self.search_space.operator_values)
         max_lookback_abs = abs(self.search_space.input_lookback_depth)
         self.num_node_features = num_operators + max_lookback_abs + 2
+
+    def _setup_data_transforms(self) -> list:
+        '''
+        Prepare a list of Spektral transformations that must be applied to the samples for correct model usage. If not overridden,
+        no transformation is applied.
+        '''
+        return []
+
+    def _prepare_graph_for_predict(self, cell_spec: list):
+        g = cell_spec_to_spektral_graph(self.search_space, cell_spec, None)
+        for tx in self.data_transforms:
+            g = tx(g)
+
+        # expand dims to fake the batch size first dimension (set to 1).
+        return np.expand_dims(g['x'], axis=0), np.expand_dims(g['a'], axis=0)
 
     def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
                           validation_split: bool = True, shuffle: bool = True) -> 'tuple[Loader, Optional[Loader]]':
@@ -170,20 +190,22 @@ class SpektralPredictor(KerasPredictor, ABC):
 
         # TODO: WORKAROUND -> predict case, avoid loader and use numpy directly, to avoid bug with keras model predict
         if len(cell_specs) == 1:
-            g = cell_spec_to_spektral_graph(self.search_space, cell_specs[0], None)
-            return (np.expand_dims(g['x'], axis=0), np.expand_dims(g['a'], axis=0)), None
+            g = self._prepare_graph_for_predict(cell_specs[0])
+            return g, None
 
         train_gds, val_gds = None, None
         if validation_split:
             cells_train, cells_val, rewards_train, rewards_val = train_test_split(cell_specs, rewards, test_size=0.1, shuffle=shuffle)
             train_gds = CellGraphDataset(self.search_space, cells_train, rewards_train)
-            train_gds.apply(GCNFilter())
             val_gds = CellGraphDataset(self.search_space, cells_val, rewards_val)
-            val_gds.apply(GCNFilter())
         else:
-            # here samples are not shuffled
+            cell_specs, rewards = sklearn.utils.shuffle(cell_specs, rewards)
             train_gds = CellGraphDataset(self.search_space, cell_specs, rewards)
-            train_gds.apply(GCNFilter())
+
+        for tx in self.data_transforms:
+            train_gds.apply(tx)
+            if val_gds is not None:
+                val_gds.apply(tx)
 
         return PackedBatchLoader(train_gds, batch_size=batch_size, shuffle=False, node_level=False).load(), \
                None if val_gds is None else PackedBatchLoader(val_gds, batch_size=batch_size, shuffle=False, node_level=False).load()
