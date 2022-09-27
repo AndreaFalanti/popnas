@@ -3,7 +3,11 @@ import json
 import logging
 import os
 
+import numpy as np
+import seaborn as sns
 import tensorflow as tf
+from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
 from tensorflow.keras import metrics, models
 
 import log_service
@@ -17,6 +21,20 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 tf.get_logger().setLevel(logging.ERROR)
 
 AUTOTUNE = tf.data.AUTOTUNE
+
+
+def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str):
+    cmat = confusion_matrix(y_true, y_pred)
+
+    fig = plt.figure(figsize=(8, 8))
+    sns.heatmap(cmat, annot=True, fmt='d')
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+    plt.savefig(save_path + '.png', bbox_inches='tight', dpi=120)
+    plt.savefig(save_path + '.pdf', bbox_inches='tight')
+    plt.close(fig)
 
 
 def get_model_cell_spec(log_folder_path: str):
@@ -92,6 +110,12 @@ def main():
     results = model.evaluate(x=test_ds, return_dict=True)
 
     logger.info('Results: %s', rstr(results))
+
+    # plot confusion matrix. Y labels must be convert to integers and flatten (since they are batched)
+    y_pred = model.predict(x=test_ds)
+    y_pred = np.argmax(y_pred, axis=-1).flatten()
+    y_true = np.concatenate([np.argmax(y, axis=-1) for x, y in test_ds], axis=0)
+    save_confusion_matrix(y_true, y_pred, save_path=os.path.join(model_path, 'confusion_matrix'))
 
 
 if __name__ == '__main__':
