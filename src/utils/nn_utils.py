@@ -52,31 +52,33 @@ def get_best_metric_per_output(hist: History, metric: str, maximize: bool = True
     r = re.compile(rf'val_Softmax_c(\d+)_{metric}')
     output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
 
-    # save best accuracy reached for each output
-    multi_output_accuracies = {}
+    # save best score reached for each output
+    multi_output_scores = {}
     for output_index in output_indexes:
-        multi_output_accuracies[f'c{output_index}_{metric}'] = max(hist.history[f'val_Softmax_c{output_index}_{metric}']) if maximize \
+        multi_output_scores[f'c{output_index}_{metric}'] = max(hist.history[f'val_Softmax_c{output_index}_{metric}']) if maximize \
             else min(hist.history[f'val_Softmax_c{output_index}_{metric}'])
 
-    return multi_output_accuracies
+    return multi_output_scores
 
 
-def get_multi_output_best_epoch_stats(hist: History):
+def get_multi_output_best_epoch_stats(hist: History, score_metric: str):
     '''
     Produce a dictionary with a key for each model output, that contains the metrics of the best epoch for that output.
     Args:
         hist: train history
+        score_metric:
 
     Returns:
-        (int, float, dict[int, dict[str, float]]): best epoch index, best validation accuracy and dictionary with epoch metrics for each output.
+        (int, float, dict[int, dict[str, float]]): best epoch index, best validation score and dictionary with epoch metrics for each output.
     '''
-    r = re.compile(r'val_Softmax_c(\d+)_accuracy')
+    r = re.compile(rf'val_Softmax_c(\d+)_{score_metric}')
     output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
 
-    best_accs = [max(enumerate(hist.history[f'val_Softmax_c{output_index}_accuracy']), key=operator.itemgetter(1))
-                  for output_index in output_indexes]
-    # find epoch where max validation accuracy is achieved
-    best_epoch, best_val_acc = max(best_accs, key=operator.itemgetter(1))
+    # get the best validation score metric for each cell
+    best_scores = [max(enumerate(hist.history[f'val_Softmax_c{output_index}_{score_metric}']), key=operator.itemgetter(1))
+                   for output_index in output_indexes]
+    # find epoch where max validation score is achieved
+    best_epoch, best_val_acc = max(best_scores, key=operator.itemgetter(1))
 
     epoch_metrics_per_output = {}
     for output_index in output_indexes:
