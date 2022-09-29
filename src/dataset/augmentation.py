@@ -1,3 +1,4 @@
+import tensorflow_addons as tfa
 from tensorflow.keras import layers
 from tensorflow.python.keras import Sequential
 
@@ -16,3 +17,9 @@ def get_image_data_augmentation_model():
         # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
         layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
     ], name='data_augmentation')
+
+
+def get_image_tf_data_augmentation_functions():
+    return [
+        lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
+    ]

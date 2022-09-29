@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets
 from tensorflow.keras.utils import image_dataset_from_directory
 
-from dataset.augmentation import get_image_data_augmentation_model
+from dataset.augmentation import get_image_data_augmentation_model, get_image_tf_data_augmentation_functions
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy
 from dataset.preprocessing import ImagePreprocessor
 
@@ -69,7 +69,8 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
     def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
-        data_augmentation = get_image_data_augmentation_model() if self.use_data_augmentation else None
+        keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
+        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation else None
 
         # TODO: folds were implemented only in Keras datasets, later i have externalized the logic to support the other dataset format. Still,
         #  the train-validation is done in different ways based on format right now, and if seed is fixed the folds could be identical.
@@ -156,9 +157,10 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
             # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
             batch_len = None if using_custom_ds else self.batch_size
-            train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor, data_augmentation,
+            train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
+                                                             keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
                                                              shuffle=True, shard_policy=shard_policy)
-            val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, None, shard_policy=shard_policy)
+            val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append((train_ds, val_ds))
 
         self._logger.info('Dataset folds built successfully')
@@ -211,7 +213,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
         # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
         batch_len = None if using_custom_ds else self.batch_size
-        test_ds, batches = self._finalize_dataset(test_ds, batch_len, data_preprocessor, None, shard_policy=shard_policy)
+        test_ds, batches = self._finalize_dataset(test_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches

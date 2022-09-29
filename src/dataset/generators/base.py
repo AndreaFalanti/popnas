@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Callable
 
 import tensorflow as tf
 from tensorflow.keras import Sequential
@@ -34,8 +34,8 @@ class BaseDatasetGenerator(ABC):
         self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
 
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
-                          data_augmentation: Optional[Sequential], shuffle: bool = False,
-                          shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
+                          keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation_fns: 'Optional[list[Callable]]' = None,
+                          shuffle: bool = False, shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
         Basically apply batch, preprocessing, cache, data augmentation (only to training set) and prefetch.
@@ -68,8 +68,12 @@ class BaseDatasetGenerator(ABC):
             ds = ds.shuffle(len(ds), reshuffle_each_iteration=True)
 
         # if data augmentation is performed on CPU, map it before prefetch
-        if data_augmentation is not None and not self.augment_on_gpu:
-            ds = ds.map(lambda x, y: (data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+        if keras_data_augmentation is not None and not self.augment_on_gpu:
+            ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
+
+        if tf_data_augmentation_fns is not None:
+            for data_aug_fn in tf_data_augmentation_fns:
+                ds = ds.map(data_aug_fn, num_parallel_calls=AUTOTUNE)
 
         return ds.prefetch(AUTOTUNE), len(ds)
 

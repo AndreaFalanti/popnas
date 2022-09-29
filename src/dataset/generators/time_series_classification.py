@@ -79,8 +79,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError()
 
             preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
-            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, None, shuffle=True)
-            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor, None)
+            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True)
+            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor)
             dataset_folds.append((train_ds, val_ds))
 
         self._logger.info('Dataset folds built successfully')
@@ -103,7 +103,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             raise NotImplementedError()
 
         preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
-        test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, preprocessor, None)
+        test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, preprocessor)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, input_shape, batches
