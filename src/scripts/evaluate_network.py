@@ -25,7 +25,8 @@ AUTOTUNE = tf.data.AUTOTUNE
 def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int):
     cmat = confusion_matrix(y_true, y_pred)
 
-    fig = plt.figure(figsize=(20, 20))
+    fig_size = 8 + 0.2 * n_classes
+    fig = plt.figure(figsize=(1 + fig_size, fig_size))
     if n_classes <= 20:
         sns.heatmap(cmat, annot=True, fmt='d')
     # avoid annotations in case there are too many classes
