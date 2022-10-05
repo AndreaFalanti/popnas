@@ -11,7 +11,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
+from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes, test_data_augmentation
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
@@ -90,8 +90,8 @@ def main():
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    epochs = (2 if cdr_enabled else 300) if args.same else cnn_config['epochs']
-    cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
+    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
+    cnn_config['cosine_decay_restart']['period_in_epochs'] = 3
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
     # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
@@ -109,6 +109,9 @@ def main():
     balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in dataset_folds] \
         if balance_class_losses else None
     logger.info('Datasets generated successfully')
+
+    # DEBUG ONLY
+    # test_data_augmentation(dataset_folds[0][0])
 
     # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
     if args.load:
