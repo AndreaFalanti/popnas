@@ -7,8 +7,11 @@ def get_image_data_augmentation_model():
     '''
     Keras model that can be used in both CPU or GPU for data augmentation.
     Follow similar augmentation techniques used in other papers, which usually are:
+
     - horizontal flip
+
     - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
+
     - whitening (not always used, here it's not performed)
     '''
     return Sequential([
@@ -21,5 +24,5 @@ def get_image_data_augmentation_model():
 
 def get_image_tf_data_augmentation_functions():
     return [
-        lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
+        # lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
     ]
