@@ -55,6 +55,9 @@ def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", required=True)
+    parser.add_argument('-f', metavar='FILTERS', type=int, help="desired starting filters", required=True)
+    parser.add_argument('-m', metavar='MOTIFS', type=int, help="desired motifs", required=True)
+    parser.add_argument('-n', metavar='NORMAL CELLS PER MOTIF', type=int, help="desired normal cells per motif", required=True)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
@@ -95,6 +98,10 @@ def main():
     multi_output = True
     augment_on_gpu = False
     epochs = 600
+
+    arc_config['motifs'] = args.m
+    arc_config['normal_cells_per_motif'] = args.n
+    cnn_config['filters'] = args.f
 
     score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
