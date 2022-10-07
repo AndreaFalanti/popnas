@@ -217,3 +217,68 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches
+
+    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
+        keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
+        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation else None
+
+        shard_policy = AutoShardPolicy.DATA
+
+        # Custom dataset, loaded with Keras utilities
+        if self.dataset_path is not None:
+            if self.resize_dim is None:
+                raise ValueError('Image must have a set resize dimension to use a custom dataset')
+
+            # if val_size is None, it means that a validation split is present, merge the two datasets
+            if self.val_size is None:
+                train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
+                                                        image_size=self.resize_dim, batch_size=self.batch_size)
+                val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
+                                                      image_size=self.resize_dim, batch_size=self.batch_size)
+
+                train_ds = train_ds.unbatch().concatenate(val_ds.unbatch())
+            # extract a validation split from training samples
+            else:
+                train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'),
+                                                        seed=123, subset='training', label_mode='categorical',
+                                                        image_size=self.resize_dim, batch_size=self.batch_size)
+                train_ds = train_ds.unbatch()
+
+            # TODO: sharding should be set to FILE here? or not?
+            shard_policy = AutoShardPolicy.FILE
+
+            classes = self.dataset_classes_count
+            image_shape = self.resize_dim + (3,)
+        # Keras dataset case
+        elif self.dataset_name in ['cifar10', 'cifar100', 'fashion_mnist']:
+            train, test, classes, image_shape, channels = self.__load_keras_dataset_images()
+            classes = classes or self.dataset_classes_count  # like || in javascript
+
+            x_train, y_train = train
+
+            if self.resize_dim is not None:
+                image_shape = self.resize_dim + (channels,)
+
+            # remove last axis
+            y_train = np.squeeze(y_train)
+
+            train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        # TFDS case
+        else:
+            tfds_split = 'train+validation' if self.val_size is None else 'train'
+            train_ds, info = tfds.load(self.dataset_name, split=tfds_split, as_supervised=True, shuffle_files=True, with_info=True,
+                                       read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+            image_shape = info.features['image'].shape if self.resize_dim is None else self.resize_dim + (info.features['image'].shape[2],)
+            classes = info.features['label'].num_classes
+
+        # finalize dataset generation, common logic to all dataset formats
+        # avoid categorical for custom datasets, since already done
+        using_custom_ds = self.dataset_path is not None
+        data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
+        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
+                                                         keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
+                                                         shuffle=True, shard_policy=shard_policy)
+
+        self._logger.info('Final training dataset built successfully')
+        return train_ds, classes, image_shape, train_batches

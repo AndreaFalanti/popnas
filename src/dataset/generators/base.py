@@ -96,3 +96,19 @@ class BaseDatasetGenerator(ABC):
             test dataset, the number of classes, the input shape, test batch count
         '''
         raise NotImplementedError()
+
+    @abstractmethod
+    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
+        '''
+        Generate a full training (or union of training and validation if split a priori) tensorflow dataset, used in training to convergence
+        done for best model selected after the search procedure.
+
+        If val_size is set to None, the function expect to find a separate validation set, which will be merged to
+        the training one.
+
+        Sample limit is not applied here.
+
+        Returns:
+            train dataset, the number of classes, the input shape, train batch count
+        '''
+        raise NotImplementedError()

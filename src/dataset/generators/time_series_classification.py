@@ -107,3 +107,30 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, input_shape, batches
+
+    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
+        # Custom datasets
+        if self.dataset_path is not None:
+            x_train, y_train = self._get_numpy_split('train')
+
+            classes = len(np.unique(y_train))
+            # discard first dimension since is the number of samples
+            input_shape = np.shape(x_train)[1:]
+
+            # create a validation set for evaluation of the child models. If val_size is None, then files for validation split must exist.
+            if self.val_size is None:
+                x_val, y_val = self._get_numpy_split('validation')
+                x_train = np.concatenate((x_train, x_val), axis=0)
+                y_train = np.concatenate((y_train, y_val), axis=0)
+
+            q_x = np.quantile(x_train, q=0.98) if self.rescale else 1
+            train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        else:
+            raise NotImplementedError()
+
+        preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
+        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True)
+
+        self._logger.info('Dataset folds built successfully')
+        return train_ds, classes, input_shape, train_batches
+
