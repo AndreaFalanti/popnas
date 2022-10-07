@@ -72,17 +72,20 @@ def save_trimmed_json_config(config: dict, save_path: str):
         json.dump(config, f, indent=4)
 
 
-def log_final_training_results(logger: logging.Logger, hist: callbacks.History, score_metric: str, training_time: float, using_multi_output: bool):
+def log_final_training_results(logger: logging.Logger, hist: callbacks.History, score_metric: str, training_time: float, using_multi_output: bool,
+                               using_val: bool = True):
     # hist.history is a dictionary of lists (each metric is a key)
     if using_multi_output:
-        epoch_index, best_val_score, epoch_metrics_per_output = get_multi_output_best_epoch_stats(hist, score_metric)
+        epoch_index, best_val_score, epoch_metrics_per_output = get_multi_output_best_epoch_stats(hist, score_metric, using_val)
     else:
-        epoch_index, best_val_score = max(enumerate(hist.history[f'val_{score_metric}']), key=operator.itemgetter(1))
+        hist_metric = f'val_{score_metric}' if using_val else score_metric
+        epoch_index, best_val_score = max(enumerate(hist.history[hist_metric]), key=operator.itemgetter(1))
         epoch_metrics_per_output = {'best': {}}
-        epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
-        epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
+        if using_val:
+            epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
+            epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
+            epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
+            epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
 
         epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
         epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
@@ -100,11 +103,12 @@ def log_final_training_results(logger: logging.Logger, hist: callbacks.History, 
         log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
         logger.info('*' * 36 + log_title + '*' * 36)
 
-        logger.info('Validation')
-        logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
-        logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
-        logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
-        logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
+        if using_val:
+            logger.info('Validation')
+            logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
+            logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
+            logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
+            logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
 
         logger.info('Training')
         logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
