@@ -85,17 +85,19 @@ def main():
     cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
+
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
-    cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
+    # enable cutout and scheduled drop path, since are beneficial in longer training and probably disabled during search
+    if args.same:
+        config['dataset']['data_augmentation']['use_cutout'] = True
+        cnn_config['drop_path_prob'] = 0.2
 
-    # enable cutout
-    config['dataset']['data_augmentation']['use_cutout'] = True
+        cnn_config['epochs'] = 254 if cdr_enabled else 300
+        cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
     # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
-    cnn_config['epochs'] = epochs
     save_trimmed_json_config(config, save_path_prefix)
     score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
@@ -159,12 +161,12 @@ def main():
         # Define callbacks
         train_callbacks = define_callbacks(cdr_enabled, score_metric, multi_output, last_cell_index)
         time_cb = TimingCallback()
-        train_callbacks.append(time_cb)
+        train_callbacks.insert(0, time_cb)
     
         plot_model(model, to_file=os.path.join(model_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
     
         hist = model.fit(x=train_dataset,
-                         epochs=epochs,
+                         epochs=cnn_config['epochs'],
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
