@@ -53,7 +53,7 @@ def main():
     if args.same and args.j is not None:
         raise AttributeError("Can't specify both 'j' and 'same' arguments, they are mutually exclusive")
 
-    custom_json_path = Path(__file__).parent / '../configs/final_training.json' if args.j is None else args.j
+    custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if args.j is None else args.j
 
     save_path = os.path.join(args.p, args.name)
     create_model_log_folder(save_path)
