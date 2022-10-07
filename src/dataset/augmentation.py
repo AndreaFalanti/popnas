@@ -24,5 +24,5 @@ def get_image_data_augmentation_model():
 
 def get_image_tf_data_augmentation_functions():
     return [
-        # lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
+        lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
     ]

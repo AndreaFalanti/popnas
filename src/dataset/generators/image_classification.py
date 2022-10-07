@@ -19,6 +19,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         resize_config = dataset_config['resize']
         self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
+        self.use_cutout = dataset_config['data_augmentation'].get('use_cutout', False)
 
     def __load_keras_dataset_images(self):
         '''
@@ -70,7 +71,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
     def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
         keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
-        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation else None
+        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation and self.use_cutout else None
 
         # TODO: folds were implemented only in Keras datasets, later i have externalized the logic to support the other dataset format. Still,
         #  the train-validation is done in different ways based on format right now, and if seed is fixed the folds could be identical.
@@ -220,7 +221,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
     def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
         keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
-        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation else None
+        tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation and self.use_cutout else None
 
         shard_policy = AutoShardPolicy.DATA
 

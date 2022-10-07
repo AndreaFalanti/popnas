@@ -5,7 +5,7 @@
         "filters": 24,
         "weight_reg": 5e-4,
         "use_adamW": true,
-        "drop_path_prob": 0.0,
+        "drop_path_prob": 0.2,
         "cosine_decay_restart": {
             "enabled": true,
             "period_in_epochs": 2,
@@ -43,6 +43,7 @@
         },
         "data_augmentation": {
             "enabled": true,
+            "use_cutout": true,
             "perform_on_gpu": false
         }
     }

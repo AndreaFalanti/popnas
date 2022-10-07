@@ -261,6 +261,9 @@
                         "enabled": {
                             "type": "boolean"
                         },
+                        "use_cutout": {
+                            "type": "boolean"
+                        },
                         "perform_on_gpu": {
                             "type": "boolean"
                         }
