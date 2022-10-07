@@ -49,7 +49,7 @@ def main():
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-n', metavar='NUM_MODELS', type=str, help='number of top models to train, when -spec or --load are not specified', default=5)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
-    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
+    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training_k')
     parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
     args = parser.parse_args()
