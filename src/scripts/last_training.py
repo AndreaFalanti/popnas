@@ -79,6 +79,9 @@ def main():
     config['dataset']['batch_size'] = args.b
     config['search_strategy'] = run_config['search_strategy']
 
+    # enable cutout
+    config['dataset']['data_augmentation']['use_cutout'] = True
+
     # initialize train strategy
     # retrocompatible with previous config format, which have no "others" section
     config_ts_device = config['others'].get('train_strategy', None) if 'others' in config.keys() else config.get('train_strategy', None)
@@ -106,7 +109,7 @@ def main():
     logger.info('Datasets generated successfully')
 
     # DEBUG ONLY
-    # test_data_augmentation(dataset_folds[0][0])
+    # test_data_augmentation(train_ds)
 
     if args.spec is None:
         logger.info('Getting best cell specification found during POPNAS run...')

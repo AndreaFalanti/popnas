@@ -91,7 +91,10 @@ def main():
     # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
     # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
     epochs = (254 if cdr_enabled else 300) if args.same else cnn_config['epochs']
-    cnn_config['cosine_decay_restart']['period_in_epochs'] = 3
+    cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
+
+    # enable cutout
+    config['dataset']['data_augmentation']['use_cutout'] = True
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
     # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
