@@ -3,8 +3,12 @@ import re
 import sys
 from functools import reduce
 
+import numpy as np
+import seaborn as sns
 import tensorflow as tf
 import tf2onnx
+from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import History
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
@@ -12,7 +16,8 @@ from tensorflow.python.framework.convert_to_constants import convert_variables_t
 
 class TrainingResults:
     ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
-    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, inference_time: float, params: int, flops: int) -> None:
+    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, inference_time: float,
+                 params: int, flops: int) -> None:
         self.cell_spec = cell_spec
         self.accuracy = accuracy
         self.f1_score = f1_score
@@ -25,7 +30,8 @@ class TrainingResults:
 
     @staticmethod
     def get_csv_headers():
-        return ['best val accuracy', 'val F1 score', 'training time(seconds)', 'inference time(seconds)', 'total params', 'flops', '# blocks', 'cell structure']
+        return ['best val accuracy', 'val F1 score', 'training time(seconds)', 'inference time(seconds)', 'total params',
+                'flops', '# blocks', 'cell structure']
 
     def to_csv_list(self):
         ''' Return a list with fields ordered for csv insertion '''
@@ -100,15 +106,15 @@ def get_multi_output_best_epoch_stats(hist: History, score_metric: str, using_va
 
 # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280
 # See also: https://stackoverflow.com/questions/49525776/how-to-calculate-a-mobilenet-flops-in-keras
-def get_model_flops(model, write_path=None):
+def get_model_flops(model: Model, write_path=None):
     '''
     Get total flops of current compiled model.
 
     Returns:
         (int): number of FLOPS
     '''
-    # tf warnings are disabled in manager.py, a lot of them are print and they seems irrelevant.
-    # enable them in manager.py if you want to investigate for potential issues.
+    # tf warnings have been disabled in manager.py, a lot of them are displayed in this function, but they seem irrelevant.
+    # enable warnings in manager.py if you want to investigate for potential issues.
     concrete = tf.function(lambda inputs: model(inputs))
     concrete_func = concrete.get_concrete_function([tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs])
 
@@ -203,3 +209,40 @@ def get_optimized_steps_per_execution(train_strategy: tf.distribute.Strategy):
 
 def save_keras_model_to_onnx(model: Model, save_path: str):
     tf2onnx.convert.from_keras(model, opset=10, output_path=save_path)
+
+
+def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int, normalize: bool):
+    # if normalize is set, normalize the rows (true values)
+    cmat = confusion_matrix(y_true, y_pred, normalize='true' if normalize else None)
+
+    fig_size = 8 + 0.2 * n_classes
+    fig = plt.figure(figsize=(1 + fig_size, fig_size))
+    if n_classes <= 20:
+        fmt = '.3f' if normalize else 'd'
+        sns.heatmap(cmat, annot=True, fmt=fmt, square=True)
+    # avoid annotations in case there are too many classes
+    else:
+        sns.heatmap(cmat, square=True)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+    plt.savefig(save_path + '.png', bbox_inches='tight', dpi=120)
+    plt.savefig(save_path + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+
+
+def predict_and_save_confusion_matrix(model: Model, ds: tf.data.Dataset, multi_output: bool, n_classes: int, save_path: str):
+    # Y labels must be converted to integers and flatten (since they are batched)
+    y_pred = model.predict(x=ds)
+    # take last output, in case the model is multi-output
+    if multi_output:
+        y_pred = y_pred[-1]
+    y_pred = np.argmax(y_pred, axis=-1).flatten()
+
+    # DS values are stored as one-hot. Convert them to integer labels.
+    y_true = np.concatenate([np.argmax(y, axis=-1) for x, y in ds], axis=0)
+
+    # save both normalized and not normalized versions of confusion matrix
+    save_confusion_matrix(y_true, y_pred, save_path=save_path, n_classes=n_classes, normalize=False)
+    save_confusion_matrix(y_true, y_pred, save_path=f'{save_path}_norm', n_classes=n_classes, normalize=True)
