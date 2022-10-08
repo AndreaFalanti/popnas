@@ -77,7 +77,6 @@ def main():
 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(args, custom_json_path)
-    config['dataset']['samples'] = 2000
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
