@@ -17,7 +17,7 @@ from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
     log_final_training_results
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
+from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -96,7 +96,7 @@ def main():
         config['dataset']['data_augmentation']['use_cutout'] = True
         cnn_config['drop_path_prob'] = 0.2
 
-        cnn_config['epochs'] = 254 if cdr_enabled else 300
+        cnn_config['epochs'] = 2
         cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
@@ -182,6 +182,10 @@ def main():
 
     logger.info('Converting trained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
+
+    logger.info('Saving confusion matrix')
+    predict_and_save_confusion_matrix(model, validation_dataset, multi_output, n_classes=classes_count,
+                                      save_path=os.path.join(save_path, 'val_confusion_matrix'))
 
 
 if __name__ == '__main__':

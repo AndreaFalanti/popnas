@@ -17,7 +17,7 @@ from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import log_best_cell_results_during_search, define_callbacks, log_final_training_results, \
     save_trimmed_json_config, create_model_log_folder
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
+from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
 # TODO: this script is similar to final_training.py, but trains multiple models (the top-k which reached the best results on score metric
@@ -178,8 +178,12 @@ def main():
     
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))
-        logger.info('Model %d training complete', i)
 
+        logger.info('Saving confusion matrix')
+        predict_and_save_confusion_matrix(model, validation_dataset, multi_output, n_classes=classes_count,
+                                          save_path=os.path.join(model_folder, 'val_confusion_matrix'))
+
+        logger.info('Model %d training complete', i)
         tf.keras.backend.clear_session()
 
 
