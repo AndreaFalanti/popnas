@@ -149,7 +149,9 @@ class ModelGenerator:
             self.prev_cell_index = self.cell_index
 
             if self.multi_output:
-                self.__generate_output(cell_output)  # TODO: use dropout also here? maybe scheduled?
+                # use a dropout rate which is proportional to the cell index
+                drop_rate = round(self.dropout_prob * ((self.cell_index + 1) / self.total_cells), 2)
+                self.__generate_output(cell_output, dropout_prob=drop_rate)
         # skip cell creation, since it will not be used
         else:
             cell_output = None
