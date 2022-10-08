@@ -15,9 +15,9 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import log_best_cell_results_during_search, define_callbacks, log_final_training_results, \
-    save_trimmed_json_config, create_model_log_folder
+    save_trimmed_json_config, create_model_log_folder, build_config
 from utils.func_utils import create_empty_folder, parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
+from utils.nn_utils import get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
 # TODO: this script is similar to final_training.py, but trains multiple models (the top-k which reached the best results on score metric
@@ -50,15 +50,10 @@ def main():
     parser.add_argument('-n', metavar='NUM_MODELS', type=str, help='number of top models to train, when -spec or --load are not specified', default=5)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training_k')
-    parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
     args = parser.parse_args()
 
-    if args.same and args.j is not None:
-        raise AttributeError("Can't specify both 'j' and 'same' arguments, they are mutually exclusive")
-
     custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if args.j is None else args.j
-
     save_path_prefix = os.path.join(args.p, args.name)
 
     create_empty_folder(save_path_prefix)
@@ -66,18 +61,7 @@ def main():
     logger = log_service.get_logger(__name__)
 
     logger.info('Reading configuration...')
-    if args.same:
-        with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
-            config = json.load(f)  # type: dict
-    else:
-        with open(custom_json_path, 'r') as f:
-            config = json.load(f)   # type: dict
-
-    # initialize train strategy
-    # retrocompatible with previous config format, which have no "others" section
-    config_ts_device = config['others'].get('train_strategy', None) if 'others' in config.keys() else config.get('train_strategy', None)
-    ts_device = args.ts if args.ts is not None else config_ts_device
-    train_strategy = initialize_train_strategy(ts_device)
+    config, train_strategy = build_config(args, custom_json_path)
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
@@ -85,21 +69,11 @@ def main():
     cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
-
-    # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
-    # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    # enable cutout and scheduled drop path, since are beneficial in longer training and probably disabled during search
-    if args.same:
-        config['dataset']['data_augmentation']['use_cutout'] = True
-        cnn_config['drop_path_prob'] = 0.2
-
-        cnn_config['epochs'] = 254 if cdr_enabled else 300
-        cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
+    score_metric = config['search_strategy']['score_metric']
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
     # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
     save_trimmed_json_config(config, save_path_prefix)
-    score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')

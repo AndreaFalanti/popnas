@@ -12,11 +12,11 @@ from tensorflow.keras import callbacks
 
 import log_service
 from utils.func_utils import create_empty_folder
-from utils.nn_utils import get_multi_output_best_epoch_stats
+from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy
 from utils.rstr import rstr
 
 
-def define_callbacks(cdr_enabled: bool, score_metric: str, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
+def define_callbacks(score_metric: str, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
     '''
     Define callbacks used in model training.
 
@@ -28,20 +28,10 @@ def define_callbacks(cdr_enabled: bool, score_metric: str, multi_output: bool, l
     ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_v' + score_metric[:2] + '{' + target_metric + ':.4f}.ckpt'
     ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
                                               save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
-    # By default shows losses and metrics for both training and validation
+    # By default, it shows losses and metrics for both training and validation
     tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
 
-    # these callbacks are shared between all models
-    train_callbacks = [ckpt_callback, tb_callback]
-
-    # if using plain lr, adapt it with reduce learning rate on plateau
-    # NOTE: for unknown reasons, activating plateau callback when cdr is present will also cause an error at the end of the first epoch
-    # TODO: right now, if cdr is disabled the lr is scheduled with cosine decay, so reduceLROnPlateau could be not optimal.
-    # if not cdr_enabled:
-    #     train_callbacks.append(callbacks.ReduceLROnPlateau(monitor='val_accuracy', factor=0.4, patience=5, verbose=1, mode='max'))
-    #     train_callbacks.append(callbacks.EarlyStopping(monitor='val_accuracy', patience=12, restore_best_weights=True, verbose=1, mode='max'))
-
-    return train_callbacks
+    return [ckpt_callback, tb_callback]
 
 
 def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_score: float, metric: str, index: int = 0):
@@ -117,3 +107,39 @@ def log_final_training_results(logger: logging.Logger, hist: callbacks.History, 
         logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
 
     logger.info('*' * 80)
+
+
+def build_config(args, custom_json_path: str):
+    # run configuration used during search. Dataset config is extracted from this.
+    with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
+        search_config = json.load(f)  # type: dict
+    # read hyperparameters to use for model selection
+    with open(custom_json_path, 'r') as f:
+        config = json.load(f)  # type: dict
+
+    def merge_config_section(section_name: str):
+        ''' Override search config parameters with defined script config parameters, the ones not defined are taken from search config. '''
+        return dict(search_config[section_name], **config[section_name])
+
+    # override defined dataset parameters with script config, the ones not defined are taken from search config
+    for key in config.keys():
+        config[key] = merge_config_section(key)
+
+    # set custom batch size, if present
+    if args.b is not None:
+        config['dataset']['batch_size'] = args.b
+        # TODO: scale learning rate?
+
+        # set score metric (to select best architecture if -spec is not provided)
+    config['search_strategy'] = {
+        'score_metric': search_config['search_strategy'].get('score_metric', 'accuracy')
+    }
+
+    # initialize train strategy (try-except to be retrocompatible with previous config format)
+    try:
+        ts_device = args.ts if args.ts is not None else search_config['others']['train_strategy']
+        train_strategy = initialize_train_strategy(ts_device)
+    except KeyError:
+        train_strategy = initialize_train_strategy(None)
+
+    return config, train_strategy

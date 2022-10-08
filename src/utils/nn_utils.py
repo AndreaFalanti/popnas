@@ -2,6 +2,7 @@ import operator
 import re
 import sys
 from functools import reduce
+from typing import Optional
 
 import numpy as np
 import seaborn as sns
@@ -150,7 +151,7 @@ def compute_tensor_byte_size(tensor: tf.Tensor):
     return reduce(operator.mul, tensor_shape, 1) * dtype_size
 
 
-def initialize_train_strategy(config_strategy_device: str) -> tf.distribute.Strategy:
+def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distribute.Strategy:
     # debug available devices
     device_list = tf.config.list_physical_devices()
     print(device_list)
@@ -160,11 +161,6 @@ def initialize_train_strategy(config_strategy_device: str) -> tf.distribute.Stra
 
     missing_device_msg = f'{config_strategy_device} is not available for execution, run with a different train strategy' \
                          f' or troubleshot the issue in case a {config_strategy_device} is actually present in the device.'
-
-    # if tf.test.gpu_device_name():
-    #     print('GPU found')
-    # else:
-    #     print('No GPU found')
 
     # TODO: add multi-GPU
     # Generate the train strategy. Currently supported values: ['CPU', 'GPU', 'TPU']

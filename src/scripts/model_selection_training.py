@@ -1,23 +1,22 @@
 import argparse
-import json
 import logging
 import os
 from pathlib import Path
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras import callbacks, models, metrics
+from tensorflow.keras import callbacks, metrics
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes, test_data_augmentation
+from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results
+    log_final_training_results, build_config
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
+from utils.nn_utils import get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -41,17 +40,13 @@ def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
+    parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", default=None)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
-    parser.add_argument('--load', help='load model from checkpoint', action='store_true')
-    parser.add_argument('--same', help='use same hyperparams of the ones used during search algorithm', action='store_true')
     parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
     parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
     args = parser.parse_args()
-
-    if args.same and args.j is not None:
-        raise AttributeError("Can't specify both 'j' and 'same' arguments, they are mutually exclusive")
 
     custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if args.j is None else args.j
 
@@ -66,43 +61,18 @@ def main():
             tensor_debug_mode="FULL_HEALTH",
             circular_buffer_size=-1)
 
-    with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
-        run_config = json.load(f)  # type: dict
-
     logger.info('Reading configuration...')
-    if args.same:
-        config = run_config
-    else:
-        with open(custom_json_path, 'r') as f:
-            config = json.load(f)   # type: dict
-
-    # initialize train strategy
-    # retrocompatible with previous config format, which have no "others" section
-    config_ts_device = config['others'].get('train_strategy', None) if 'others' in config.keys() else config.get('train_strategy', None)
-    ts_device = args.ts if args.ts is not None else config_ts_device
-    train_strategy = initialize_train_strategy(ts_device)
+    config, train_strategy = build_config(args, custom_json_path)
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
 
-    cdr_enabled = cnn_config['cosine_decay_restart']['enabled']
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
-
-    # expand number of epochs when training with same settings of the search algorithm, otherwise we would perform the same training
-    # with these setting we have 7 periods of cosine decay restart (initial period = 2 epochs)
-    # enable cutout and scheduled drop path, since are beneficial in longer training and probably disabled during search
-    if args.same:
-        config['dataset']['data_augmentation']['use_cutout'] = True
-        cnn_config['drop_path_prob'] = 0.2
-
-        cnn_config['epochs'] = 2
-        cnn_config['cosine_decay_restart']['period_in_epochs'] = 2
+    score_metric = config['search_strategy']['score_metric']
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
-    # update and prune JSON config first (especially when coming from --same flag since it has all params of search algorithm)
     save_trimmed_json_config(config, save_path)
-    score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -118,41 +88,32 @@ def main():
     # DEBUG ONLY
     # test_data_augmentation(dataset_folds[0][0])
 
-    # TODO: load model from checkpoint is more of a legacy feature right now. Delete it?
-    if args.load:
-        logger.info('Loading best model from provided folder...')
-        with train_strategy.scope():
-            model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))  # type: models.Model
-
-        last_cell_index = 7     # TODO
-        logger.info('Model loaded successfully')
+    if args.spec is None:
+        logger.info('Getting best cell specification found during POPNAS run...')
+        # find best model found during search and log some relevant info
+        metric = metrics_fields_dict[score_metric].real_column
+        cell_spec, best_score = get_best_cell_spec(args.p, metric)
+        log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
     else:
-        if args.spec is None:
-            logger.info('Getting best cell specification found during POPNAS run...')
-            # find best model found during search and log some relevant info
-            metric = metrics_fields_dict[score_metric].real_column
-            cell_spec, best_score = get_best_cell_spec(args.p, metric)
-            log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
-        else:
-            cell_spec = parse_cell_structures([args.spec])[0]
+        cell_spec = parse_cell_structures([args.spec])[0]
 
-        logger.info('Generating Keras model from cell specification...')
-        # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
-        with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
-            f.write(cell_spec_to_str(cell_spec))
+    logger.info('Generating Keras model from cell specification...')
+    # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
+    with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
+        f.write(cell_spec_to_str(cell_spec))
 
-        with train_strategy.scope():
-            model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
-                                       data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
-            model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
+    with train_strategy.scope():
+        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
+                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
+        model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
-            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-            train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+        loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+        train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
 
-            execution_steps = get_optimized_steps_per_execution(train_strategy)
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
+        execution_steps = get_optimized_steps_per_execution(train_strategy)
+        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
 
-        logger.info('Model generated successfully')
+    logger.info('Model generated successfully')
 
     model.summary(line_length=140, print_fn=logger.info)
 
@@ -163,7 +124,7 @@ def main():
     train_dataset, validation_dataset = dataset_folds[0]
 
     # Define callbacks
-    train_callbacks = define_callbacks(cdr_enabled, score_metric, multi_output, last_cell_index)
+    train_callbacks = define_callbacks(score_metric, multi_output, last_cell_index)
     time_cb = TimingCallback()
     train_callbacks.insert(0, time_cb)
 
