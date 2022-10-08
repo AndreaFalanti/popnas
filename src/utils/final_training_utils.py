@@ -7,6 +7,7 @@ import json
 import logging
 import operator
 import os
+from typing import Optional
 
 from tensorflow.keras import callbacks
 
@@ -34,12 +35,13 @@ def define_callbacks(score_metric: str, multi_output: bool, last_cell_index: int
     return [ckpt_callback, tb_callback]
 
 
-def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_score: float, metric: str, index: int = 0):
-    logger.info('%s', f' BEST CELL INFO ({index}) ')
+def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_score: Optional[float], metric: str, index: int = 0):
+    logger.info('%s', f' CELL INFO ({index}) ')
     logger.info('Cell specification:')
     for i, block in enumerate(cell_spec):
         logger.info("\tBlock %d: %s", i + 1, rstr(block))
-    logger.info('Best score (%s) reached during training: %0.4f', metric, best_score)
+    if best_score is not None:
+        logger.info('Best score (%s) reached during training: %0.4f', metric, best_score)
 
 
 def create_model_log_folder(log_path: str):
