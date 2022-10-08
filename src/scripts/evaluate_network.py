@@ -22,16 +22,20 @@ tf.get_logger().setLevel(logging.ERROR)
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int):
+def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int, normalize: bool):
     cmat = confusion_matrix(y_true, y_pred)
+    if normalize:
+        # normalized confusion matrix
+        cmat = cmat.astype('float') / cmat.sum(axis=1)[:, np.newaxis]
 
     fig_size = 8 + 0.2 * n_classes
     fig = plt.figure(figsize=(1 + fig_size, fig_size))
     if n_classes <= 20:
-        sns.heatmap(cmat, annot=True, fmt='d')
+        fmt = '.2f' if normalize else 'd'
+        sns.heatmap(cmat, annot=True, fmt=fmt, square=True)
     # avoid annotations in case there are too many classes
     else:
-        sns.heatmap(cmat)
+        sns.heatmap(cmat, square=True)
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
@@ -61,7 +65,10 @@ def evaluate_and_save_confusion_matrix(model: Model, test_ds: tf.data.Dataset, m
 
     y_pred = np.argmax(y_pred, axis=-1).flatten()
     y_true = np.concatenate([np.argmax(y, axis=-1) for x, y in test_ds], axis=0)
-    save_confusion_matrix(y_true, y_pred, save_path=os.path.join(model_path, 'confusion_matrix'), n_classes=n_classes)
+
+    # save both normalized and not normalized versions of confusion matrix
+    save_confusion_matrix(y_true, y_pred, save_path=os.path.join(model_path, 'confusion_matrix'), n_classes=n_classes, normalize=False)
+    save_confusion_matrix(y_true, y_pred, save_path=os.path.join(model_path, 'confusion_matrix_norm'), n_classes=n_classes, normalize=True)
 
 
 # This script can be used to evaluate the final model trained on a test set.
@@ -75,7 +82,7 @@ def main():
     parser.add_argument('--search_model', help='use best model found in search, with weights found on proxy training', action='store_true')
     parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)',
                         default='best_model_training')
-    parser.add_argument('--top', help='when -f is provided, consider it a nested folder, output of top_k_final_training script', action='store_true')
+    parser.add_argument('--top', help='when -f is provided, consider it a nested folder, output of model_selection_top_k script', action='store_true')
     args = parser.parse_args()
 
     model_path = os.path.join(args.p, 'best_model') if args.search_model else os.path.join(args.p, args.f)
