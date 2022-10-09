@@ -1,8 +1,8 @@
 {
     "cnn_hp": {
-        "epochs": 300,
+        "epochs": 200,
         "use_adamW": true,
-        "drop_path_prob": 0.2,
+        "drop_path_prob": 0.4,
         "cosine_decay_restart": {
             "enabled": false,
             "period_in_epochs": 2,
