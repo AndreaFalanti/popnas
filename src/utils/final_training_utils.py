@@ -148,11 +148,12 @@ def build_config(args, custom_json_path: str):
     return config, train_strategy
 
 
-def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]', last_cell_index: int):
+def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'):
     ''' Build a new model using only a secondary output at 2/3 of cells (drop other output from multi-output model) '''
-    secondary_output_index = int(last_cell_index * 0.66)
+    last_output_index = len(mo_model.outputs) - 1
+    secondary_output_index = round(last_output_index * 0.66)
     model = Model(inputs=mo_model.inputs, outputs=[mo_model.outputs[secondary_output_index], mo_model.outputs[-1]])
-    output_names = [k for i, k in enumerate(mo_loss_weights.keys()) if i in [secondary_output_index, last_cell_index]]
+    output_names = [k for i, k in enumerate(mo_loss_weights.keys()) if i in [secondary_output_index, last_output_index]]
     loss_weights = {
         output_names[0]: 0.25,
         output_names[1]: 0.75

@@ -207,7 +207,7 @@ def main():
             # enable label smoothing
             loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
             # remove unnecessary exits and recalibrate loss weights
-            model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights, last_cell_index)
+            model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights)
 
             execution_steps = get_optimized_steps_per_execution(train_strategy)
             model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
