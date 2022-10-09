@@ -131,7 +131,7 @@ def build_config(args, custom_json_path: str):
     # set custom batch size, if present
     if args.b is not None:
         config['dataset']['batch_size'] = args.b
-        # TODO: scale learning rate?
+        config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (args.b / search_config['dataset']['batch_size'])
 
         # set score metric (to select best architecture if -spec is not provided)
     config['search_strategy'] = {
