@@ -7,7 +7,7 @@ from typing import Optional, Iterator, NamedTuple
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras import callbacks, metrics
+from tensorflow.keras import callbacks, metrics, losses
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
@@ -16,7 +16,7 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, build_config
+    log_final_training_results, build_config, prune_excessive_outputs, override_checkpoint_callback
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
@@ -110,7 +110,7 @@ def main():
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-n', metavar='NUM_MODELS', type=int, help='number of top models to train, when -spec is not specified', default=5)
     parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", default=None)
-    parser.add_argument('-params', metavar='PARAMS RANGE', type=str, help="desired params range", default=None)
+    parser.add_argument('-params', metavar='PARAMS RANGE', type=str, help="desired params range, semicolon separated (e.g. 2.5e6;3.5e6)", default=None)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
@@ -147,7 +147,6 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    config['dataset']['samples'] = 1000
     dataset_generator = dataset_generator_factory(config['dataset'])
     dataset_folds, classes_count, input_shape, train_batches, val_batches = dataset_generator.generate_train_val_datasets()
 
@@ -200,10 +199,15 @@ def main():
             # alter macro parameters of model generator, before building the model
             model_gen.alter_macro_structure(*macro)
 
-            model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
+            mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
-            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+            loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
             train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+
+            # enable label smoothing
+            loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
+            # remove unnecessary exits and recalibrate loss weights
+            model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights, last_cell_index)
 
             execution_steps = get_optimized_steps_per_execution(train_strategy)
             model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
@@ -220,13 +224,14 @@ def main():
 
         # Define callbacks
         train_callbacks = define_callbacks(score_metric, multi_output, last_cell_index)
+        override_checkpoint_callback(train_callbacks, score_metric, last_cell_index, use_val=True)
         time_cb = TimingCallback()
         train_callbacks.insert(0, time_cb)
 
         plot_model(model, to_file=os.path.join(model_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
         hist = model.fit(x=train_dataset,
-                         epochs=2, #cnn_config['epochs'],
+                         epochs=cnn_config['epochs'],
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
@@ -249,7 +254,7 @@ def main():
         # keep track of all results
         with open(os.path.join(save_path, 'training_results.csv'), 'a', newline='') as f:
             writer = csv.writer(f)
-            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            # append mode, so if file handler is in position 0 it means is empty. In this case, write the headers too.
             if f.tell() == 0:
                 writer.writerow(['cell_spec', 'm', 'n', 'f', 'val_score', 'training_time'])
 

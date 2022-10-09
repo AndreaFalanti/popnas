@@ -9,7 +9,7 @@ import operator
 import os
 from typing import Optional
 
-from tensorflow.keras import callbacks
+from tensorflow.keras import callbacks, Model
 
 import log_service
 from utils.func_utils import create_empty_folder
@@ -146,3 +146,31 @@ def build_config(args, custom_json_path: str):
         train_strategy = initialize_train_strategy(None)
 
     return config, train_strategy
+
+
+def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]', last_cell_index: int):
+    ''' Build a new model using only a secondary output at 2/3 of cells (drop other output from multi-output model) '''
+    secondary_output_index = int(last_cell_index * 0.66)
+    model = Model(inputs=mo_model.inputs, outputs=[mo_model.outputs[secondary_output_index], mo_model.outputs[-1]])
+    output_names = [k for i, k in enumerate(mo_loss_weights.keys()) if i in [secondary_output_index, last_cell_index]]
+    loss_weights = {
+        output_names[0]: 0.25,
+        output_names[1]: 0.75
+    }
+
+    return model, loss_weights
+
+
+def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, use_val: bool = False):
+    class ModelCheckpointCustom(callbacks.ModelCheckpoint):
+        def on_epoch_end(self, epoch, logs=None):
+            # at most 1 checkpoint every 10 epochs, the best one is saved (e.g. epoch 124 is best among [120, 129] -> saved in cp_ed12.ckpt
+            super().on_epoch_end(epoch // 10, logs)
+
+    # Save best weights, here we have no validation set, so we check the best on training
+    prefix = 'val_' if use_val else ''
+    target_metric = f'{prefix}Softmax_c{last_cell_index}_{score_metric}'
+
+    ckpt_save_format = 'cp_ed{epoch:02d}.ckpt'
+    train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
+                                               save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
