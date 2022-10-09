@@ -109,6 +109,7 @@ def log_final_training_results(logger: logging.Logger, hist: callbacks.History, 
         logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
 
     logger.info('*' * 80)
+    return best_val_score
 
 
 def build_config(args, custom_json_path: str):

@@ -43,7 +43,7 @@ def main():
     parser.add_argument('--search_model', help='use best model found in search, with weights found on proxy training', action='store_true')
     parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)',
                         default='best_model_training')
-    parser.add_argument('--top', help='when -f is provided, consider it a nested folder, output of model_selection_top_k script', action='store_true')
+    parser.add_argument('--top', help='when -f is provided, consider it as a nested folder if this option is set', action='store_true')
     args = parser.parse_args()
 
     model_path = os.path.join(args.p, 'best_model') if args.search_model else os.path.join(args.p, args.f)

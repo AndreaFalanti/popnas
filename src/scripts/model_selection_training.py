@@ -1,8 +1,9 @@
 import argparse
+import csv
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Iterator
+from typing import Optional, Iterator, NamedTuple
 
 import pandas as pd
 import tensorflow as tf
@@ -17,6 +18,7 @@ from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
     log_final_training_results, build_config
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
+from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
@@ -27,24 +29,78 @@ tf.get_logger().setLevel(logging.ERROR)
 AUTOTUNE = tf.data.AUTOTUNE
 
 
+class MacroConfig(NamedTuple):
+    m: int
+    n: int
+    f: int
+
+    def __str__(self) -> str:
+        return f'm{self.m}-n{self.n}-f{self.f}'
+
+    def modify(self, m_mod: int, n_mod: int, f_mod: float):
+        return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
+
+
 def get_best_cell_specs(log_folder_path: str, n: int, metric: str = 'best val accuracy'):
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
     best_acc_rows = df.nlargest(n, columns=[metric])
 
     cell_specs = parse_cell_structures(best_acc_rows['cell structure'])
-    return zip(cell_specs, best_acc_rows[metric])
+    return cell_specs, best_acc_rows[metric]
 
 
-def get_cells_to_train_iter(args, score_metric: str, logger: logging.Logger) -> Iterator['tuple[list, Optional[float]]']:
+def get_cells_to_train_iter(args, score_metric: str, macro: MacroConfig,
+                            logger: logging.Logger) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
+    '''
+    Return an iterator of all cells to train during model selection process.
+
+    Args:
+        args: script command line arguments
+        score_metric: target score metric for selecting top-k architectures
+        macro: macro parameters used during search
+        logger:
+
+    Returns:
+        Enumerate generator, in form: (cell_index, (cell_spec, score_during_search, macro_config))
+    '''
     if args.spec is None:
-        logger.info('Getting best cell specification found during POPNAS run...')
+        logger.info('Getting best cell specifications found during POPNAS run...')
         metric = metrics_fields_dict[score_metric].real_column
 
-        return get_best_cell_specs(args.p, args.n, metric)
+        cell_specs, best_scores = get_best_cell_specs(args.p, args.n, metric)
+        return enumerate(zip(cell_specs, best_scores, [macro] * len(cell_specs))).__iter__()
     # single cell specification given by the user
     else:
-        return zip(parse_cell_structures([args.spec]), [None])
+        return enumerate(zip(parse_cell_structures([args.spec]), [None], [macro])).__iter__()
+
+
+def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]'],
+                                                 original_macro: MacroConfig, min_params: int, max_params: int,
+                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
+    m_modifiers = [0, 1]
+    n_modifiers = [-1, 0, 1] if original_macro.n > 1 else [0, 1]
+    f_modifiers = [1, 1.5, 1.75, 2]
+
+    for i, (cell_spec, best_score, macro) in cells_iter:
+        # always generate the original architecture
+        yield i, (cell_spec, best_score, macro)
+
+        # return the max amount of filters for each (M,N) combination that fits parameters constraints
+        for m_mod in m_modifiers:
+            for n_mod in n_modifiers:
+                max_f_macro = None
+                for f_mod in f_modifiers:
+                    new_macro = original_macro.modify(m_mod, n_mod, f_mod)
+                    graph_gen.alter_macro_structure(*new_macro)
+
+                    # f_mods are ordered, so the last one to satisfy the condition is the max f
+                    if min_params < graph_gen.generate_network_graph(cell_spec).get_total_params() < max_params:
+                        max_f_macro = new_macro
+
+                # check also that it is different from original macro
+                if max_f_macro is not None and str(max_f_macro) != str(macro):
+                    yield i, (cell_spec, None, max_f_macro)
 
 
 def main():
@@ -54,6 +110,7 @@ def main():
     parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-n', metavar='NUM_MODELS', type=int, help='number of top models to train, when -spec is not specified', default=5)
     parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", default=None)
+    parser.add_argument('-params', metavar='PARAMS RANGE', type=str, help="desired params range", default=None)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
@@ -90,6 +147,7 @@ def main():
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
+    config['dataset']['samples'] = 1000
     dataset_generator = dataset_generator_factory(config['dataset'])
     dataset_folds, classes_count, input_shape, train_batches, val_batches = dataset_generator.generate_train_val_datasets()
 
@@ -107,16 +165,30 @@ def main():
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
                                    data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
 
-    cell_score_iter = get_cells_to_train_iter(args, score_metric, logger)
+    m = arc_config['motifs']
+    n = arc_config['normal_cells_per_motif']
+    f = cnn_config['filters']
+    macro_config = MacroConfig(m, n, f)
 
-    for i, (cell_spec, best_score) in enumerate(cell_score_iter):
-        model_folder = os.path.join(save_path, str(i))
+    cell_score_iter = get_cells_to_train_iter(args, score_metric, macro_config, logger)
+
+    # generate alternative macro architectures of the selected cell specifications
+    # the returned iterator as the same structure and returns also the original elements
+    if args.params is not None:
+        # get params ranges. float conversion is used to support exponential notation (e.g. 2e6 for 2 millions).
+        min_params, max_params = map(int, map(float, args.params.split(';')))
+        graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, classes_count)
+
+        cell_score_iter = add_macro_architecture_changes_to_cells_iter(cell_score_iter, macro_config, min_params, max_params, graph_gen)
+
+    for i, (cell_spec, best_score, macro) in cell_score_iter:
+        model_folder = os.path.join(save_path, f'{i}-{macro}')
         create_model_log_folder(model_folder)
-        model_logger = log_service.get_logger(__name__)
+        model_logger = log_service.get_logger(f'model_{i}_{macro}')
 
         log_best_cell_results_during_search(model_logger, cell_spec, best_score, score_metric, i)
 
-        logger.info('Executing model %d training', i)
+        logger.info('Executing model %d-%s training', i, macro)
         # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
         with open(os.path.join(model_folder, 'cell_spec.txt'), 'w') as f:
             f.write(cell_spec_to_str(cell_spec))
@@ -125,6 +197,9 @@ def main():
 
         model_logger.info('Generating Keras model from cell specification...')
         with train_strategy.scope():
+            # alter macro parameters of model generator, before building the model
+            model_gen.alter_macro_structure(*macro)
+
             model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
 
             loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
@@ -151,7 +226,7 @@ def main():
         plot_model(model, to_file=os.path.join(model_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
         hist = model.fit(x=train_dataset,
-                         epochs=cnn_config['epochs'],
+                         epochs=2, #cnn_config['epochs'],
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
@@ -159,7 +234,7 @@ def main():
                          callbacks=train_callbacks)  # type: callbacks.History
 
         training_time = sum(time_cb.logs)
-        log_final_training_results(model_logger, hist, score_metric, training_time, arc_config['multi_output'])
+        training_score = log_final_training_results(model_logger, hist, score_metric, training_time, arc_config['multi_output'])
 
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))
@@ -168,8 +243,17 @@ def main():
         predict_and_save_confusion_matrix(model, validation_dataset, multi_output, n_classes=classes_count,
                                           save_path=os.path.join(model_folder, 'val_confusion_matrix'))
 
-        logger.info('Model %d training complete', i)
+        logger.info('Model %d-%s training complete', i, macro)
         tf.keras.backend.clear_session()
+
+        # keep track of all results
+        with open(os.path.join(save_path, 'training_results.csv'), 'a', newline='') as f:
+            writer = csv.writer(f)
+            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            if f.tell() == 0:
+                writer.writerow(['cell_spec', 'm', 'n', 'f', 'val_score', 'training_time'])
+
+            writer.writerow([cell_spec, *macro, training_score, training_time])
 
 
 if __name__ == '__main__':

@@ -98,6 +98,15 @@ class ModelGenerator:
         self.network_build_info = None  # type: NetworkBuildInfo
         self.output_layers = {}
 
+    def alter_macro_structure(self, m: int, n: int, f: int):
+        self.motifs = m
+        self.normal_cells_per_motif = n
+        self.filters = f
+
+        # recompute properties associated to the macro structure parameters
+        self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+        self.cell_output_shapes = self.__compute_cell_output_shapes()
+
     def __compute_cell_output_shapes(self):
         output_shapes = []
         current_shape = list(self.input_shape)
