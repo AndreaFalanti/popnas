@@ -4,13 +4,14 @@ import logging
 import os
 
 import tensorflow as tf
-from tensorflow.keras import metrics, models, Model
+from tensorflow.keras import models, Model
 
 import log_service
 from dataset.utils import dataset_generator_factory
 from models.model_generator import ModelGenerator
 from utils.func_utils import parse_cell_structures
-from utils.nn_utils import predict_and_save_confusion_matrix
+from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy
+from utils.post_search_training_utils import MacroConfig, compile_post_search_model
 
 # disable Tensorflow info and warning messages
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
@@ -43,6 +44,7 @@ def main():
     parser.add_argument('--search_model', help='use best model found in search, with weights found on proxy training', action='store_true')
     parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)',
                         default='best_model_training')
+    parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('--top', help='when -f is provided, consider it as a nested folder if this option is set', action='store_true')
     args = parser.parse_args()
 
@@ -62,6 +64,8 @@ def main():
     arc_config = config['architecture_parameters']
     multi_output = arc_config['multi_output']
 
+    train_strategy = initialize_train_strategy(args.ts)
+
     # Load and prepare the dataset
     print('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
@@ -76,8 +80,9 @@ def main():
         predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
                                           save_path=os.path.join(model_path, 'test_confusion_matrix'))
     else:
-        model_gen = ModelGenerator(cnn_config, arc_config, test_batches, output_classes_count=classes_count, input_shape=image_shape,
-                                   data_augmentation_model=None)
+        with train_strategy.scope():
+            model_gen = ModelGenerator(cnn_config, arc_config, test_batches, output_classes_count=classes_count, input_shape=image_shape,
+                                       data_augmentation_model=None)
 
         model_paths = [f.path for f in os.scandir(model_path) if f.is_dir()] if args.top else [model_path]
         for m_index, m_path in enumerate(model_paths):
@@ -90,12 +95,17 @@ def main():
 
             print('Generating Keras model from cell specification...')
 
-            model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=False)
+            # read model configuration to extract its macro architecture parameters
+            with open(os.path.join(m_path, 'run.json'), 'r') as f:
+                model_config = json.load(f)
 
-            loss, loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-            train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+            macro = MacroConfig.from_config(model_config)
 
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics)
+            with train_strategy.scope():
+                model_gen.alter_macro_structure(*macro)
+                mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=False)
+                model = compile_post_search_model(mo_model, model_gen, train_strategy)
+
             print('Model generated successfully')
 
             latest = tf.train.latest_checkpoint(os.path.join(m_path, 'weights'))
