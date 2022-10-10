@@ -15,7 +15,7 @@ from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
-from utils.func_utils import parse_cell_structures, cell_spec_to_str
+from utils.func_utils import parse_cell_structures, cell_spec_to_str, create_empty_folder
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
@@ -108,9 +108,16 @@ def main():
 
     custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if args.j is None else args.j
 
-    folder_name = args.name if args.spec is not None or args.n <= 1 else args.name + f'_top{args.n}'
-    save_path = os.path.join(args.p, folder_name)
-    create_model_log_folder(save_path)
+    # create appropriate model structure (different between single model and multi-model)
+    if args.n <= 1:
+        save_path = os.path.join(args.p, args.name)
+        create_model_log_folder(save_path)
+    else:
+        save_path = os.path.join(args.p, f'{args.name}_top{args.n}')
+        # avoid generating tensorboard and weights folders
+        create_empty_folder(save_path)
+        log_service.set_log_path(save_path)
+
     logger = log_service.get_logger(__name__)
 
     # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
