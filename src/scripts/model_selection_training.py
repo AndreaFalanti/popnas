@@ -3,11 +3,11 @@ import csv
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Iterator, NamedTuple
+from typing import Optional, Iterator
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras import callbacks, metrics, losses
+from tensorflow.keras import callbacks
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
@@ -16,10 +16,10 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, build_config, prune_excessive_outputs, override_checkpoint_callback
+    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import get_optimized_steps_per_execution, save_keras_model_to_onnx, predict_and_save_confusion_matrix
+from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -27,18 +27,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
 tf.get_logger().setLevel(logging.ERROR)
 
 AUTOTUNE = tf.data.AUTOTUNE
-
-
-class MacroConfig(NamedTuple):
-    m: int
-    n: int
-    f: int
-
-    def __str__(self) -> str:
-        return f'm{self.m}-n{self.n}-f{self.f}'
-
-    def modify(self, m_mod: int, n_mod: int, f_mod: float):
-        return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
 
 
 def get_best_cell_specs(log_folder_path: str, n: int, metric: str = 'best val accuracy'):
@@ -200,17 +188,7 @@ def main():
             model_gen.alter_macro_structure(*macro)
 
             mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
-
-            loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-            train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
-
-            # enable label smoothing
-            loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
-            # remove unnecessary exits and recalibrate loss weights
-            model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights)
-
-            execution_steps = get_optimized_steps_per_execution(train_strategy)
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
+            model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
         model_logger.info('Model generated successfully')
 

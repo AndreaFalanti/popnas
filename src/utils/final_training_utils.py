@@ -7,13 +7,15 @@ import json
 import logging
 import operator
 import os
-from typing import Optional
+from typing import Optional, NamedTuple, Any
 
-from tensorflow.keras import callbacks, Model
+import tensorflow as tf
+from tensorflow.keras import callbacks, Model, metrics, losses
 
 import log_service
+from models.model_generator import ModelGenerator
 from utils.func_utils import create_empty_folder
-from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy
+from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
 
 
@@ -175,3 +177,39 @@ def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_
     ckpt_save_format = 'cp_ed{epoch:02d}.ckpt'
     train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
                                                save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
+
+
+class MacroConfig(NamedTuple):
+    m: int
+    n: int
+    f: int
+
+    def __str__(self) -> str:
+        return f'm{self.m}-n{self.n}-f{self.f}'
+
+    def modify(self, m_mod: int, n_mod: int, f_mod: float):
+        return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
+
+    @staticmethod
+    def from_config(config: 'dict[str, Any]'):
+        return MacroConfig(config['architecture_parameters']['motifs'],
+                           config['architecture_parameters']['normal_cells_per_motif'],
+                           config['cnn_hp']['filters'])
+
+
+def compile_post_search_model(mo_model: Model, model_gen: ModelGenerator, train_strategy: tf.distribute.Strategy):
+    '''
+    Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
+    '''
+    loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
+    train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
+
+    # enable label smoothing
+    loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
+
+    # remove unnecessary exits and recalibrate loss weights
+    model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights)
+
+    execution_steps = get_optimized_steps_per_execution(train_strategy)
+    model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
+    return model

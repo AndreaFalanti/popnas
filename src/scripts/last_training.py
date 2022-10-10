@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras import callbacks, metrics, losses
+from tensorflow.keras import callbacks
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import log_service
@@ -15,9 +15,9 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.final_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, prune_excessive_outputs, override_checkpoint_callback, save_trimmed_json_config
+    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution, save_keras_model_to_onnx
+from utils.nn_utils import initialize_train_strategy, save_keras_model_to_onnx
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -123,19 +123,9 @@ def main():
     with train_strategy.scope():
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
                                    data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
+
         mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
-
-        loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-        train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
-
-        # small changes to conform to PNAS training procedure
-        # enable label smoothing
-        loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
-        # remove unnecessary exits and recalibrate loss weights
-        model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights)
-
-        execution_steps = get_optimized_steps_per_execution(train_strategy)
-        model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
+        model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
     logger.info('Model generated successfully')
 
