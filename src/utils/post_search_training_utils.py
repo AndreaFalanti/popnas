@@ -2,7 +2,7 @@
 Stores common function used in training scripts, which could be executed after the main search procedure.
 All the functions inside this file are not used inside the search algorithm.
 '''
-
+import copy
 import json
 import logging
 import operator
@@ -212,4 +212,13 @@ def compile_post_search_model(mo_model: Model, model_gen: ModelGenerator, train_
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
     model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
-    return model
+    return
+
+
+def build_macro_customized_config(config: dict, macro: MacroConfig):
+    model_config = copy.deepcopy(config)
+    model_config['architecture_parameters']['motifs'] = macro.m
+    model_config['architecture_parameters']['normal_cells_per_motif'] = macro.n
+    model_config['cnn_hp']['filters'] = macro.f
+
+    return model_config

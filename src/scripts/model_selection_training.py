@@ -19,7 +19,7 @@ from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model
+    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -180,7 +180,8 @@ def main():
         with open(os.path.join(model_folder, 'cell_spec.txt'), 'w') as f:
             f.write(cell_spec_to_str(cell_spec))
 
-        save_trimmed_json_config(config, model_folder)
+        model_config = build_macro_customized_config(config, macro)
+        save_trimmed_json_config(model_config, model_folder)
 
         model_logger.info('Generating Keras model from cell specification...')
         with train_strategy.scope():
