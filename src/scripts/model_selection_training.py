@@ -15,11 +15,11 @@ from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
-from utils.final_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
+from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
+    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
