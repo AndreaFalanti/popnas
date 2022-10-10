@@ -212,7 +212,7 @@ def compile_post_search_model(mo_model: Model, model_gen: ModelGenerator, train_
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
     model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
-    return
+    return model
 
 
 def build_macro_customized_config(config: dict, macro: MacroConfig):
