@@ -17,7 +17,7 @@ from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.nn_utils import initialize_train_strategy, save_keras_model_to_onnx
 from utils.post_search_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model
+    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -54,42 +54,22 @@ def main():
     create_model_log_folder(save_path)
     logger = log_service.get_logger(__name__)
 
-    logger.info('Reading configuration...')
-    with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
-        run_config = json.load(f)  # type: dict
-
     # read final_training config
     custom_json_path = Path(__file__).parent / '../configs/last_training.json'
-    with open(custom_json_path, 'r') as f:
-        config = json.load(f)  # type: dict
 
-    # override part of the custom configuration with the search configuration
-    config['dataset'] = run_config['dataset']
-    config['dataset']['batch_size'] = args.b
-    config['search_strategy'] = run_config['search_strategy']
-
-    # enable cutout
-    config['dataset']['data_augmentation']['use_cutout'] = True
-
-    # initialize train strategy
-    # retrocompatible with previous config format, which have no "others" section
-    config_ts_device = config['others'].get('train_strategy', None) if 'others' in config.keys() else config.get('train_strategy', None)
-    ts_device = args.ts if args.ts is not None else config_ts_device
-    train_strategy = initialize_train_strategy(ts_device)
+    logger.info('Reading configuration...')
+    config, train_strategy = build_config(args, custom_json_path)
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
 
-    cdr_enabled = False
-    multi_output = True
-    augment_on_gpu = False
-    epochs = 600
+    multi_output = arc_config['multi_output']
+    augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
+    score_metric = config['search_strategy']['score_metric']
 
     arc_config['motifs'] = args.m
     arc_config['normal_cells_per_motif'] = args.n
     cnn_config['filters'] = args.f
-
-    score_metric = config['search_strategy'].get('score_metric', 'accuracy')
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -143,7 +123,7 @@ def main():
     plot_model(model, to_file=os.path.join(save_path, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
     hist = model.fit(x=train_ds,
-                     epochs=epochs,
+                     epochs=cnn_config['epochs'],
                      steps_per_epoch=train_batches,
                      class_weight=balanced_class_weights,
                      callbacks=train_callbacks)     # type: callbacks.History
