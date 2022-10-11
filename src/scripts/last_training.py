@@ -46,7 +46,7 @@ def main():
     parser.add_argument('-n', metavar='NORMAL CELLS PER MOTIF', type=int, help="desired normal cells per motif", required=True)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
-    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='')
+    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='final_model_training')
     parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
     args = parser.parse_args()
 
