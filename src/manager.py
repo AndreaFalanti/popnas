@@ -260,7 +260,8 @@ class NetworkManager:
         # if algorithm is training the last models batch (B = value provided in command line)
         # save the best model in a folder, so that can be trained from scratch later on
         score = accuracy if self.score_objective == 'accuracy' else f1_score
-        if save_best_model and score > self.best_score:
+        # avoid saving ONNX on TPU (CPU:0 device not found, same as flops)
+        if save_best_model and score > self.best_score and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
             self.best_score = score
             # last model should be automatically overwritten, leaving only one model
             self._logger.info('Saving model...')
