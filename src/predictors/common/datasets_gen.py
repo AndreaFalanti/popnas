@@ -104,6 +104,12 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
         rnn_ops = [ops for _, ops in rnn_inputs]
 
         ds = tf.data.Dataset.from_tensor_slices((rnn_in, rnn_ops))
+
+        # set sharding options to DATA. This improves performances on distributed environments.
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        ds = ds.with_options(options)
+
         if y_rewards is not None:
             ds_label = tf.data.Dataset.from_tensor_slices(y_rewards)
             ds = tf.data.Dataset.zip((ds, ds_label))
@@ -146,6 +152,12 @@ def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[l
         cell_series = list(map(lambda cell: __prepare_rnn_inputs(search_space, cell), x_cell_specs))
 
         ds = tf.data.Dataset.from_tensor_slices(cell_series)
+
+        # set sharding options to DATA. This improves performances on distributed environments.
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        ds = ds.with_options(options)
+
         if y_rewards is not None:
             ds_label = tf.data.Dataset.from_tensor_slices(y_rewards)
             ds = tf.data.Dataset.zip((ds, ds_label))
