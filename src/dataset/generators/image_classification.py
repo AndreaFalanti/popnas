@@ -9,7 +9,7 @@ from tensorflow.keras import datasets
 from tensorflow.keras.utils import image_dataset_from_directory
 
 from dataset.augmentation import get_image_data_augmentation_model, get_image_tf_data_augmentation_functions
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED
 from dataset.preprocessing import ImagePreprocessor
 
 
@@ -91,9 +91,9 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
                 if self.val_size is None:
                     train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
-                                                            image_size=self.resize_dim, batch_size=self.batch_size)
+                                                            image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
                     val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
-                                                          image_size=self.resize_dim, batch_size=self.batch_size)
+                                                          image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
 
                     # limit only train dataset, if limit is set
                     if self.samples_limit is not None:
@@ -103,11 +103,11 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 else:
                     # TODO: find a way to make the split stratified (Stratification is done due stochasticity right now)
                     train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), validation_split=self.val_size,
-                                                            seed=123, subset='training', label_mode='categorical',
-                                                            image_size=self.resize_dim, batch_size=self.batch_size)
+                                                            subset='training', label_mode='categorical',
+                                                            image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
                     val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), validation_split=self.val_size,
-                                                          seed=123, subset='validation', label_mode='categorical',
-                                                          image_size=self.resize_dim, batch_size=self.batch_size)
+                                                          subset='validation', label_mode='categorical',
+                                                          image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
 
                     # limit both datasets, so that the sum of samples is the declared one
                     if self.samples_limit is not None:
@@ -138,7 +138,8 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                     image_shape = self.resize_dim + (channels,)
 
                 # create a validation set for evaluation of the child models
-                x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, test_size=self.val_size, stratify=y_train_init)
+                x_train, x_val, y_train, y_val = train_test_split(x_train_init, y_train_init, test_size=self.val_size, stratify=y_train_init,
+                                                                  random_state=SEED)
                 # remove last axis
                 y_train = np.squeeze(y_train)
                 y_val = np.squeeze(y_val)
@@ -179,7 +180,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
             # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
             test_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_test'), label_mode='categorical',
-                                                   image_size=self.resize_dim, batch_size=self.batch_size)
+                                                   image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
 
             # TODO: sharding should be set to FILE here? or not?
             shard_policy = AutoShardPolicy.FILE
@@ -233,15 +234,15 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             # if val_size is None, it means that a validation split is present, merge the two datasets
             if self.val_size is None:
                 train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
-                                                        image_size=self.resize_dim, batch_size=self.batch_size)
+                                                        image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
                 val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
-                                                      image_size=self.resize_dim, batch_size=self.batch_size)
+                                                      image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
 
                 train_ds = train_ds.unbatch().concatenate(val_ds.unbatch())
             # extract a validation split from training samples
             else:
                 train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'),
-                                                        seed=123, subset='training', label_mode='categorical',
+                                                        seed=SEED, subset='training', label_mode='categorical',
                                                         image_size=self.resize_dim, batch_size=self.batch_size)
                 train_ds = train_ds.unbatch()
 

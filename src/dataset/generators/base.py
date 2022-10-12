@@ -9,6 +9,7 @@ from dataset.preprocessing import DataPreprocessor
 
 AUTOTUNE = tf.data.AUTOTUNE
 AutoShardPolicy = tf.data.experimental.AutoShardPolicy
+SEED = 1234
 
 
 class BaseDatasetGenerator(ABC):
@@ -50,7 +51,7 @@ class BaseDatasetGenerator(ABC):
 
         # shuffle samples to avoid batches of same class (if samples are ordered)
         if shuffle:
-            ds = ds.shuffle(len(ds))
+            ds = ds.shuffle(len(ds), seed=SEED)
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
@@ -65,7 +66,7 @@ class BaseDatasetGenerator(ABC):
 
         # shuffle batches at each epoch
         if shuffle:
-            ds = ds.shuffle(len(ds), reshuffle_each_iteration=True)
+            ds = ds.shuffle(len(ds), reshuffle_each_iteration=True, seed=SEED)
 
         # if data augmentation is performed on CPU, map it before prefetch
         if keras_data_augmentation is not None and not self.augment_on_gpu:

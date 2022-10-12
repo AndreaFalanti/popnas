@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sktime import datasets as sktdata
 
-from dataset.generators.base import BaseDatasetGenerator
+from dataset.generators.base import BaseDatasetGenerator, SEED
 from dataset.preprocessing import TimeSeriesPreprocessor
 
 
@@ -65,13 +65,14 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
                 if self.samples_limit is not None:
                     # also shuffle, since .ts files are usually ordered by class. Without shuffle, entire classes could be dropped.
-                    x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit)
+                    x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
 
                 # create a validation set for evaluation of the child models. If val_size is None, then files for validation split must exist.
                 if self.val_size is None:
                     x_val, y_val = self._get_numpy_split('validation')
                 else:
-                    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, stratify=y_train)
+                    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, stratify=y_train,
+                                                                      random_state=SEED)
 
                 train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
                 val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
