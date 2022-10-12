@@ -14,7 +14,6 @@
         "softmax_dropout": 0.0
     },
     "architecture_parameters": {
-        "lookback_reshape": false,
         "multi_output": true
     },
     "dataset": {

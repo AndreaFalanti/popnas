@@ -15,14 +15,14 @@
         ]
     },
     "search_strategy": {
-        "max_children": 256,
+        "max_children": 128,
         "max_exploration_children": 16,
         "score_metric": "accuracy",
         "additional_pareto_objectives": ["time"]
     },
     "cnn_hp": {
         "epochs": 21,
-        "learning_rate": 0.008,
+        "learning_rate": 0.01,
         "filters": 24,
         "weight_reg": 5e-4,
         "use_adamW": true,
@@ -40,7 +40,7 @@
         "motifs": 3,
         "normal_cells_per_motif": 2,
         "block_join_operator": "add",
-        "lookback_reshape": true,
+        "lookback_reshape": false,
         "concat_only_unused_blocks": true,
         "residual_cells": true,
         "multi_output": false
@@ -50,7 +50,7 @@
         "name": "custom-dataset",
         "path": "insert-path",
         "classes_count": 10,
-        "batch_size": 64,
+        "batch_size": 128,
         "inference_batch_size": 16,
         "validation_size": 0.1,
         "cache": true,
