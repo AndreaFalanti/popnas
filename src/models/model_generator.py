@@ -58,6 +58,7 @@ class ModelGenerator:
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         self.multi_output = arc_params['multi_output']
+        self.residual_cells = arc_params['residual_cells']
         self.output_classes_count = output_classes_count
         self.input_shape = input_shape
 
@@ -299,10 +300,38 @@ class ModelGenerator:
             else:
                 concat_layer = layers.Concatenate(axis=-1)(block_outputs)
             x = self.op_instantiator.generate_pointwise_conv(filters, strided=False, name=f'concat_pointwise_conv_c{self.cell_index}')
-            return x(concat_layer)
+            cell_out = x(concat_layer)
         # avoids concatenation, since it is unnecessary
         else:
-            return block_outputs[0]
+            cell_out = block_outputs[0]
+
+        # if option is set in configuration, make the cell a residual unit, by summing cell output with nearest lookback input
+        if self.residual_cells:
+            nearest_lookback = max(self.network_build_info.used_lookbacks)
+            lb_input = inputs[nearest_lookback]
+
+            # check if a linear projection must be performed (case where input shape and output have different sizes, see Resnet paper)
+            lb_shape = lb_input.shape.as_list()
+            out_shape = cell_out.shape.as_list()
+
+            different_depth = lb_shape[-1] != out_shape[-1]
+            different_spatial = lb_shape[1] != out_shape[1]  # 0 is the batch size, 1 is always related to spatial (for both 1D and 2D)
+
+            # if shapes are different, apply a linear projection, otherwise use the lookback as it is
+            pool_kernel_groups = 'x'.join(['2'] * (len(self.input_shape) - 1))
+            pool_name = f'{pool_kernel_groups} maxpool'
+            # linear projection = max pool + pointwise conv if also different depth (second and third arguments), otherwise just max pool
+            if different_spatial:
+                lb_input = self.op_instantiator.build_op_layer(pool_name, out_shape[-1], lb_shape[-1],
+                                                               f'_residual_proj_c{self.cell_index}', strided=True)(lb_input)
+            # linear projection = pointwise conv
+            elif different_depth:
+                lb_input = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
+                                                                        name=f'pointwise_conv_residual_proj_c{self.cell_index}')(lb_input)
+
+            cell_out = layers.Add(name=f'residual_c{self.cell_index}')([cell_out, lb_input])
+
+        return cell_out
 
     def __normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int):
         '''

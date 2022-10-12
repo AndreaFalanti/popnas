@@ -45,6 +45,7 @@
         "block_join_operator": "add",
         "lookback_reshape": true,
         "concat_only_unused_blocks": true,
+        "residual_cells": true,
         "multi_output": false
     },
     "dataset": {
