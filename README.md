@@ -104,6 +104,8 @@ Here it's presented a list of the configuration sections and fields, with a brie
   - @x@ avgpool
   - @x@ tconv      (Transpose convolution)
 
+  For time series (1D inputs), specify the kernel size as @ instead of @x@, since the kernel size is mono dimensional.
+
 **Search strategy**:
 - **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
   (except the first step, which trains all possible cells).
@@ -111,7 +113,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
   Currently supported: [accuracy, f1_score].
 - **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
-  the selection of the neural network architectures to train. Currently supported values are [time, params],
+  the selection of the neural network architectures to train. Currently supported values: [time, params].
   POPNAS requires at least one of them.
   
 **CNN hyperparameters**:
@@ -138,11 +140,14 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **block_join_operator**: defines the operator used to join the tensors produced by the two operators of a block.
   Supported values: [add, avg].
 - **lookback_reshape**: if _true_, when a skip lookback (-2) has a different shape from the one expected by the current cell, it is reshaped
-  with a pointwise convolution, similar to what was done in PNAS, before passing it to block operators. If _false_, the skip lookbacks are instead
-  passed directly to block operators requesting them, which would operate like as reduction cell case when the shape diverge from expected one.
+  with a pointwise convolution, before passing it to block operators (as done in PNAS). If _false_, the skip lookbacks are instead
+  passed directly to block operators requesting them, which would operate as reduction cell case when the shape diverges from expected one.
 - **concat_only_unused_blocks**: if _true_, only blocks' output not used internally by the cell
   will be used in final concatenation cell output, following PNAS and NASNet.
   If set to _false_, all blocks' output will be concatenated in final cell output.
+- **residual_cells**: if _true_, each cell output will be followed by a sum with the nearest lookback input used, to make the output residual
+  (see ResNet paper). If lookback and cell output shapes diverge, pointwise convolution and/or max pooling are performed to adapt 
+  the spatial dimension and the filters.
 - **multi_output**: if _true_, CNNs will have an output exit (GAP + Softmax) at the end of each cell.
 
 [//]: # (**RNN hyperparameters &#40;controller, optional&#41;**: \\)
