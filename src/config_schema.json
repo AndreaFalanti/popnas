@@ -157,6 +157,9 @@
                 "concat_only_unused_blocks": {
                     "type": "boolean"
                 },
+                "residual_cells": {
+                    "type": "boolean"
+                },
                 "multi_output": {
                     "type": "boolean"
                 }
@@ -167,6 +170,7 @@
                 "block_join_operator",
                 "lookback_reshape",
                 "concat_only_unused_blocks",
+                "residual_cells",
                 "multi_output"
             ]
         },
