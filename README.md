@@ -1,13 +1,15 @@
 # POPNASv2
-Second version of POPNAS algorithm, a neural architecture search method based on 
-[PNAS paper](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
-The first version has been developed for a master thesis by Matteo Vantadori (Politecnico di Milano, academic year 2018-2019).
+Second version of Pareto-optimal Progressive Neural Architecture Search (POPNAS) algorithm, a neural architecture search method based on 
+[PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
 
 This new version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
 an average 4x speed-up compared to PNAS on same experiment configurations.
 
-The accuracy of the final neural network architectures found are now competitive with other NAS works,
-solving the main drawback of the first POPNAS version, which had a large accuracy GAP with PNAS and similar methods. 
+The top-accuracy neural network architectures found are now competitive with PNAS and other state-of-the-art methods,
+solving the main drawback of the first POPNAS version.
+
+POPNASv2 has been developed by Andrea Falanti for his master's thesis at Politecnico di Milano, and the work has also have been published at the IEEE IJCNN 2022.
+The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/document/9892073.
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
