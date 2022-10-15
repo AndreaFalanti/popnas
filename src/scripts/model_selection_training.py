@@ -67,8 +67,8 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
                                                  original_macro: MacroConfig, min_params: int, max_params: int,
                                                  graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
     m_modifiers = [0, 1]
-    n_modifiers = [-1, 0, 1] if original_macro.n > 1 else [0, 1]
-    f_modifiers = [1, 1.5, 1.75, 2]
+    n_modifiers = [0, 1, 2]
+    f_modifiers = [0.85, 1, 1.5, 1.75, 2]
 
     for i, (cell_spec, best_score, macro) in cells_iter:
         # always generate the original architecture
