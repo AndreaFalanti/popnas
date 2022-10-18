@@ -51,7 +51,13 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         return (x_train, y_train), (x_test, y_test), classes_count, image_shape, channels
 
     def __generate_datasets_from_tfds(self):
-        split_spec = 'train' if self.samples_limit is None else f'train[:{self.samples_limit}]'
+        # EuroSAT have only train split, but conventionally the last 20% of samples is used as test set
+        # (27000 total, 21600 for train, last 5400 for test)
+        if self.dataset_name == 'eurosat/rgb':
+            split_spec = 'train[:21600]' if self.samples_limit is None else f'train[:{min(21600, self.samples_limit)}]'
+        else:
+            split_spec = 'train' if self.samples_limit is None else f'train[:{self.samples_limit}]'
+
         train_ds, info = tfds.load(self.dataset_name, split=split_spec, as_supervised=True, shuffle_files=True, with_info=True,
                                    read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
@@ -61,6 +67,9 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                                read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
         else:
             samples_count = self.samples_limit or info.splits['train'].num_examples
+            if self.dataset_name == 'eurosat/rgb':
+                samples_count = 21600
+
             train_samples = math.ceil(samples_count * (1 - self.val_size))
 
             val_ds = train_ds.skip(train_samples)
@@ -85,7 +94,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 if self.resize_dim is None:
                     raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-                # TODO: samples limit is applied but in a naive way, since unbatching breakes the dataset cardinality.
+                # TODO: samples limit is applied but in a naive way, since unbatching breaks the dataset cardinality.
                 #  Stratification is done due stochasticity, which is not good for low amount of samples.
                 #  Anyway not a big problem since in "real" runs you would not limit the samples deliberately.
                 # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
@@ -203,7 +212,13 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
         # TFDS case
         else:
-            test_ds, info = tfds.load(self.dataset_name, split='test', as_supervised=True, shuffle_files=False, with_info=True,
+            # EuroSAT use the last 20% of samples as test, it isn't directly separated in multiple splits
+            if self.dataset_name == 'eurosat/rgb':
+                split_name = 'train[21600:]'
+            else:
+                split_name = 'test'
+
+            test_ds, info = tfds.load(self.dataset_name, split=split_name, as_supervised=True, shuffle_files=False, with_info=True,
                                       read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
             image_shape = info.features['image'].shape if self.resize_dim is None else self.resize_dim + (info.features['image'].shape[2],)
@@ -267,7 +282,12 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
         # TFDS case
         else:
-            tfds_split = 'train+validation' if self.val_size is None else 'train'
+            # EuroSAT use the last 20% of samples as test, it isn't directly separated in multiple splits. Use the first 80% as train+val.
+            if self.dataset_name == 'eurosat/rgb':
+                tfds_split = 'train[:21600]'
+            else:
+                tfds_split = 'train+validation' if self.val_size is None else 'train'
+
             train_ds, info = tfds.load(self.dataset_name, split=tfds_split, as_supervised=True, shuffle_files=True, with_info=True,
                                        read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
