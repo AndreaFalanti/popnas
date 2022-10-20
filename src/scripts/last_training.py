@@ -74,7 +74,7 @@ def main():
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
-    train_ds, classes_count, input_shape, train_batches = dataset_generator.generate_final_training_dataset()
+    train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
 
     # produce weights for balanced loss if option is enabled in database config
     balance_class_losses = config['dataset'].get('balance_class_losses', False)
@@ -102,7 +102,8 @@ def main():
 
     with train_strategy.scope():
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
-                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
+                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
+                                   preprocessing_model=preprocessing_model)
 
         mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
         model = compile_post_search_model(mo_model, model_gen, train_strategy)

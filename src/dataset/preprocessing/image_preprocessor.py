@@ -1,7 +1,7 @@
 from typing import Optional
 
 import tensorflow as tf
-from tensorflow.keras import layers
+from tensorflow.keras import layers, Sequential
 
 from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
@@ -13,11 +13,11 @@ class ImagePreprocessor(DataPreprocessor):
         self.rescaling = rescaling
         self.to_one_hot = to_one_hot
 
-    def apply_preprocessing(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    def _apply_preprocessing_on_dataset_pipeline(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         if self.resize_dim is not None:
             ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
 
-        # rescale pixel values (usually to [-1, 1] or [0, 1] domain)
+        # rescale pixel values (usually to [-1, 1] or [0, 1] domain), independent from dataset values so can be directly applied
         if self.rescaling is not None:
             normalization_layer = layers.Rescaling(self.rescaling[0], offset=self.rescaling[1])
             ds = ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=AUTOTUNE)
@@ -27,3 +27,9 @@ class ImagePreprocessor(DataPreprocessor):
             ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot)), num_parallel_calls=AUTOTUNE)
 
         return ds
+
+    def _build_preprocessing_embeddable_model(self, ds: tf.data.Dataset) -> Optional[Sequential]:
+        # no layers which require fitting on data here
+        return None
+
+

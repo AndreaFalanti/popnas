@@ -1,8 +1,10 @@
 import math
 import os.path
+from typing import Optional
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import Sequential
 import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets
@@ -77,10 +79,12 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         return train_ds, val_ds, info
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
+    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
         keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
         tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation and self.use_cutout else None
+
+        preprocessing_model = None
 
         # TODO: folds were implemented only in Keras datasets, later i have externalized the logic to support the other dataset format. Still,
         #  the train-validation is done in different ways based on format right now, and if seed is fixed the folds could be identical.
@@ -170,14 +174,16 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             batch_len = None if using_custom_ds else self.batch_size
             train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
-                                                             shuffle=True, shard_policy=shard_policy)
+                                                             shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
             val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append((train_ds, val_ds))
+
+            preprocessing_model = data_preprocessor.preprocessor_model
 
         self._logger.info('Dataset folds built successfully')
 
         # IDE is wrong, variables are always assigned since folds > 1, so at least one cycle is always executed
-        return dataset_folds, classes, image_shape, train_batches, val_batches
+        return dataset_folds, classes, image_shape, train_batches, val_batches, preprocessing_model
 
     def generate_test_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple, int]':
         shard_policy = AutoShardPolicy.DATA
@@ -235,7 +241,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches
 
-    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
+    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int, Optional[Sequential]]':
         keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
         tf_aug = get_image_tf_data_augmentation_functions() if self.use_data_augmentation and self.use_cutout else None
 
@@ -300,7 +306,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
-                                                         shuffle=True, shard_policy=shard_policy)
+                                                         shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
 
         self._logger.info('Final training dataset built successfully')
-        return train_ds, classes, image_shape, train_batches
+        return train_ds, classes, image_shape, train_batches, data_preprocessor.preprocessor_model

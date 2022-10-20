@@ -143,7 +143,7 @@ def main():
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
-    dataset_folds, classes_count, input_shape, train_batches, val_batches = dataset_generator.generate_train_val_datasets()
+    dataset_folds, classes_count, input_shape, train_batches, val_batches, preprocessing_model = dataset_generator.generate_train_val_datasets()
 
     # produce weights for balanced loss if option is enabled in database config
     balance_class_losses = config['dataset'].get('balance_class_losses', False)
@@ -157,7 +157,8 @@ def main():
     # create a model generator instance
     with train_strategy.scope():
         model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
-                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None)
+                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
+                                   preprocessing_model=preprocessing_model)
 
     m = arc_config['motifs']
     n = arc_config['normal_cells_per_motif']

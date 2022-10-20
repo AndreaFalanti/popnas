@@ -1,6 +1,7 @@
 import math
 import os.path
 import re
+from typing import Optional
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -49,7 +50,8 @@ class ModelGenerator:
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
     def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, input_shape: 'tuple[int, ...]',
-                 data_augmentation_model: Sequential = None, save_weights: bool = False):
+                 data_augmentation_model: Optional[Sequential] = None, preprocessing_model: Optional[Sequential] = None,
+                 save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
 
         self.concat_only_unused = arc_params['concat_only_unused_blocks']
@@ -79,6 +81,8 @@ class ModelGenerator:
 
         # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
         self.data_augmentation_model = data_augmentation_model
+        # if not None, some preprocessing is performed directly in the model (parametric layers like normalization, so that work also for test split)
+        self.preprocessing_model = preprocessing_model
 
         # compute output shapes of each cell, to enable easier tensor shape management
         self.cell_output_shapes = self.__compute_cell_output_shapes()
@@ -214,15 +218,16 @@ class ModelGenerator:
 
         model_input = layers.Input(shape=self.input_shape)
 
-        # define inputs usable by blocks
-        # last_output will be the input image at start, while skip_output is set to None to trigger
-        # a special case in build_cell (avoids input normalization)
-        if self.data_augmentation_model is None:
-            cell_inputs = [model_input, model_input]  # [skip, last]
-        # data augmentation integrated in the model to perform it in GPU, input is therefore the output of the data augmentation model
-        else:
-            data_augmentation = self.data_augmentation_model(model_input)
-            cell_inputs = [data_augmentation, data_augmentation]  # [skip, last]
+        start_lookback_input = model_input
+        # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
+        if self.preprocessing_model is not None:
+            start_lookback_input = self.preprocessing_model(start_lookback_input)
+        # data augmentation integrated in the model to perform it in GPU. Update lookback inputs to be the output of the data augmentation model.
+        if self.data_augmentation_model is not None:
+            start_lookback_input = self.data_augmentation_model(start_lookback_input)
+
+        # define inputs usable by blocks, both set to input image (or preprocessed / data augmentation of the input) at start
+        cell_inputs = [start_lookback_input, start_lookback_input]  # [skip, last]
 
         # TODO: adapt it for 1D (time-series)
         # if stem is used, it will add a conv layer + 2 reduction cells at the start of the network
@@ -258,7 +263,7 @@ class ModelGenerator:
 
     def __build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
-        Generate cell from action list. Following PNAS paper, addition is used to combine block results.
+        Generate the cell neural network implementation from the cell encoding.
 
         Args:
             filters: Amount of filters to use

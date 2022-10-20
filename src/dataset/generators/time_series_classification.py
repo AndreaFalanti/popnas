@@ -1,7 +1,9 @@
 import os.path
+from typing import Optional
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import Sequential
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sktime import datasets as sktdata
@@ -48,9 +50,10 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
         return x, y
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int]':
+    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
+        preprocessing_model = None
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
 
@@ -80,14 +83,16 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError()
 
             preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
-            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True)
+            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor)
             dataset_folds.append((train_ds, val_ds))
+
+            preprocessing_model = preprocessor.preprocessor_model
 
         self._logger.info('Dataset folds built successfully')
 
         # IDE is wrong, variables are always assigned since folds > 1, so at least one cycle is always executed
-        return dataset_folds, classes, input_shape, train_batches, val_batches
+        return dataset_folds, classes, input_shape, train_batches, val_batches, preprocessing_model
 
     def generate_test_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple, int]':
         # Custom datasets
@@ -109,7 +114,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, input_shape, batches
 
-    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int]':
+    def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int, Optional[Sequential]]':
         # Custom datasets
         if self.dataset_path is not None:
             x_train, y_train = self._get_numpy_split('train')
@@ -130,8 +135,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             raise NotImplementedError()
 
         preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
-        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True)
+        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
 
         self._logger.info('Dataset folds built successfully')
-        return train_ds, classes, input_shape, train_batches
+        return train_ds, classes, input_shape, train_batches, preprocessor.preprocessor_model
 
