@@ -28,6 +28,24 @@ def _load_ts(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
     return x_train, y_train
 
 
+def _convert_labels_to_zero_indexed_categorical(y: np.ndarray):
+    class_labels = np.unique(y)     # unique already sort in ascending order
+    num_classes = len(class_labels)
+
+    # already 0-indexed labels
+    if set(class_labels) == set(range(num_classes)):
+        return y
+    else:
+        # Copy array and use original for mask purposes.
+        # Doing this is possible to avoid cases where labels can be merged (example: [-1, 0], -1 are substituted with 0,
+        # then 0 are substituted with 1, so all labels become 1). This approach solves the issue.
+        new_y = y.copy()
+        for i, label in enumerate(class_labels):
+            new_y[y == label] = i
+
+        return new_y
+
+
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
@@ -47,6 +65,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
         # make a plain list to perform one_hot correctly in preprocessor
         y = np.squeeze(y)
+        # also make sure that labels are consecutive 0-indexed integers (0 to num_classes - 1)
+        y = _convert_labels_to_zero_indexed_categorical(y)
 
         return x, y
 
