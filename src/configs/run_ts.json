@@ -6,10 +6,12 @@
             "identity",
             "3 dconv",
             "7 dconv",
-            "15 dconv",
+            "13 dconv",
+            "21 dconv",
             "3 conv",
             "7 conv",
-            "15 conv",
+            "13 conv",
+            "21 conv",
             "2 maxpool",
             "2 avgpool"
         ]
@@ -56,8 +58,8 @@
         "cache": true,
         "folds": 1,
         "samples": null,
-        "balance_class_losses": false,
-        "normalize": false,
+        "balance_class_losses": true,
+        "normalize": true,
         "rescale": false,
         "data_augmentation": {
             "enabled": false,
