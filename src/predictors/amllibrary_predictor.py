@@ -102,7 +102,7 @@ class AMLLibraryPredictor(Predictor):
         # TODO: actually tested only on linear models, SVR should use kernel probably while XGBoost the tree explainer
         if self.perform_feature_analysis and set(self.techniques).issubset({'NNLS', 'LRRidge'}):
             features_df = dataset_df.drop(columns=self.drop_columns, errors='ignore')
-            save_feature_analysis_plots(self.model.get_regressor(), features_df, output_folder, save_pred_every=500, model_type='linear')
+            save_feature_analysis_plots(self.model.get_regressor(), features_df, output_folder, save_pred_every=30, model_type='linear')
 
     def predict(self, x: list) -> float:
         features_df = pd.DataFrame([x], columns=self.feature_names)

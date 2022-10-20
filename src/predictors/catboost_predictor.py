@@ -102,7 +102,7 @@ class CatBoostPredictor(Predictor):
             result_pairs.to_csv(os.path.join(train_log_folder, 'feature_importance.csv'))
 
             features_df = dataset_df.drop(columns=self.drop_columns)
-            save_feature_analysis_plots(self.model, features_df, train_log_folder, save_pred_every=60)
+            save_feature_analysis_plots(self.model, features_df, train_log_folder, save_pred_every=30)
             self._logger.info('Feature analysis complete')
 
     def predict(self, x: list) -> float:
