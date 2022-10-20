@@ -21,11 +21,11 @@ def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: st
 
     features_num = len(features_df.columns.to_list())
     shap.plots.beeswarm(shap_values, max_display=features_num, show=False)
-    plt.savefig(os.path.join(log_folder, 'shap_impact_on_output.png'), bbox_inches='tight')
+    plt.savefig(os.path.join(log_folder, 'shap_impact_on_output.pdf'), bbox_inches='tight')
     plt.close()
 
     shap.plots.bar(shap_values, max_display=features_num, show=False)
-    plt.savefig(os.path.join(log_folder, 'shap_importance.png'), bbox_inches='tight')
+    plt.savefig(os.path.join(log_folder, 'shap_importance.pdf'), bbox_inches='tight')
     plt.close()
 
     if save_pred_every is not None:
@@ -35,7 +35,7 @@ def save_feature_analysis_plots(model, features_df: pd.DataFrame, log_folder: st
 
         for i in range(len(shap_values) // save_pred_every):
             shap.plots.waterfall(shap_values[i * save_pred_every], max_display=features_num, show=False)
-            plt.savefig(os.path.join(pred_path, f'shap_pred{i * save_pred_every}.png'), bbox_inches='tight')
+            plt.savefig(os.path.join(pred_path, f'shap_pred{i * save_pred_every}.pdf'), bbox_inches='tight')
             plt.close()
 
     print('Shap plots written successfully')
