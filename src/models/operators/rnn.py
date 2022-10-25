@@ -63,7 +63,7 @@ class RnnBatchReduce(Layer):
 
 
 class Lstm(RnnBatch):
-    def __init__(self, filters: int, weight_reg: Optional[Regularizer] = None, name='LstmLayerNorm', **kwargs):
+    def __init__(self, filters: int, weight_reg: Optional[Regularizer] = None, name='Lstm', **kwargs):
         super().__init__(filters, weight_reg, name=name, **kwargs)
 
         # TODO: layer norm version is incredibly slow (between 10 and 100 times slower), no CUDNN optimization seems available. Use normal LSTM.
