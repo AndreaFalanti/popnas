@@ -140,6 +140,7 @@ class OpInstantiator:
             return PoolingConv(filters, pool_type, to_int_tuple(pool_size), strides, name=layer_name, weight_reg=self.weight_reg) if adapt_depth \
                 else Pooling(pool_type, to_int_tuple(pool_size), strides, name=layer_name)
 
+        # extra operators specific for images
         if self.op_dims == 2:
             match = self.op_regexes['cvt'].match(op_name)  # type: re.Match
             if match:
@@ -153,5 +154,15 @@ class OpInstantiator:
                 layer_name = f'{match.group(1)}k-{match.group(2)}h_scvt{layer_name_suffix}'
                 return SimplifiedCVT(emb_dim=filters, emb_kernel=int(match.group(1)), emb_stride=strides[0],
                                      heads=int(match.group(2)), dim_head=filters, weight_reg=self.weight_reg, name=layer_name)
+        # extra operators specific for time series
+        elif self.op_dims == 1:
+            if op_name == 'lstm':
+                layer_name = f'lstm{layer_name_suffix}'
+                rnn = Lstm(filters, weight_reg=self.weight_reg, name=layer_name)
+                return RnnBatchReduce(rnn, strides) if strided else rnn
+            if op_name == 'gru':
+                layer_name = f'gru{layer_name_suffix}'
+                rnn = Gru(filters, weight_reg=self.weight_reg, name=layer_name)
+                return RnnBatchReduce(rnn, strides) if strided else rnn
 
         raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')
