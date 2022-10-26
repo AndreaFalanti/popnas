@@ -29,6 +29,16 @@ def compute_layer_norm_params(filters: int):
     return 2 * filters
 
 
+def compute_lstm_params(filters_in: int, filters_out: int):
+    # lstm params + batch normalization that follows the rnn
+    return 4 * (filters_out * filters_in + filters_out ** 2 + filters_out) + compute_batch_norm_params(filters_out)
+
+
+def compute_gru_params(filters_in: int, filters_out: int):
+    # lstm params + batch normalization that follows the rnn
+    return 3 * (filters_out * filters_in + filters_out ** 2 + 2 * filters_out) + compute_batch_norm_params(filters_out)
+
+
 def compute_conv_params(kernel: 'tuple[Union[str, int], ...]', filters_in: int, filters_out: int, bias: bool = True, bn: bool = True):
     '''
     Formula for computing the parameters of many convolutional operators.
@@ -97,6 +107,12 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
     # if identity need to change shape, then it becomes a pointwise convolution
     if op == 'identity':
         return 0 if preserve_shape else compute_conv_params((1, 1), input_filters, output_filters)
+
+    if op == 'lstm':
+        return compute_lstm_params(input_filters, output_filters)
+
+    if op == 'gru':
+        return compute_gru_params(input_filters, output_filters)
 
     # single convolution case
     match = op_regex_dict['conv'].match(op)  # type: re.Match
