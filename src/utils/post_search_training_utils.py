@@ -131,7 +131,7 @@ def build_config(args, custom_json_path: str):
         config[key] = merge_config_section(key)
 
     # set custom batch size, if present
-    if args.b is not None:
+    if hasattr(args, 'b') and args.b is not None:
         config['dataset']['batch_size'] = args.b
         config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (args.b / search_config['dataset']['batch_size'])
 
@@ -144,7 +144,7 @@ def build_config(args, custom_json_path: str):
     try:
         ts_device = args.ts if args.ts is not None else search_config['others']['train_strategy']
         train_strategy = initialize_train_strategy(ts_device)
-    except KeyError:
+    except AttributeError:
         train_strategy = initialize_train_strategy(None)
 
     return config, train_strategy
