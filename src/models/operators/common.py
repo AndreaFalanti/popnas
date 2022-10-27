@@ -1,7 +1,9 @@
 import operator
 from abc import abstractmethod, ABC
+from typing import Optional
 
 import tensorflow as tf
+from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, \
     Conv1D, Conv1DTranspose, SeparableConv1D, MaxPooling1D, AveragePooling1D, \
     BatchNormalization, Layer
@@ -30,7 +32,7 @@ class Identity(Layer):
 
 # TODO: deprecated in previous versions, even if it should work fine for 2D. Right now it needs a refactor to adapt to different input dims.
 # class IdentityReshaper(Layer):
-#     def __init__(self, filters, input_filters, strides, name='identity_reshaper', **kwargs):
+#     def __init__(self, filters, input_filters: int, strides: 'tuple[int, ...]', name='identity_reshaper', **kwargs):
 #         '''
 #         Identity alternative when the tensor shape between input and output differs.
 #         IdentityReshaper can apply a stride without doing any operation,
@@ -61,7 +63,8 @@ class Identity(Layer):
 
 class OpBatchActivation(Layer, ABC):
     @abstractmethod
-    def __init__(self, filters, kernel, strides, weight_reg=None, name='abstract', **kwargs):
+    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='abstract', **kwargs):
         '''
         Abstract utility class used as baseline for any {Operation - Batch Normalization - Activation} layer.
         Op attribute must be set to a Keras layer or TF nn operation in all concrete implementations.
@@ -94,7 +97,8 @@ class OpBatchActivation(Layer, ABC):
 
 
 class SeparableConvolution(OpBatchActivation):
-    def __init__(self, filters, kernel, strides, weight_reg=None, name='dconv', **kwargs):
+    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='dconv', **kwargs):
         '''
         Constructs a {Separable Convolution - Batch Normalization - Activation} layer.
         '''
@@ -107,7 +111,8 @@ class SeparableConvolution(OpBatchActivation):
 
 
 class Convolution(OpBatchActivation):
-    def __init__(self, filters, kernel, strides, weight_reg=None, name='conv', **kwargs):
+    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='conv', **kwargs):
         '''
         Constructs a {Spatial Convolution - Batch Normalization - Activation} layer.
         '''
@@ -119,7 +124,8 @@ class Convolution(OpBatchActivation):
 
 
 class TransposeConvolution(OpBatchActivation):
-    def __init__(self, filters, kernel, strides, weight_reg=None, name='tconv', **kwargs):
+    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='tconv', **kwargs):
         '''
         Constructs a {Transpose Convolution - Batch Normalization - Activation} layer.
         '''
@@ -131,7 +137,8 @@ class TransposeConvolution(OpBatchActivation):
 
 
 class TransposeConvolutionStack(Layer):
-    def __init__(self, filters, kernel, strides, weight_reg=None, name='tconv', **kwargs):
+    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='tconv', **kwargs):
         '''
         Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
         '''
@@ -163,7 +170,8 @@ class TransposeConvolutionStack(Layer):
 
 
 class StackedConvolution(Layer):
-    def __init__(self, filter_list, kernel_list, stride_list, weight_reg=None, name='stack_conv', **kwargs):
+    def __init__(self, filter_list: 'list[int]', kernel_list: 'list[tuple]', stride_list: 'list[tuple]', weight_reg: Optional[Regularizer] = None,
+                 name='stack_conv', **kwargs):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
@@ -197,7 +205,7 @@ class StackedConvolution(Layer):
 
 
 class Pooling(Layer):
-    def __init__(self, pool_type, size, strides, name='pool', **kwargs):
+    def __init__(self, pool_type: str, size: 'tuple[int, ...]', strides: 'tuple[int, ...]', name='pool', **kwargs):
         '''
         Constructs a standard pooling layer (average or max).
         '''
@@ -223,7 +231,8 @@ class Pooling(Layer):
 
 
 class PoolingConv(Layer):
-    def __init__(self, filters, pool_type, size, strides, weight_reg=None, name='pool_conv', **kwargs):
+    def __init__(self, filters: int, pool_type: str, size: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
+                 name='pool_conv', **kwargs):
         '''
         Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
         to adapt the output depth to filters size.

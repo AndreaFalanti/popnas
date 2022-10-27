@@ -38,7 +38,7 @@ class RnnBatch(Layer, ABC):
 
 
 class RnnBatchReduce(Layer):
-    def __init__(self, rnn_layer: RnnBatch, strides: tuple, **kwargs):
+    def __init__(self, rnn_layer: RnnBatch, strides: 'tuple[int, ...]', **kwargs):
         '''
         Abstract utility class used as baseline for any {Operation - Batch Normalization - Activation} layer.
         Op attribute must be set to a Keras layer or TF nn operation in all concrete implementations.
