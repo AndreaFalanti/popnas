@@ -61,14 +61,10 @@ class Identity(Layer):
 #         return config
 
 
-class OpBatchActivation(Layer, ABC):
-    @abstractmethod
+class ConvBatchActivation(Layer, ABC):
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
                  name='abstract', **kwargs):
-        '''
-        Abstract utility class used as baseline for any {Operation - Batch Normalization - Activation} layer.
-        Op attribute must be set to a Keras layer or TF nn operation in all concrete implementations.
-        '''
+        ''' Abstract utility class used as baseline for any {Convolution operator - Batch Normalization - Activation} layer. '''
         super().__init__(name=name, **kwargs)
         self.filters = filters
         self.kernel = kernel
@@ -77,8 +73,13 @@ class OpBatchActivation(Layer, ABC):
 
         self.bn = BatchNormalization()
 
-        # concrete implementations must use a valid Keras layer / TF operation, assigning it to this variable during __init__
-        self.op = None
+        # concrete implementations must use a valid convolutional Keras layer / TF operation
+        self.op = self._build_convolutional_layer()
+
+    @abstractmethod
+    def _build_convolutional_layer(self):
+        ''' Build the convolutional operator. '''
+        raise NotImplementedError()
 
     def call(self, inputs, training=None, mask=None):
         x = self.op(inputs)
@@ -96,44 +97,29 @@ class OpBatchActivation(Layer, ABC):
         return config
 
 
-class SeparableConvolution(OpBatchActivation):
-    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
-                 name='dconv', **kwargs):
-        '''
-        Constructs a {Separable Convolution - Batch Normalization - Activation} layer.
-        '''
-        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
-
-        dconv = op_dim_selector['dconv'][len(kernel)]
-        self.op = dconv(filters, kernel, strides=strides, padding='same',
+class SeparableConvolution(ConvBatchActivation):
+    ''' Constructs a {Separable Convolution - Batch Normalization - Activation} layer. '''
+    def _build_convolutional_layer(self):
+        dconv = op_dim_selector['dconv'][len(self.kernel)]
+        self.op = dconv(self.filters, self.kernel, strides=self.strides, padding='same',
                         depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
-                        depthwise_regularizer=weight_reg, pointwise_regularizer=weight_reg)
+                        depthwise_regularizer=self.weight_reg, pointwise_regularizer=self.weight_reg)
 
 
-class Convolution(OpBatchActivation):
-    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
-                 name='conv', **kwargs):
-        '''
-        Constructs a {Spatial Convolution - Batch Normalization - Activation} layer.
-        '''
-        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
-
-        conv = op_dim_selector['conv'][len(kernel)]
-        self.op = conv(filters, kernel, strides=strides, padding='same',
-                       kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+class Convolution(ConvBatchActivation):
+    ''' Constructs a {Spatial Convolution - Batch Normalization - Activation} layer. '''
+    def _build_convolutional_layer(self):
+        conv = op_dim_selector['conv'][len(self.kernel)]
+        self.op = conv(self.filters, self.kernel, strides=self.strides, padding='same',
+                       kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
 
 
-class TransposeConvolution(OpBatchActivation):
-    def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
-                 name='tconv', **kwargs):
-        '''
-        Constructs a {Transpose Convolution - Batch Normalization - Activation} layer.
-        '''
-        super().__init__(filters, kernel, strides, weight_reg, name=name, **kwargs)
-
-        tconv = op_dim_selector['tconv'][len(kernel)]
-        self.op = tconv(filters, kernel, strides, padding='same',
-                        kernel_initializer='he_uniform', kernel_regularizer=weight_reg)
+class TransposeConvolution(ConvBatchActivation):
+    ''' Constructs a {Transpose Convolution - Batch Normalization - Activation} layer. '''
+    def _build_convolutional_layer(self):
+        tconv = op_dim_selector['tconv'][len(self.kernel)]
+        self.op = tconv(self.filters, self.kernel, self.strides, padding='same',
+                        kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
 
 
 class TransposeConvolutionStack(Layer):
