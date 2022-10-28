@@ -250,35 +250,25 @@ class Pooling(Layer):
 
 
 class PoolingConv(Layer):
-    def __init__(self, filters: int, pool_type: str, size: 'tuple[int, ...]', strides: 'tuple[int, ...]', weight_reg: Optional[Regularizer] = None,
-                 name='pool_conv', **kwargs):
-        '''
-        Constructs a pooling layer (average or max). It also adds a pointwise convolution (using Convolution class)
-        to adapt the output depth to filters size.
-        '''
-        super().__init__(name=name, **kwargs)
+    def __init__(self, pool_layer: Pooling, filters: int, weight_reg: Optional[Regularizer] = None, **kwargs):
+        ''' Adds a pointwise convolution (using Convolution class) to a Pooling layer, to adapt the output depth to filters size. '''
+        super().__init__(name=f'{pool_layer.name}_pw', **kwargs)
+        self.pool_layer = pool_layer
         self.filters = filters
-        self.pool_type = pool_type
-        self.size = size
-        self.strides = strides
         self.weight_reg = weight_reg
 
-        self.pool = Pooling(pool_type, size, strides)
-
-        ones = tuple([1] * len(size))
+        ones = tuple([1] * len(self.pool_layer.size))
         self.pointwise_conv = Convolution(filters, kernel=ones, strides=ones, weight_reg=weight_reg)
 
     def call(self, inputs, training=None, mask=None):
-        output = self.pool(inputs)
-        return self.pointwise_conv(output)
+        x = self.pool_layer(inputs)
+        return self.pointwise_conv(x)
 
     def get_config(self):
         config = super().get_config()
         config.update({
+            'pool_layer': self.pool_layer,
             'filters': self.filters,
-            'pool_type': self.pool_type,
-            'size': self.size,
-            'strides': self.strides,
             'weight_reg': self.weight_reg
         })
         return config
