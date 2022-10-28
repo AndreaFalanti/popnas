@@ -8,7 +8,7 @@ import tensorflow_addons as tfa
 from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model, Sequential
 
 import log_service
-import models.operators as ops
+import models.operators.layers as ops
 from models.op_instantiator import OpInstantiator
 from utils.func_utils import list_flatten
 from utils.nn_utils import compute_tensor_byte_size
