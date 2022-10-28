@@ -5,7 +5,7 @@ import tensorflow_addons as tfa
 from tensorflow.keras.layers import BatchNormalization, Layer, RNN, GRU, LSTM
 from tensorflow.keras.regularizers import Regularizer
 
-from models.operators import Pooling
+from models.operators.layers import Pooling
 
 
 class RnnBatch(Layer, ABC):
