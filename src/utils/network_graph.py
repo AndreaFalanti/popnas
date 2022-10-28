@@ -39,7 +39,7 @@ def compute_gru_params(filters_in: int, filters_out: int):
     return 3 * (filters_out * filters_in + filters_out ** 2 + 2 * filters_out) + compute_batch_norm_params(filters_out)
 
 
-def compute_conv_params(kernel: 'tuple[Union[str, int], ...]', filters_in: int, filters_out: int, bias: bool = True, bn: bool = True):
+def compute_conv_params(kernel: Union[str, 'tuple[Union[str, int], ...]'], filters_in: int, filters_out: int, bias: bool = True, bn: bool = True):
     '''
     Formula for computing the parameters of many convolutional operators.
 
@@ -50,7 +50,10 @@ def compute_conv_params(kernel: 'tuple[Union[str, int], ...]', filters_in: int, 
         bias: use bias or not
         bn: followed by BatchNormalization or not
     '''
-    # +1 is bias term
+    # split kernel in multiple digits, if in str format
+    if isinstance(kernel, str):
+        kernel = kernel.split('x')
+
     kernel = to_int_tuple(kernel)  # cast to int in case are elements are str
     b = 1 if bias else 0
     bn_params = compute_batch_norm_params(filters_out) if bn else 0
@@ -58,10 +61,15 @@ def compute_conv_params(kernel: 'tuple[Union[str, int], ...]', filters_in: int, 
     return (prod(kernel) * filters_in + b) * filters_out + bn_params
 
 
-def compute_dconv_params(kernel: 'tuple[Union[str, int], ...]', filters_in: int, filters_out: int, bias: bool = True, bn: bool = True):
+def compute_dconv_params(kernel: Union[str, 'tuple[Union[str, int], ...]'], filters_in: int, filters_out: int, bias: bool = True, bn: bool = True):
     ''' Depthwise separable convolution + batch norm. '''
     # bias term is used only in pointwise for unknown reasons, also it has no batch normalization,
     # so it is computed separately without "compute_conv_params" function.
+
+    # split kernel in multiple digits, if in str format
+    if isinstance(kernel, str):
+        kernel = kernel.split('x')
+
     kernel = to_int_tuple(kernel)  # cast to int in case are elements are str
     return (prod(kernel) * filters_in) + \
            compute_conv_params((1, 1), filters_in, filters_out, bias=bias, bn=bn)
@@ -117,7 +125,7 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
     # single convolution case
     match = op_regex_dict['conv'].match(op)  # type: re.Match
     if match:
-        return compute_conv_params(match.groups(), input_filters, output_filters)
+        return compute_conv_params(match.group('kernel'), input_filters, output_filters)
 
     # pooling case, if it needs to change shape, then it is followed by a pointwise convolution
     match = op_regex_dict['pool'].match(op)  # type: re.Match
@@ -127,20 +135,18 @@ def compute_op_params(op: str, input_shape: TensorShape, output_shape: TensorSha
     # stacked convolution case, both use batch normalization and only the first one modifies the shape
     match = op_regex_dict['stack_conv'].match(op)  # type: re.Match
     if match:
-        # half groups are the first kernel, the last half the second one
-        g_size = len(match.groups())
-        return compute_conv_params(match.groups()[:g_size // 2], input_filters, output_filters) + \
-               compute_conv_params(match.groups()[g_size // 2:], output_filters, output_filters)
+        return compute_conv_params(match.group('kernel_1'), input_filters, output_filters) + \
+               compute_conv_params(match.group('kernel_2'), output_filters, output_filters)
 
     # depthwise separable convolution case
     match = op_regex_dict['dconv'].match(op)  # type: re.Match
     if match:
-        return compute_dconv_params(match.groups(), input_filters, output_filters)
+        return compute_dconv_params(match.group('kernel'), input_filters, output_filters)
 
     match = op_regex_dict['tconv'].match(op)  # type: re.Match
     if match:
-        return compute_conv_params(match.groups(), input_filters, output_filters) + \
-               compute_conv_params(match.groups(), output_filters, output_filters)
+        return compute_conv_params(match.group('kernel'), input_filters, output_filters) + \
+               compute_conv_params(match.group('kernel'), output_filters, output_filters)
 
     # Convolutional vision transformer cases
     match = op_regex_dict['cvt'].match(op)  # type: re.Match
@@ -291,7 +297,7 @@ class NetworkGraph:
     This class is intended to produce a graph with a 1000x speedup compared to generating it in keras, providing
     a standard graph structure which can be analyzed with operational research techniques.
 
-    It is also useful to estimate very fast the amount of memory required by the neural network.
+    It is also useful to estimate quickly the amount of memory required by the neural network.
     '''
 
     def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int,

@@ -29,13 +29,14 @@ class GraphGenerator:
         # add groups to detect kernel size, based on op dimensionality.
         # e.g. Conv2D -> 3x3 conv, Conv1D -> 3 conv
         kernel_dims = len(self.input_shape) - 1
-        op_kernel_groups = 'x'.join([r'(\d+)'] * kernel_dims)
+        op_kernel_group = 'x'.join([r'\d+'] * kernel_dims)
+        opt_dilation_rate = rf'(:\d+dr)?'
 
-        return {'conv': re.compile(rf'{op_kernel_groups} conv'),
-                'dconv': re.compile(rf'{op_kernel_groups} dconv'),
-                'tconv': re.compile(rf'{op_kernel_groups} tconv'),
-                'stack_conv': re.compile(rf'{op_kernel_groups}-{op_kernel_groups} conv'),
-                'pool': re.compile(rf'{op_kernel_groups} (max|avg)pool'),
+        return {'conv': re.compile(rf'(?P<kernel>{op_kernel_group}){opt_dilation_rate} conv'),
+                'dconv': re.compile(rf'(?P<kernel>{op_kernel_group}){opt_dilation_rate} dconv'),
+                'tconv': re.compile(rf'(?P<kernel>{op_kernel_group}) tconv'),
+                'stack_conv': re.compile(rf'(?P<kernel_1>{op_kernel_group})-(?P<kernel_2>{op_kernel_group}) conv'),
+                'pool': re.compile(rf'(?P<kernel>{op_kernel_group}) (max|avg)pool'),
                 'cvt': re.compile(r'(\d+)k-(\d+)h-(\d+)b cvt'),
                 'scvt': re.compile(r'(\d+)k-(\d+)h scvt')}
 
