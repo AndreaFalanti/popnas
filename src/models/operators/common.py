@@ -83,7 +83,7 @@ class ConvBatchActivation(Layer, ABC):
         self.op = self._build_convolutional_layer()
 
     @abstractmethod
-    def _build_convolutional_layer(self):
+    def _build_convolutional_layer(self) -> Layer:
         ''' Build the convolutional operator. '''
         raise NotImplementedError()
 
@@ -111,7 +111,7 @@ class DilatedConvBatchActivationPooling(Layer):
         support the usage of both striding and dilation in the same operator (to avoid discarding values completely).
         Takes as parameter a ConvBatchActivation layer with dilation > 1 and stride 1, then adapts the spatial dim with a max pooling.
         '''
-        super().__init__(name=f'pooled_{conv_batch_act_layer.name}', **kwargs)
+        super().__init__(name=f'{conv_batch_act_layer.name}_pooled', **kwargs)
         self.conv_batch_act_layer = conv_batch_act_layer
 
         # build size and stride of pooling operator
@@ -132,27 +132,27 @@ class DilatedConvBatchActivationPooling(Layer):
 
 class SeparableConvolution(ConvBatchActivation):
     ''' Constructs a {Separable Convolution - Batch Normalization - Activation} layer. '''
-    def _build_convolutional_layer(self):
+    def _build_convolutional_layer(self) -> Layer:
         dconv = op_dim_selector['dconv'][len(self.kernel)]
-        self.op = dconv(self.filters, self.kernel, strides=self.strides, dilation_rate=self.dilation_rate, padding='same',
-                        depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
-                        depthwise_regularizer=self.weight_reg, pointwise_regularizer=self.weight_reg)
+        return dconv(self.filters, self.kernel, strides=self.strides, dilation_rate=self.dilation_rate, padding='same',
+                     depthwise_initializer='he_uniform', pointwise_initializer='he_uniform',
+                     depthwise_regularizer=self.weight_reg, pointwise_regularizer=self.weight_reg)
 
 
 class Convolution(ConvBatchActivation):
     ''' Constructs a {Spatial Convolution - Batch Normalization - Activation} layer. '''
-    def _build_convolutional_layer(self):
+    def _build_convolutional_layer(self) -> Layer:
         conv = op_dim_selector['conv'][len(self.kernel)]
-        self.op = conv(self.filters, self.kernel, strides=self.strides, dilation_rate=self.dilation_rate, padding='same',
-                       kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
+        return conv(self.filters, self.kernel, strides=self.strides, dilation_rate=self.dilation_rate, padding='same',
+                    kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
 
 
 class TransposeConvolution(ConvBatchActivation):
     ''' Constructs a {Transpose Convolution - Batch Normalization - Activation} layer. '''
-    def _build_convolutional_layer(self):
+    def _build_convolutional_layer(self) -> Layer:
         tconv = op_dim_selector['tconv'][len(self.kernel)]
-        self.op = tconv(self.filters, self.kernel, self.strides, dilation_rate=self.dilation_rate, padding='same',
-                        kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
+        return tconv(self.filters, self.kernel, self.strides, dilation_rate=self.dilation_rate, padding='same',
+                     kernel_initializer='he_uniform', kernel_regularizer=self.weight_reg)
 
 
 class TransposeConvolutionStack(Layer):
