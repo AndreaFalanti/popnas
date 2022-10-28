@@ -73,8 +73,9 @@ class ConvBatchActivation(Layer, ABC):
         self.weight_reg = weight_reg
 
         if any(map(lambda x: x > 1, self.strides)) and dilation_rate > 1:
-            raise AttributeError('TensorFlow does not support using strides and dilation at same time. Use DilatedConvBatchActivationPooling class,'
-                                 ' which adapts dilated convolutions for reduction cells.')
+            # TensorFlow does not support using strides and dilation at same time. Strides are set to 1 to avoid problems.
+            # Pass the layer to DilatedConvBatchActivationPooling class to adapt spatial resolution in reduction cells.
+            self.strides = tuple([1] * len(self.strides))
 
         self.bn = BatchNormalization()
 
@@ -103,14 +104,14 @@ class ConvBatchActivation(Layer, ABC):
         return config
 
 
-class DilatedConvBatchActivationPooling(Layer, ABC):
+class DilatedConvBatchActivationPooling(Layer):
     def __init__(self, conv_batch_act_layer: ConvBatchActivation, **kwargs):
         '''
         Utility class to adapt dilated convolution layers to spatial resolution changes (like in reduction cell), since TensorFlow doesn't
         support the usage of both striding and dilation in the same operator (to avoid discarding values completely).
         Takes as parameter a ConvBatchActivation layer with dilation > 1 and stride 1, then adapts the spatial dim with a max pooling.
         '''
-        super().__init__(**kwargs)
+        super().__init__(name=f'pooled_{conv_batch_act_layer.name}', **kwargs)
         self.conv_batch_act_layer = conv_batch_act_layer
 
         # build size and stride of pooling operator
