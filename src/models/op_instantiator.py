@@ -1,16 +1,14 @@
-import re
-
 from tensorflow.keras.layers import Layer, GlobalAveragePooling2D, GlobalAveragePooling1D, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
-from utils.func_utils import to_int_tuple
-from .operators import *
+from models.operators.layers import Convolution
+from models.operators.allocators import *
 
 
 class OpInstantiator:
     '''
     Class that takes care of building and returning valid Keras layers for the operators and input shape considered.
-    Based on input shape, 1D or 2D operators are used.
+    Based on input shape, 1D or 2D operators are used accordingly.
     '''
 
     def __init__(self, input_dims: int, block_op_join: str, reduction_stride_factor: int = 2, weight_reg: Regularizer = None):
@@ -26,30 +24,35 @@ class OpInstantiator:
         self.block_join_op_selector = {'add': Add, 'avg': Average}
         self.block_op_join = block_op_join
 
-        self.op_regexes = self.__compile_op_regexes()
+        self.op_allocators = self._define_common_allocators()
 
-        # enable Convolutional Vision Transformer only for images
-        if input_dims == 3:
-            self.op_regexes['cvt'] = re.compile(r'(\d+)k-(\d+)h-(\d+)b cvt')
-            self.op_regexes['scvt'] = re.compile(r'(\d+)k-(\d+)h scvt')
+        # enable operators available only for images
+        if self.op_dims == 2:
+            self.op_allocators.update(self._define_2d_specific_allocators())
+        elif self.op_dims == 1:
+            self.op_allocators.update(self._define_1d_specific_allocators())
 
-    def __compile_op_regexes(self):
-        '''
-        Build a dictionary with compiled regexes for each parametrized supported operation.
-        Adapt regexes based on input dimensionality.
+    def _define_common_allocators(self) -> 'dict[str, BaseOpAllocator]':
+        return {
+            'identity': IdentityOpAllocator(self.op_dims),
+            'conv': ConvolutionOpAllocator(self.op_dims),
+            'dconv': SeparableConvolutionOpAllocator(self.op_dims),
+            'tconv': TransposeConvolutionOpAllocator(self.op_dims),
+            'stack_conv': StackedConvolutionOpAllocator(self.op_dims),
+            'pool': PoolOpAllocator(self.op_dims)
+        }
 
-        Returns:
-            (dict): Regex dictionary
-        '''
-        # add groups to detect kernel size, based on op dimensionality.
-        # e.g. Conv2D -> 3x3 conv, Conv1D -> 3 conv
-        op_kernel_groups = 'x'.join([r'(\d+)'] * self.op_dims)
+    def _define_2d_specific_allocators(self) -> 'dict[str, BaseOpAllocator]':
+        return {
+            'cvt': CVTOpAllocator(self.op_dims),
+            'scvt': SimplifiedCVTOpAllocator(self.op_dims)
+        }
 
-        return {'conv': re.compile(rf'{op_kernel_groups} conv'),
-                'dconv': re.compile(rf'{op_kernel_groups} dconv'),
-                'tconv': re.compile(rf'{op_kernel_groups} tconv'),
-                'stack_conv': re.compile(rf'{op_kernel_groups}-{op_kernel_groups} conv'),
-                'pool': re.compile(rf'{op_kernel_groups} (max|avg)pool')}
+    def _define_1d_specific_allocators(self) -> 'dict[str, BaseOpAllocator]':
+        return {
+            'lstm': LSTMOpAllocator(self.op_dims),
+            'gru': GRUOpAllocator(self.op_dims)
+        }
 
     def generate_block_join_operator(self, name_suffix: str):
         return self.block_join_op_selector[self.block_op_join](name=f'{self.block_op_join}{name_suffix}')
@@ -79,90 +82,18 @@ class OpInstantiator:
         adapt_depth = filters != input_filters
         strides = self.reduction_stride if strided else self.normal_stride
 
-        # check non parametrized operations first since they don't require a regex and are faster
-        if op_name == 'identity':
-            # 'identity' action case, if using stride-2, then it's actually handled as a pointwise convolution
-            if strided or adapt_depth:
-                # TODO: IdentityReshaper leads to a strange non-deterministic bug and for now it has been disabled, reverting to pointwise convolution
-                # layer_name = f'identity_reshaper{block_info_suffix}'
-                # x = IdentityReshaper(filters, input_filters, strides, name=layer_name)
-                layer_name = f'pointwise_id{layer_name_suffix}'
-                kernel = tuple([1] * self.op_dims)
-                return Convolution(filters, kernel, strides, weight_reg=self.weight_reg, name=layer_name)
-            else:
-                # else just submits a linear layer if shapes match
-                layer_name = f'identity{layer_name_suffix}'
-                return Identity(name=layer_name)
-
-        # check for separable conv
-        match = self.op_regexes['dconv'].match(op_name)  # type: re.Match
-        if match:
-            layer_name = f'{"x".join(match.groups())}_dconv{layer_name_suffix}'
-            return SeparableConvolution(filters, kernel=to_int_tuple(match.groups()), strides=strides,
-                                        name=layer_name, weight_reg=self.weight_reg)
-
-        # check for transpose conv
-        match = self.op_regexes['tconv'].match(op_name)  # type: re.Match
-        if match:
-            layer_name = f'{"x".join(match.groups())}_tconv{layer_name_suffix}'
-            return TransposeConvolutionStack(filters, kernel=to_int_tuple(match.groups()), strides=strides,
-                                             name=layer_name, weight_reg=self.weight_reg)
-
-        # check for stacked conv operation
-        match = self.op_regexes['stack_conv'].match(op_name)  # type: re.Match
-        if match:
-            g_count = len(match.groups())
-            first_kernel_groups = match.groups()[:g_count // 2]
-            second_kernel_groups = match.groups()[g_count // 2:]
-
-            f = [filters, filters]
-            k = [to_int_tuple(first_kernel_groups), to_int_tuple(second_kernel_groups)]
-            s = [strides, self.normal_stride]
-
-            layer_name = f'{"x".join(first_kernel_groups)}-{"x".join(second_kernel_groups)}_conv{layer_name_suffix}'
-            return StackedConvolution(f, k, s, name=layer_name, weight_reg=self.weight_reg)
-
-        # check for standard conv
-        match = self.op_regexes['conv'].match(op_name)  # type: re.Match
-        if match:
-            layer_name = f'{"x".join(match.groups())}_conv{layer_name_suffix}'
-            return Convolution(filters, kernel=to_int_tuple(match.groups()), strides=strides,
-                               name=layer_name, weight_reg=self.weight_reg)
-
-        # check for pooling
-        match = self.op_regexes['pool'].match(op_name)  # type: re.Match
-        if match:
-            # last group is the pooling type
-            pool_size = match.groups()[:-1]
-            pool_type = match.groups()[-1]
-
-            layer_name = f'{"x".join(pool_size)}_{pool_type}pool{layer_name_suffix}'
-            return PoolingConv(filters, pool_type, to_int_tuple(pool_size), strides, name=layer_name, weight_reg=self.weight_reg) if adapt_depth \
-                else Pooling(pool_type, to_int_tuple(pool_size), strides, name=layer_name)
-
-        # extra operators specific for images
-        if self.op_dims == 2:
-            match = self.op_regexes['cvt'].match(op_name)  # type: re.Match
+        # iterate on allocators, stop at first match and allocates the Keras layer based on conditions
+        for allocator in self.op_allocators.values():
+            match = allocator.is_match(op_name)
             if match:
-                layer_name = f'{match.group(1)}k-{match.group(2)}h-{match.group(3)}b_cvt{layer_name_suffix}'
-                return CVTStage(emb_dim=filters, emb_kernel=int(match.group(1)), emb_stride=strides[0], mlp_mult=2,
-                                heads=int(match.group(2)), dim_head=filters, ct_blocks=int(match.group(3)),
-                                weight_reg=self.weight_reg, name=layer_name)
+                if adapt_depth and strided:
+                    return allocator.generate_reduction_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
+                elif strided:
+                    return allocator.generate_spatial_adaptation_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
+                elif adapt_depth:
+                    return allocator.generate_depth_adaptation_layer(match, filters, self.weight_reg, name_suffix=layer_name_suffix)
+                else:
+                    return allocator.generate_normal_layer(match, filters, self.weight_reg, name_suffix=layer_name_suffix)
 
-            match = self.op_regexes['scvt'].match(op_name)  # type: re.Match
-            if match:
-                layer_name = f'{match.group(1)}k-{match.group(2)}h_scvt{layer_name_suffix}'
-                return SimplifiedCVT(emb_dim=filters, emb_kernel=int(match.group(1)), emb_stride=strides[0],
-                                     heads=int(match.group(2)), dim_head=filters, weight_reg=self.weight_reg, name=layer_name)
-        # extra operators specific for time series
-        elif self.op_dims == 1:
-            if op_name == 'lstm':
-                layer_name = f'lstm{layer_name_suffix}'
-                rnn = Lstm(filters, weight_reg=self.weight_reg, name=layer_name)
-                return RnnBatchReduce(rnn, strides) if strided else rnn
-            if op_name == 'gru':
-                layer_name = f'gru{layer_name_suffix}'
-                rnn = Gru(filters, weight_reg=self.weight_reg, name=layer_name)
-                return RnnBatchReduce(rnn, strides) if strided else rnn
-
+        # raised only if no allocator matches the operator string
         raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')
