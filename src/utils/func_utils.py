@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_percentage_error
 
 
-def to_int_tuple(str_tuple: 'tuple[str, ...]'):
+def to_int_tuple(str_tuple: Iterable[str]):
     '''
     Cast each str element of a tuple to int and return it.
     '''
