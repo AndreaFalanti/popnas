@@ -4,16 +4,18 @@
         "lookback_depth": 2,
         "operators": [
             "identity",
-            "3 dconv",
             "7 dconv",
             "13 dconv",
             "21 dconv",
-            "3 conv",
             "7 conv",
             "13 conv",
             "21 conv",
+            "7:2dr conv",
+            "7:4dr conv",
             "2 maxpool",
-            "2 avgpool"
+            "2 avgpool",
+            "lstm",
+            "gru"
         ]
     },
     "search_strategy": {
@@ -26,9 +28,9 @@
         "epochs": 21,
         "learning_rate": 0.01,
         "filters": 24,
-        "weight_reg": 5e-4,
+        "weight_reg": 1e-3,
         "use_adamW": true,
-        "drop_path_prob": 0.0,
+        "drop_path_prob": 0.2,
         "cosine_decay_restart": {
             "enabled": true,
             "period_in_epochs": 3,
