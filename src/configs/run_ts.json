@@ -60,7 +60,7 @@
         "cache": true,
         "folds": 1,
         "samples": null,
-        "balance_class_losses": true,
+        "balance_class_losses": false,
         "normalize": true,
         "rescale": false,
         "data_augmentation": {
