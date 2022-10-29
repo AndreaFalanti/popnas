@@ -13,18 +13,18 @@ The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/d
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
-use the provider Docker container and avoid these steps (see Docker section below).
+use the provided Docker container and skip these steps (see Docker section below).
 
 ### Required additional software and tools
 Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
 for installing it on your machine and learning more about it.
 
-You need to have installed either python version 3.7 or 3.8 for building a valid environment (python versions > 3.8 could work,
+You need either python version 3.7 or 3.8 installed in your system for building a valid environment (python versions > 3.8 could work,
 but they have not been officially tested).
-To install and manage the python versions and work with _poetry_ tool, it's advised to use [pyenv](https://github.com/pyenv/pyenv)
+To install and manage the python versions and work with _poetry_, it is advised to use [pyenv](https://github.com/pyenv/pyenv)
 or [pyenv-win](https://github.com/pyenv-win/pyenv-win) based on your system.
 
-Make also sure that *graphviz* is installed in your machine, since it is required to generate plots of Keras models.
+Make also sure that *graphviz* is installed in your machine, since it is required to generate the plots of Keras models.
 Follow the installation instructions at: https://graphviz.gitlab.io/download/.
 
 ### Installation steps
@@ -58,9 +58,9 @@ python run.py
 ```
 
 ### GPU support
-To use a GPU locally, you must satisfy Tensorflow GPU hardware and software requirements.
-Follow https://www.tensorflow.org/install/gpu instructions to setup your device, make sure
-to install the correct versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
+To enable GPU computations locally, you must satisfy Tensorflow GPU hardware and software requirements.
+Follow https://www.tensorflow.org/install/gpu instructions to set up your device. Make sure
+to install the exact versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
 
 ## Build Docker container
 In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
@@ -99,12 +99,18 @@ Here it's presented a list of the configuration sections and fields, with a brie
   since they are recognized by regexes.
   Actually supported operators, with customizable kernel size(@):
   - identity
-  - @x@ dconv      (Depthwise-separable convolution)
-  - @x@-@x@ conv
+  - @x@ dconv (Depthwise-separable convolution)
+  - @x@-@x@ conv (Stacked convolutions)
   - @x@ conv
   - @x@ maxpool
   - @x@ avgpool
-  - @x@ tconv      (Transpose convolution)
+  - @x@ tconv (Transpose convolution)
+  - (2D only) @k-@h-@b cvt (Convolutional Vision Transformer)
+  - (2D only) @k-@h scvt (Simplified Convolutional Vision Transformer, custom operator not from literature)
+  - (1D only) lstm
+  - (1D only) gru
+
+  conv and dconv support also an optional group _:@dr_ for setting the dilation rate.
 
   For time series (1D inputs), specify the kernel size as @ instead of @x@, since the kernel size is mono dimensional.
 
@@ -210,7 +216,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 
 **Dataset(_time_series_classification_ only)**:
 - **rescale**: if _true_ the values will be rescaled with a factor based on 98 percentile of the entire input values.
-- **normalize**: if _true_, sample values will be shifted and scaled into a distribution centered around 0 with standard deviation 1.
+- **normalize**: if _true_, sample values will be shifted and scaled into a distribution centered around 0 with standard deviation 1 (z-normalization).
 
 **Others**:
 - **accuracy_predictor_ensemble_units**: defines the number of models used in the accuracy predictor (ensemble).
