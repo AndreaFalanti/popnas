@@ -1,5 +1,4 @@
 import argparse
-import json
 import logging
 import os
 from pathlib import Path
@@ -15,9 +14,10 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
-from utils.nn_utils import initialize_train_strategy, save_keras_model_to_onnx
+from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
 from utils.post_search_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config
+    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
+    save_evaluation_results
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
@@ -76,6 +76,7 @@ def main():
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
     train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
+    test_ds, _, _, test_batches = dataset_generator.generate_test_dataset()
 
     # produce weights for balanced loss if option is enabled in database config
     balance_class_losses = config['dataset'].get('balance_class_losses', False)
@@ -135,6 +136,10 @@ def main():
 
     logger.info('Converting trained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
+
+    save_evaluation_results(model, test_ds, save_path)
+    predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
+                                      save_path=os.path.join(save_path, 'test_confusion_matrix'))
 
 
 if __name__ == '__main__':

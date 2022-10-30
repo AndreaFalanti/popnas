@@ -1,6 +1,6 @@
 '''
-Stores common function used in training scripts, which could be executed after the main search procedure.
-All the functions inside this file are not used inside the search algorithm.
+Stores common function used in post search scripts, which could be executed after the main NAS procedure.
+All the functions stored inside this file are not used in the search algorithm.
 '''
 import copy
 import json
@@ -222,3 +222,9 @@ def build_macro_customized_config(config: dict, macro: MacroConfig):
     model_config['cnn_hp']['filters'] = macro.f
 
     return model_config
+
+
+def save_evaluation_results(model: Model, ds: tf.data.Dataset, model_path: str):
+    results = model.evaluate(x=ds, return_dict=True)
+    with open(os.path.join(model_path, 'eval.txt'), 'w') as f:
+        f.write(f'Results: {results}')

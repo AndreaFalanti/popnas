@@ -4,14 +4,14 @@ import logging
 import os
 
 import tensorflow as tf
-from tensorflow.keras import models, Model
+from tensorflow.keras import models
 
 import log_service
 from dataset.utils import dataset_generator_factory
 from models.model_generator import ModelGenerator
 from utils.func_utils import parse_cell_structures
 from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy
-from utils.post_search_training_utils import MacroConfig, compile_post_search_model
+from utils.post_search_training_utils import MacroConfig, compile_post_search_model, save_evaluation_results
 
 # disable Tensorflow info and warning messages
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
@@ -25,12 +25,6 @@ def get_model_cell_spec(log_folder_path: str):
         cell_spec = f.read()
 
     return parse_cell_structures([cell_spec])[0]
-
-
-def save_evaluation_results(model: Model, ds: tf.data.Dataset, model_path: str):
-    results = model.evaluate(x=ds, return_dict=True)
-    with open(os.path.join(model_path, 'eval.txt'), 'w') as f:
-        f.write(f'Results: {results}')
 
 
 # This script can be used to evaluate the final model trained on a test set.
