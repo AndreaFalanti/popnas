@@ -40,6 +40,7 @@ def main():
     # spec argument can be taken from model summary.txt, changing commas between tuples with ;
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
     parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", required=True)
     parser.add_argument('-f', metavar='FILTERS', type=int, help="desired starting filters", required=True)
     parser.add_argument('-m', metavar='MOTIFS', type=int, help="desired motifs", required=True)
@@ -55,7 +56,7 @@ def main():
     logger = log_service.get_logger(__name__)
 
     # read final_training config
-    custom_json_path = Path(__file__).parent / '../configs/last_training.json'
+    custom_json_path = Path(__file__).parent / '../configs/last_training.json' if args.j is None else args.j
 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(args, custom_json_path)
