@@ -245,7 +245,7 @@ def main():
             if f.tell() == 0:
                 writer.writerow(['cell_spec', 'm', 'n', 'f', 'val_score', 'training_time'])
 
-            writer.writerow([cell_spec, *macro, training_score, training_time])
+            writer.writerow([cell_spec_to_str(cell_spec), *macro, training_score, training_time])
 
 
 if __name__ == '__main__':
