@@ -1,7 +1,6 @@
 {
     "cnn_hp": {
         "epochs": 600,
-        "weight_reg": 5e-4,
         "use_adamW": true,
         "drop_path_prob": 0.4,
         "cosine_decay_restart": {
