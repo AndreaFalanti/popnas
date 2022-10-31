@@ -226,7 +226,7 @@ def main():
                          callbacks=train_callbacks)  # type: callbacks.History
 
         training_time = sum(time_cb.logs)
-        training_score = log_final_training_results(model_logger, hist, score_metric, training_time, arc_config['multi_output'])
+        training_score, best_epoch = log_final_training_results(model_logger, hist, score_metric, training_time, arc_config['multi_output'])
 
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))
@@ -243,9 +243,9 @@ def main():
             writer = csv.writer(f)
             # append mode, so if file handler is in position 0 it means is empty. In this case, write the headers too.
             if f.tell() == 0:
-                writer.writerow(['cell_spec', 'm', 'n', 'f', 'val_score', 'training_time'])
+                writer.writerow(['cell_spec', 'm', 'n', 'f', 'best_epoch', 'val_score', 'training_time'])
 
-            writer.writerow([cell_spec_to_str(cell_spec), *macro, training_score, training_time])
+            writer.writerow([cell_spec_to_str(cell_spec), *macro, best_epoch, training_score, training_time])
 
 
 if __name__ == '__main__':
