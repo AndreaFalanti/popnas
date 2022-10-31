@@ -164,17 +164,18 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
     return model, loss_weights
 
 
-def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, use_val: bool = False):
+def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, save_chunk: int = 25, use_val: bool = False):
     class ModelCheckpointCustom(callbacks.ModelCheckpoint):
         def on_epoch_end(self, epoch, logs=None):
-            # at most 1 checkpoint every 10 epochs, the best one is saved (e.g. epoch 124 is best among [120, 129] -> saved in cp_ed12.ckpt
-            super().on_epoch_end(epoch // 10, logs)
+            # at most 1 checkpoint every "save_chunk" epochs, the best one in the interval is stored since it override the others
+            # (e.g. if save_chunk=10 and epoch 124 is best among [120, 129] -> e124 weights saved in cp_ec12_10.ckpt)
+            super().on_epoch_end(epoch // save_chunk, logs)
 
     # Save best weights, here we have no validation set, so we check the best on training
     prefix = 'val_' if use_val else ''
     target_metric = f'{prefix}Softmax_c{last_cell_index}_{score_metric}'
 
-    ckpt_save_format = 'cp_ed{epoch:02d}.ckpt'
+    ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
     train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
                                                save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
 
