@@ -8,9 +8,10 @@ import re
 from collections import namedtuple
 from typing import Union
 
+import graphviz
 from igraph import *
 
-from utils.func_utils import list_flatten, chunks, to_int_tuple, prod
+from utils.func_utils import list_flatten, chunks, to_int_tuple, prod, parse_cell_structures
 
 # in case the operators are 1D, if w is set to 1 it still works correctly.
 # the only important thing for computing correctly the params is that c is always mapped to the number of filters.
@@ -292,12 +293,12 @@ def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int
 class NetworkGraph:
     '''
     Generate and store a graph representing the whole neural network structure, without the learning functionalities
-    or the utilities to allocate the layers in memory, for building the actual network use Keras instead (ModelGenerator).
+    or the utilities to allocate the layers in memory. Use Keras and TensorFlow For building the actual network (ModelGenerator).
 
-    This class is intended to produce a graph with a 1000x speedup compared to generating it in keras, providing
+    This class is intended to produce a graph with a 1000x speedup compared to generating it in Keras, providing
     a standard graph structure which can be analyzed with operational research techniques.
 
-    It is also useful to estimate quickly the amount of memory required by the neural network.
+    It is also useful to estimate quickly the amount of memory (parameters) required by the neural network.
     '''
 
     def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int,
@@ -392,3 +393,50 @@ class NetworkGraph:
                 return i
 
         return 0
+
+
+def save_cell_dag_image(cell_spec: Union[str, list], save_path: str):
+    max_lookback = 2
+    # parse cell if provided in str format
+    if isinstance(cell_spec, str):
+        cell_spec = parse_cell_structures([cell_spec])[0]
+
+    flat_cell = list_flatten(cell_spec)
+    block_count = len(cell_spec)
+    ops = flat_cell[1::2]
+    inputs = flat_cell[0::2]
+    unused_blocks = [i for i in range(block_count) if i not in inputs]
+    used_lookbacks = [i for i in range(-max_lookback, 0) if i in inputs]
+
+    g = graphviz.Digraph(filename='cell_graph.gz', directory=save_path,
+                         graph_attr=dict(rankdir='LR', ordering='out', splines='true'),
+                         edge_attr=dict(arrowhead='vee'))
+
+    for i in used_lookbacks:
+        g.node(f'lb{i}', f'{i}', shape='circle', color='red')
+
+    for i, op in enumerate(ops):
+        g.node(f'op{i}', op, shape='rect', color='blue')
+
+    for i in range(block_count):
+        g.node(f'add{i}', f'add{i}', shape='diamond', color='green')
+        g.edges([(f'op{i * 2}', f'add{i}'), (f'op{i * 2 + 1}', f'add{i}')])
+
+    for i, inp in enumerate(inputs):
+        # lookback
+        if inp < 0:
+            # NOTE: ':s' is compass direction 'sud', improving edge head placement
+            g.edge(tail_name=f'lb{inp}', head_name=f'op{i}:w')
+        # input from another block
+        else:
+            g.edge(tail_name=f'add{inp}', head_name=f'op{i}:w')
+
+    g.node('out', 'out', shape='circle', color='red')
+    if len(unused_blocks) > 1:
+        g.node(f'concat', shape='rect')
+        g.edges([(f'add{i}', 'concat') for i in unused_blocks])
+        g.edge(tail_name='concat', head_name='out:w')
+    else:
+        g.edge(tail_name=f'add{block_count - 1}', head_name='out:w')
+
+    g.render()
