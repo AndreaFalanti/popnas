@@ -162,9 +162,8 @@ def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distr
     missing_device_msg = f'{config_strategy_device} is not available for execution, run with a different train strategy' \
                          f' or troubleshot the issue in case a {config_strategy_device} is actually present in the device.'
 
-    # TODO: add multi-GPU
-    # Generate the train strategy. Currently supported values: ['CPU', 'GPU', 'TPU']
-    # Basically a switch, but is not supported in python.
+    # Generate the train strategy. Currently supported values: ['CPU', 'GPU', 'multi-GPU', 'TPU']
+    # Basically a switch, which it's not supported in used python version.
     if config_strategy_device is None:
         # should use GPU if available, otherwise CPU. Fallback for when strategy is not specified and for backwards compatibility.
         train_strategy = tf.distribute.get_strategy()
@@ -172,17 +171,27 @@ def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distr
         # remove GPUs from visible devices, using only CPUs
         tf.config.set_visible_devices([], 'GPU')
         tf.config.set_visible_devices([], 'TPU')
+
         print('Using CPU devices only')
         # default strategy
         train_strategy = tf.distribute.get_strategy()
     elif config_strategy_device == 'GPU':
         if len(gpu_devices) == 0:
             sys.exit(missing_device_msg)
+
         # default strategy also for single GPU
         train_strategy = tf.distribute.get_strategy()
+    elif config_strategy_device == 'multi-GPU':
+        if len(gpu_devices) < 2:
+            sys.exit(f'At least 2 GPUs required for multi-GPU strategy, {len(gpu_devices)} GPUs have been found.')
+
+        # by default, uses all GPUs found in the worker. Multiple workers (cluster of devices) are not currently supported.
+        # NOTE: Tune the batch size and learning rate to exploit more parallelism, if necessary.
+        train_strategy = tf.distribute.MirroredStrategy()
     elif config_strategy_device == 'TPU':
         if len(tpu_devices) == 0:
             sys.exit(missing_device_msg)
+
         cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
         tf.tpu.experimental.initialize_tpu_system(cluster_resolver)
         train_strategy = tf.distribute.TPUStrategy(cluster_resolver)
