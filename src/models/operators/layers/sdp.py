@@ -32,7 +32,7 @@ class ScheduledDropPath(Layer):
         # number of times weights are updated (batches_per_epoch * epochs)
         self.total_training_steps = total_training_steps
         # keep track of current execution step
-        self.current_step = tf.Variable(0, trainable=False, dtype=tf.float32)
+        self.current_step = tf.Variable(0, trainable=False, dtype=tf.float32, aggregation=tf.VariableAggregation.ONLY_FIRST_REPLICA)
         # input tensors ndims, used to generate the masks
         self.dims = dims
 
@@ -68,7 +68,7 @@ class ScheduledDropPath(Layer):
             # new rescaling factor: n_inputs / n_survived_inputs, no rescale if no input is dropped.
             keep_prob_inv = tf.cast(len(inputs) / tf.math.add_n(binary_tensors), dtype=input_dtype)
             # increment current_step, keep track of how much training steps have been executed to scale the probability correctly
-            self.current_step.assign_add(delta=1)
+            self.current_step.assign_add(1)
 
             # multiply the output tensors for their masks
             output_tensors = []
