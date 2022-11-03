@@ -51,7 +51,7 @@ def __save_latex_plots(save_name):
 
     # save as pdf
     save_path = log_service.build_path('plots', 'pdf', save_name + '.pdf')
-    plt.savefig(save_path, bbox_inches='tight')
+    plt.savefig(save_path, bbox_inches='tight', dpi=120)
 
 
 def save_and_finalize_plot(fig: plt.Figure, title: str, save_name: str):
@@ -261,12 +261,12 @@ def __plot_predictions_pareto_scatter_chart(predictions: Sequence[list], pareto_
     point_dim = (72.*1.5/fig.dpi)**2
     num_pred_points = len(predictions[0])
     # in case of huge amount of predictions (standard case in NAS), if >= 0.5% of the points overlaps in a point saturate the alpha,
-    # otherwise it is partially transparent. Clamped to 0.0125 since minimum is 1 / 255 and it's very hard to spot on plot.
+    # otherwise it is partially transparent. Clamped to 0.0125 since minimum is 1 / 255 = 0.004, but it's very hard to spot on plot.
     alpha = 0.25 if num_pred_points < 1000 else max(0.0125, 1 / (num_pred_points * 0.005))
 
     # zorder is used for plotting series over others (highest has priority)
     if proj == '3d':
-        ax.scatter(*predictions, marker='o', alpha=alpha, zorder=1, s=point_dim)
+        ax.scatter(*predictions, marker='o', alpha=alpha, zorder=1, s=point_dim, rasterized=True)
         ax.scatter(*pareto_points, marker='*', alpha=1.0, zorder=2)
 
         ax.set_xlabel(labels[0])
@@ -274,7 +274,7 @@ def __plot_predictions_pareto_scatter_chart(predictions: Sequence[list], pareto_
         ax.set_zlabel(labels[2])
     else:
         # accuracy is put first, but it's better to have it on y-axis for readability
-        ax.scatter(*reversed(predictions), marker='o', alpha=alpha, zorder=1, s=point_dim)
+        ax.scatter(*reversed(predictions), marker='o', alpha=alpha, zorder=1, s=point_dim, rasterized=True)
         ax.plot(*reversed(pareto_points), '*--', color='tab:orange', alpha=1.0, zorder=2)
 
         ax.set_xlabel(labels[1])
