@@ -97,10 +97,10 @@ Here it's presented a list of the configuration sections and fields, with a brie
   where _-1_ refers to last generated cell, _-2_ a skip connection to second-to-last cell, etc...
 - **operators**: list of operators that can be used inside each cell. Note that the string format is important,
   since they are recognized by regexes.
-  Actually supported operators, with customizable kernel size(@):
+  Actually supported operators, with customizable integer parameters(@) for kernel size and other parameters based on the operation type:
   - identity
-  - @x@ dconv (Depthwise-separable convolution)
-  - @x@-@x@ conv (Stacked convolutions)
+  - @x@:@dr dconv (Depthwise-separable convolution)
+  - @x@-@x@:@dr conv (Stacked convolutions)
   - @x@ conv
   - @x@ maxpool
   - @x@ avgpool
@@ -110,7 +110,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
   - (1D only) lstm
   - (1D only) gru
 
-  conv and dconv support also an optional group _:@dr_ for setting the dilation rate.
+  conv and dconv support an optional group _:@dr_ for setting the dilation rate, which can be omitted  to use non-dilated convolutions.
 
   For time series (1D inputs), specify the kernel size as @ instead of @x@, since the kernel size is mono dimensional.
 
@@ -228,7 +228,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **pnas_mode**: if _true_, the algorithm will not use most of the improvements introduced by POPNAS, mainly the
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
 - **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
-  Currently supports only local training with a single device. Accepted values: [CPU, GPU, TPU].
+  Currently supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
 
 
 ## Output folder structure
