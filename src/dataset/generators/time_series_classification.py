@@ -3,10 +3,10 @@ from typing import Optional
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import Sequential
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sktime import datasets as sktdata
+from tensorflow.keras import Sequential
 
 from dataset.generators.base import BaseDatasetGenerator, SEED
 from dataset.preprocessing import TimeSeriesPreprocessor
@@ -58,10 +58,13 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):
             x, y = _load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'))
         # ts (sktime) case
-        elif os.path.exists(os.path.join(self.dataset_path, f'{split_name}.ts')):
-            x, y = _load_ts(os.path.join(self.dataset_path, f'{split_name}.ts'))
         else:
-            raise ValueError('No supported dataset format recognized at path provided in configuration')
+            try:
+                # check if there is a TS file ending with split name (both custom and UCR-UEA archives follow this convention)
+                ts_filename = [filename for filename in os.listdir(self.dataset_path) if filename.lower().endswith(f'{split_name}.ts')][0]
+                x, y = _load_ts(os.path.join(self.dataset_path, ts_filename))
+            except:
+                raise ValueError('No supported dataset format recognized at path provided in configuration')
 
         # make a plain list to perform one_hot correctly in preprocessor
         y = np.squeeze(y)
