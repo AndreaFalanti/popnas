@@ -4,9 +4,9 @@ from typing import Optional
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import Sequential
 import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
+from tensorflow.keras import Sequential
 from tensorflow.keras import datasets
 from tensorflow.keras.utils import image_dataset_from_directory
 
@@ -132,7 +132,6 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                         self._logger.info('Limiting validation dataset to %d batches', val_samples)
                         val_ds = val_ds.take(val_samples)
 
-                # TODO: sharding should be set to FILE here? or not?
                 shard_policy = AutoShardPolicy.FILE
 
                 classes = self.dataset_classes_count
@@ -252,22 +251,16 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             if self.resize_dim is None:
                 raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
+            train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
+                                                    image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+            train_ds = train_ds.unbatch()
+
             # if val_size is None, it means that a validation split is present, merge the two datasets
             if self.val_size is None:
-                train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
-                                                        image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
                 val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
                                                       image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
-
                 train_ds = train_ds.unbatch().concatenate(val_ds.unbatch())
-            # extract a validation split from training samples
-            else:
-                train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'),
-                                                        seed=SEED, subset='training', label_mode='categorical',
-                                                        image_size=self.resize_dim, batch_size=self.batch_size)
-                train_ds = train_ds.unbatch()
 
-            # TODO: sharding should be set to FILE here? or not?
             shard_policy = AutoShardPolicy.FILE
 
             classes = self.dataset_classes_count
