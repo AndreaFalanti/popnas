@@ -253,13 +253,12 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
             train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
                                                     image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
-            train_ds = train_ds.unbatch()
 
             # if val_size is None, it means that a validation split is present, merge the two datasets
             if self.val_size is None:
                 val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
                                                       image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
-                train_ds = train_ds.unbatch().concatenate(val_ds.unbatch())
+                train_ds = train_ds.concatenate(val_ds)
 
             shard_policy = AutoShardPolicy.FILE
 
@@ -297,7 +296,9 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         # avoid categorical for custom datasets, since already done
         using_custom_ds = self.dataset_path is not None
         data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
-        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
+        # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
+        batch_len = None if using_custom_ds else self.batch_size
+        train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
 
