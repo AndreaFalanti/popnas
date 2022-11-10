@@ -135,6 +135,9 @@ def main():
     training_time = sum(time_cb.logs)
     log_final_training_results(logger, hist, score_metric, training_time, arc_config['multi_output'], using_val=False)
 
+    logger.info('Saving TF model')
+    model.save(os.path.join(save_path, 'tf_model'))
+
     logger.info('Converting trained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
 
