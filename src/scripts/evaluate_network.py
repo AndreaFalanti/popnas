@@ -68,7 +68,8 @@ def main():
 
     # Generate the model
     if args.search_model:
-        model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))
+        with train_strategy.scope():
+            model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))
         print('Model loaded successfully from TF model files')
         save_evaluation_results(model, test_ds, model_path)
         predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
