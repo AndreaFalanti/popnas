@@ -9,7 +9,7 @@ import pandas as pd
 import log_service
 from benchmarking import NATSbench
 from popnas import Popnas
-from utils.config_validator import validate_config_json
+from utils.config_utils import validate_config_json
 from utils.func_utils import create_empty_folder, parse_cell_structures
 from utils.nn_utils import initialize_train_strategy
 from utils.rstr import rstr
@@ -147,9 +147,6 @@ def main():
 
             # Handle uncaught exception in a special log file
             sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
-
-            # DEBUG: To find out which devices your operations and tensors are assigned to
-            # tf.debugging.set_log_device_placement(True)
 
             popnas = Popnas(run_config, train_strategy, benchmarking=True)
             popnas.start()
