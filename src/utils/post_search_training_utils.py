@@ -114,9 +114,9 @@ def log_final_training_results(logger: logging.Logger, hist: callbacks.History, 
     return best_val_score, epoch_index
 
 
-def build_config(args, custom_json_path: str):
+def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str):
     # run configuration used during search. Dataset config is extracted from this.
-    with open(os.path.join(args.p, 'restore', 'run.json'), 'r') as f:
+    with open(os.path.join(run_path, 'restore', 'run.json'), 'r') as f:
         search_config = json.load(f)  # type: dict
     # read hyperparameters to use for model selection
     with open(custom_json_path, 'r') as f:
@@ -131,9 +131,9 @@ def build_config(args, custom_json_path: str):
         config[key] = merge_config_section(key)
 
     # set custom batch size, if present
-    if hasattr(args, 'b') and args.b is not None:
-        config['dataset']['batch_size'] = args.b
-        config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (args.b / search_config['dataset']['batch_size'])
+    if batch_size is not None:
+        config['dataset']['batch_size'] = batch_size
+        config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (batch_size / search_config['dataset']['batch_size'])
 
         # set score metric (to select best architecture if -spec is not provided)
     config['search_strategy'] = {
@@ -142,7 +142,7 @@ def build_config(args, custom_json_path: str):
 
     # initialize train strategy (try-except to be retrocompatible with previous config format)
     try:
-        ts_device = args.ts if args.ts is not None else search_config['others']['train_strategy']
+        ts_device = train_strategy if train_strategy is not None else search_config['others']['train_strategy']
         train_strategy = initialize_train_strategy(ts_device)
     except AttributeError:
         train_strategy = initialize_train_strategy(None)

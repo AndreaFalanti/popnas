@@ -38,13 +38,15 @@ def get_best_cell_specs(log_folder_path: str, n: int, metric: str = 'best val ac
     return cell_specs, best_acc_rows[metric]
 
 
-def get_cells_to_train_iter(args, score_metric: str, macro: MacroConfig,
+def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: str, macro: MacroConfig,
                             logger: logging.Logger) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
     '''
     Return an iterator of all cells to train during model selection process.
 
     Args:
-        args: script command line arguments
+        run_path: path to run folder
+        spec: cell specification, if provided
+        top_cells: number of top cells to consider in post-search training
         score_metric: target score metric for selecting top-k architectures
         macro: macro parameters used during search
         logger:
@@ -52,15 +54,15 @@ def get_cells_to_train_iter(args, score_metric: str, macro: MacroConfig,
     Returns:
         Enumerate generator, in form: (cell_index, (cell_spec, score_during_search, macro_config))
     '''
-    if args.spec is None:
+    if spec is None:
         logger.info('Getting best cell specifications found during POPNAS run...')
         metric = metrics_fields_dict[score_metric].real_column
 
-        cell_specs, best_scores = get_best_cell_specs(args.p, args.n, metric)
+        cell_specs, best_scores = get_best_cell_specs(run_path, top_cells, metric)
         return enumerate(zip(cell_specs, best_scores, [macro] * len(cell_specs))).__iter__()
     # single cell specification given by the user
     else:
-        return enumerate(zip(parse_cell_structures([args.spec]), [None], [macro])).__iter__()
+        return enumerate(zip(parse_cell_structures([spec]), [None], [macro])).__iter__()
 
 
 def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]'],
@@ -91,29 +93,17 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
                     yield i, (cell_spec, None, max_f_macro)
 
 
-def main():
-    # NOTE: spec argument can be taken from training_results.csv
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
-    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
-    parser.add_argument('-n', metavar='NUM_MODELS', type=int, help='number of top models to train, when -spec is not specified', default=5)
-    parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", default=None)
-    parser.add_argument('-params', metavar='PARAMS RANGE', type=str, help="desired params range, semicolon separated (e.g. 2.5e6;3.5e6)", default=None)
-    parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
-    parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
-    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
-    parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
-    parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
-    args = parser.parse_args()
-
-    custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if args.j is None else args.j
+def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, params: str = None, ts: str = None,
+            name: str = 'best_model_training', debug: bool = False, stem: bool = False):
+    ''' Refer to argparse help for more information about these arguments. '''
+    custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if j is None else j
 
     # create appropriate model structure (different between single model and multi-model)
-    if args.n <= 1:
-        save_path = os.path.join(args.p, args.name)
+    if k <= 1:
+        save_path = os.path.join(p, name)
         create_model_log_folder(save_path)
     else:
-        save_path = os.path.join(args.p, f'{args.name}_top{args.n}')
+        save_path = os.path.join(p, f'{name}_top{k}')
         # avoid generating tensorboard and weights folders
         create_empty_folder(save_path)
         log_service.set_log_path(save_path)
@@ -121,14 +111,14 @@ def main():
     logger = log_service.get_logger(__name__)
 
     # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
-    if args.debug:
+    if debug:
         tf.debugging.experimental.enable_dump_debug_info(
             os.path.join(save_path, 'debug'),
             tensor_debug_mode="FULL_HEALTH",
             circular_buffer_size=-1)
 
     logger.info('Reading configuration...')
-    config, train_strategy = build_config(args, custom_json_path)
+    config, train_strategy = build_config(p, b, ts, custom_json_path)
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
@@ -165,13 +155,13 @@ def main():
     f = cnn_config['filters']
     macro_config = MacroConfig(m, n, f)
 
-    cell_score_iter = get_cells_to_train_iter(args, score_metric, macro_config, logger)
+    cell_score_iter = get_cells_to_train_iter(p, spec, k, score_metric, macro_config, logger)
 
     # generate alternative macro architectures of the selected cell specifications
     # the returned iterator as the same structure and returns also the original elements
-    if args.params is not None:
+    if params is not None:
         # get params ranges. float conversion is used to support exponential notation (e.g. 2e6 for 2 millions).
-        min_params, max_params = map(int, map(float, args.params.split(';')))
+        min_params, max_params = map(int, map(float, params.split(';')))
         graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, classes_count)
 
         cell_score_iter = add_macro_architecture_changes_to_cells_iter(cell_score_iter, macro_config, min_params, max_params, graph_gen)
@@ -196,7 +186,7 @@ def main():
             # alter macro parameters of model generator, before building the model
             model_gen.alter_macro_structure(*macro)
 
-            mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=args.stem)
+            mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
             model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
         model_logger.info('Model generated successfully')
@@ -249,4 +239,19 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # NOTE: spec argument can be taken from training_results.csv
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json with training parameters', default=None)
+    parser.add_argument('-k', metavar='NUM_MODELS', type=int, help='number of top models to train, when -spec is not specified', default=5)
+    parser.add_argument('-b', metavar='BATCH SIZE', type=int, help="desired batch size", default=None)
+    parser.add_argument('-params', metavar='PARAMS RANGE', type=str, help="desired params range, semicolon separated (e.g. 2.5e6;3.5e6)",
+                        default=None)
+    parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
+    parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
+    parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='best_model_training')
+    parser.add_argument('--debug', help='produce debug files of the whole training procedure', action='store_true')
+    parser.add_argument('--stem', help='add ImageNet stem to network architecture', action='store_true')
+    args = parser.parse_args()
+
+    execute(**vars(args))

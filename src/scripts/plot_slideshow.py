@@ -110,77 +110,78 @@ def display_predictors_test_slide(test_folder_path: str, reference_plot_path: st
         display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
-    parser.add_argument('--save', help="save slides into a folder, instead of displaying them", action="store_true")
-    args = parser.parse_args()
-
-    if not args.save:
+def execute(p: str, save: bool = False):
+    ''' Refer to argparse help for more information about these arguments. '''
+    if not save:
         # force TkAgg backend for getting an interactive interface and maximizing the window
         plt.switch_backend('TkAgg')
 
-    gen_paths = path_closure(args.p)
-    gen_save_path = generate_slide_save_path(args.p) if args.save else iter(())
+    gen_paths = path_closure(p)
+    gen_save_path = generate_slide_save_path(p) if save else iter(())
 
-    with open(os.path.join(args.p, 'restore', 'run.json')) as f:
+    with open(os.path.join(p, 'restore', 'run.json')) as f:
         run_config = json.load(f)
 
     sstr_config = run_config['search_strategy']
     score_metric = sstr_config['score_metric']
 
     display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
-                          2, 2, title='Specular mono blocks (input -1) overview', save=args.save, save_name=next(gen_save_path, None))
+                          2, 2, title='Specular mono blocks (input -1) overview', save=save, save_name=next(gen_save_path, None))
     display_plot_overview(gen_paths([f'{score_metric}_pred_overview.png', f'pred_{score_metric}_errors_boxplot.png',
                                      'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
-                          2, 2, title='Prediction errors overview', save=args.save, save_name=next(gen_save_path, None))
+                          2, 2, title='Prediction errors overview', save=save, save_name=next(gen_save_path, None))
 
     b = 2
-    while os.path.isfile(os.path.join(args.p, 'plots', f'children_op_usage_B{b}.png')):
+    while os.path.isfile(os.path.join(p, 'plots', f'children_op_usage_B{b}.png')):
         display_plot_overview(gen_paths([f'pareto_op_usage_B{b}.png', f'exploration_op_usage_B{b}.png', f'children_op_usage_B{b}.png',
                                          f'pareto_inputs_usage_B{b}.png', f'exploration_inputs_usage_B{b}.png', f'children_inputs_usage_B{b}.png']),
-                              3, 2, title=f'Cell structures overview (B={b})', save=args.save, save_name=next(gen_save_path, None))
+                              3, 2, title=f'Cell structures overview (B={b})', save=save, save_name=next(gen_save_path, None))
         b += 1
 
-    pred_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('predictions_with_pareto_B')]
+    pred_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('predictions_with_pareto_B')]
     if len(pred_pareto_plot_paths) > 0:
         cols, rows = compute_dynamic_size_layout(len(pred_pareto_plot_paths))
-        display_plot_overview(gen_paths(pred_pareto_plot_paths), cols, rows, title='Predictions with Pareto overview', save=args.save,
+        display_plot_overview(gen_paths(pred_pareto_plot_paths), cols, rows, title='Predictions with Pareto overview', save=save,
                               save_name=next(gen_save_path, None))
 
-    real_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('pareto_plot_B')]
+    real_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('pareto_plot_B')]
     if len(real_pareto_plot_paths) > 0:
         cols, rows = compute_dynamic_size_layout(len(real_pareto_plot_paths))
-        display_plot_overview(gen_paths(real_pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=args.save,
+        display_plot_overview(gen_paths(real_pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=save,
                               save_name=next(gen_save_path, None))
 
-    multi_output_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.startswith('multi_output_boxplot')]
+    multi_output_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('multi_output_boxplot')]
     if len(multi_output_plot_paths) > 0:
         cols, rows = compute_dynamic_size_layout(len(multi_output_plot_paths))
-        display_plot_overview(gen_paths(multi_output_plot_paths), cols, rows, title='Val accuracy overview per output', save=args.save,
+        display_plot_overview(gen_paths(multi_output_plot_paths), cols, rows, title='Val accuracy overview per output', save=save,
                               save_name=next(gen_save_path, None))
 
     display_plot_overview(gen_paths(['val_acc_boxplot.png', 'val_f1_score_boxplot.png', 'train_time_boxplot.png']),
-                          2, 2, title='CNN training per block overview', save=args.save, save_name=next(gen_save_path, None))
+                          2, 2, title='CNN training per block overview', save=save, save_name=next(gen_save_path, None))
 
-    time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(args.p, 'plots')) if filename.endswith('_time_corr.png')]
+    time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.endswith('_time_corr.png')]
     if len(time_corr_plot_paths) > 0:
         cols, rows = compute_dynamic_size_layout(len(time_corr_plot_paths))
-        display_plot_overview(gen_paths(time_corr_plot_paths), cols, rows, title='Correlation with training time overview', save=args.save,
+        display_plot_overview(gen_paths(time_corr_plot_paths), cols, rows, title='Correlation with training time overview', save=save,
                               save_name=next(gen_save_path, None))
 
     # check if predictors time test folder is present (predictors_time_testing.py output)
-    time_test_path = os.path.join(args.p, 'pred_time_test')
+    time_test_path = os.path.join(p, 'pred_time_test')
     if os.path.isdir(time_test_path):
         display_predictors_test_slide(time_test_path, *gen_paths(['time_pred_overview.png']), title='Time prediction testing overview',
-                                      save=args.save, save_name=next(gen_save_path, None))
+                                      save=save, save_name=next(gen_save_path, None))
 
     # check if predictors acc test folder is present (predictors_acc_testing.py output)
-    acc_test_path = os.path.join(args.p, 'pred_acc_test')
+    acc_test_path = os.path.join(p, 'pred_acc_test')
     if os.path.isdir(acc_test_path):
         display_predictors_test_slide(acc_test_path, *gen_paths(['acc_pred_overview.png']), title='Accuracy prediction testing overview',
-                                      save=args.save, save_name=next(gen_save_path, None))
+                                      save=save, save_name=next(gen_save_path, None))
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
+    parser.add_argument('--save', help="save slides into a folder, instead of displaying them", action="store_true")
+    args = parser.parse_args()
+    
+    execute(**vars(args))
