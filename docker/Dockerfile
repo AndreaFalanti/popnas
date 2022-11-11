@@ -31,6 +31,6 @@ COPY src/ .
 
 # solve import problems with scripts and add specific folder for tfds mounts
 ENV PYTHONPATH="${PYTHONPATH}:/exp"
-ENV TFDS_DATA_DIR="tensorflow_datasets"
+ENV TFDS_DATA_DIR="datasets/tensorflow_datasets"
 
 CMD ["bash"]
