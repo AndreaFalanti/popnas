@@ -65,7 +65,6 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'])
     train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
-    test_ds, _, _, test_batches = dataset_generator.generate_test_dataset()
 
     # produce weights for balanced loss if option is enabled in database config
     balance_class_losses = config['dataset'].get('balance_class_losses', False)
@@ -129,9 +128,14 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Converting trained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
 
-    save_evaluation_results(model, test_ds, save_path)
-    predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
-                                      save_path=os.path.join(save_path, 'test_confusion_matrix'))
+    try:
+        test_ds, _, _, test_batches = dataset_generator.generate_test_dataset()
+        save_evaluation_results(model, test_ds, save_path)
+        predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
+                                          save_path=os.path.join(save_path, 'test_confusion_matrix'))
+    except:
+        logger.info('Could not build the test dataset, or test dataset is not provided')
+
     save_cell_dag_image(cell_spec, save_path)
 
 
