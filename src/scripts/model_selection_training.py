@@ -32,6 +32,9 @@ AUTOTUNE = tf.data.AUTOTUNE
 def get_best_cell_specs(log_folder_path: str, n: int, metric: str = 'best val accuracy'):
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
+    # avoid empty cell, which gives exceptions in macro-structure tuning. Could happen to choose empty cell in debug runs with about 10 networks,
+    # in real cases it never happens
+    df = df[df['cell structure'] != '[]']
     best_acc_rows = df.nlargest(n, columns=[metric])
 
     cell_specs = parse_cell_structures(best_acc_rows['cell structure'])
