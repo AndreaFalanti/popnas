@@ -139,19 +139,19 @@ def execute(p: str, save: bool = False):
         b += 1
 
     pred_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('predictions_with_pareto_B')]
-    if len(pred_pareto_plot_paths) > 0:
+    if len(pred_pareto_plot_paths) > 1:
         cols, rows = compute_dynamic_size_layout(len(pred_pareto_plot_paths))
         display_plot_overview(gen_paths(pred_pareto_plot_paths), cols, rows, title='Predictions with Pareto overview', save=save,
                               save_name=next(gen_save_path, None))
 
     real_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('pareto_plot_B')]
-    if len(real_pareto_plot_paths) > 0:
+    if len(real_pareto_plot_paths) > 1:
         cols, rows = compute_dynamic_size_layout(len(real_pareto_plot_paths))
         display_plot_overview(gen_paths(real_pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=save,
                               save_name=next(gen_save_path, None))
 
     multi_output_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('multi_output_boxplot')]
-    if len(multi_output_plot_paths) > 0:
+    if len(multi_output_plot_paths) > 1:
         cols, rows = compute_dynamic_size_layout(len(multi_output_plot_paths))
         display_plot_overview(gen_paths(multi_output_plot_paths), cols, rows, title='Val accuracy overview per output', save=save,
                               save_name=next(gen_save_path, None))
@@ -160,7 +160,7 @@ def execute(p: str, save: bool = False):
                           2, 2, title='CNN training per block overview', save=save, save_name=next(gen_save_path, None))
 
     time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.endswith('_time_corr.png')]
-    if len(time_corr_plot_paths) > 0:
+    if len(time_corr_plot_paths) > 1:
         cols, rows = compute_dynamic_size_layout(len(time_corr_plot_paths))
         display_plot_overview(gen_paths(time_corr_plot_paths), cols, rows, title='Correlation with training time overview', save=save,
                               save_name=next(gen_save_path, None))
