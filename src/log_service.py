@@ -30,7 +30,7 @@ def initialize_log_folders(folder_name: str = None):
     log_path = os.path.join('logs', log_folder)
 
     try:
-        os.mkdir(log_path)
+        os.makedirs(log_path, exist_ok=False)
     except FileExistsError:
         raise AttributeError('The provided log folder name already exists, use another name to avoid conflicts')
 
