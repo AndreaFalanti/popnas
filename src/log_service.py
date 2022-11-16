@@ -56,14 +56,22 @@ def check_log_folder(folder_path: str):
 
 def get_logger(name, filename='debug.log'):
     logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
     # Create handlers
     file_handler = logging.FileHandler(os.path.join(log_path, filename))
+    file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
+
     console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+    # loggers with same name are actually the same logger, so they already have handlers in that case.
+    # clear them and add the new ones. In this way, when running multiple experiments with e2e scripts, each experiments has its isolated log file.
+    logger.handlers.clear()
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
 
     return logger
 
