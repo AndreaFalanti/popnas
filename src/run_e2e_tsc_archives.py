@@ -55,6 +55,9 @@ def main():
     with open(args.p, 'rb') as f:
         datasets_metadata = pickle.load(f)  # type: list[TSCDatasetMetadata]
 
+    ds_names = [ds_meta.name for ds_meta in datasets_metadata]
+    print(f'This worker will process {len(ds_names)} datasets: {ds_names}')
+
     try:
         os.makedirs(os.path.join('logs', args.name))
     except OSError:
