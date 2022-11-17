@@ -164,7 +164,7 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
     return model, loss_weights
 
 
-def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, save_chunk: int = 25, use_val: bool = False):
+def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, save_chunk: int = 100, use_val: bool = False):
     class ModelCheckpointCustom(callbacks.ModelCheckpoint):
         def on_epoch_end(self, epoch, logs=None):
             # at most 1 checkpoint every "save_chunk" epochs, the best one in the interval is stored since it override the others
