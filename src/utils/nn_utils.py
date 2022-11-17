@@ -257,6 +257,6 @@ def predict_and_save_confusion_matrix(model: Model, ds: tf.data.Dataset, multi_o
 def perform_global_memory_clear():
     ''' Clean up memory by forcing the deletion of python unreachable objects and clearing the Keras global state. '''
     collected_count = gc.collect()
-    print(f'GC collected {collected_count} items')
-    print(f'GC has {len(gc.garbage)} items which are garbage but cannot be freed')
+    # print(f'GC collected {collected_count} items')
+    # print(f'GC has {len(gc.garbage)} items which are garbage but cannot be freed')
     tf.keras.backend.clear_session()
