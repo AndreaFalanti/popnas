@@ -15,6 +15,9 @@ def set_log_path(path):
     global log_path
     log_path = path
 
+    # NOTE: solves issue with Keras model.save duplicating logs. See also: https://github.com/keras-team/keras/issues/16732
+    logging.root.addHandler(logging.NullHandler())
+
 
 def initialize_log_folders(folder_name: str = None):
     '''
@@ -23,11 +26,10 @@ def initialize_log_folders(folder_name: str = None):
     if not os.path.exists('logs/'):
         os.mkdir('logs/')
 
-    global log_path
     # create timestamp subfolder if name is None, otherwise use the given name
     log_folder = time.strftime('%Y-%m-%d-%H-%M-%S') if folder_name is None else folder_name
-    # set the global log path variable
-    log_path = os.path.join('logs', log_folder)
+
+    set_log_path(os.path.join('logs', log_folder))
 
     try:
         os.makedirs(log_path, exist_ok=False)
