@@ -6,9 +6,9 @@ from predictors import *
 from utils.feature_analysis import generate_dataset_correlation_heatmap
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import instantiate_search_space_from_logs
-from utils.nn_utils import initialize_train_strategy
+from utils.nn_utils import initialize_train_strategy, remove_annoying_tensorflow_messages
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
+remove_annoying_tensorflow_messages()
 
 
 def setup_folders(log_path: str):

@@ -1,14 +1,6 @@
-import logging
-
-import tensorflow as tf
-
 import benchmarking
 import log_service
 from utils.nn_utils import TrainingResults
-
-# disable Tensorflow info and warning messages (Warning are not on important things, they were investigated. Still, enable them
-# when performing changes to see if there are new potential warnings that can affect negatively the algorithm).
-tf.get_logger().setLevel(logging.ERROR)
 
 
 class GraphProxy:

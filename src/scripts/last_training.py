@@ -1,5 +1,4 @@
 import argparse
-import logging
 import os
 from pathlib import Path
 
@@ -15,15 +14,15 @@ from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.network_graph import save_cell_dag_image
-from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear
+from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
+    remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
     log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
     save_evaluation_results
 from utils.timing_callback import TimingCallback
 
 # disable Tensorflow info and warning messages
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # disable Tensorflow info messages
-tf.get_logger().setLevel(logging.ERROR)
+remove_annoying_tensorflow_messages()
 
 AUTOTUNE = tf.data.AUTOTUNE
 

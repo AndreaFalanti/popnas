@@ -1,14 +1,11 @@
 import csv
-import logging
 import os
 import shutil
 from statistics import mean
 from typing import Tuple
 
-import absl.logging
 import numpy as np
 import tensorflow as tf
-import tf2onnx
 from tensorflow.keras import Model
 from tensorflow.keras.utils import plot_model
 
@@ -21,15 +18,6 @@ from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
     TrainingResults, perform_global_memory_clear
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
-
-absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
-
-# disable Tensorflow info and warning messages (Warning are not on important things, they were investigated. Still, enable them
-# when performing changes to see if there are new potential warnings that can affect negatively the algorithm).
-tf.get_logger().setLevel(logging.ERROR)
-
-# disable tf2onnx conversion messages
-tf2onnx.logging.set_level(logging.WARN)
 
 AUTOTUNE = tf.data.AUTOTUNE
 

@@ -1,6 +1,5 @@
 import argparse
 import json
-import logging
 import os
 
 import tensorflow as tf
@@ -10,12 +9,12 @@ import log_service
 from dataset.utils import dataset_generator_factory
 from models.model_generator import ModelGenerator
 from utils.func_utils import parse_cell_structures
-from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear
+from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear, \
+    remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import MacroConfig, compile_post_search_model, save_evaluation_results
 
 # disable Tensorflow info and warning messages
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-tf.get_logger().setLevel(logging.ERROR)
+remove_annoying_tensorflow_messages()
 
 AUTOTUNE = tf.data.AUTOTUNE
 

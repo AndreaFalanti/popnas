@@ -1,10 +1,14 @@
 import gc
+import logging
 import operator
+import os
 import re
 import sys
+import warnings
 from functools import reduce
 from typing import Optional
 
+import absl.logging
 import numpy as np
 import seaborn as sns
 import tensorflow as tf
@@ -260,3 +264,24 @@ def perform_global_memory_clear():
     # print(f'GC collected {collected_count} items')
     # print(f'GC has {len(gc.garbage)} items which are garbage but cannot be freed')
     tf.keras.backend.clear_session()
+
+
+def remove_annoying_tensorflow_messages():
+    ''' Disable multiple warnings and errors which seems to be bugged. Avoid using this during development, in case there are actual problems. '''
+    # disable Tensorflow messages
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+    # disable strange useless warning in model saving, that is also present in TF tutorial...
+    absl.logging.set_verbosity(absl.logging.ERROR)
+
+    # disable Tensorflow info and warning messages (Warning are not on important things, they were investigated. Still, enable them
+    # when performing changes to see if there are new potential warnings that can affect negatively the algorithm).
+    tf.get_logger().setLevel(logging.ERROR)
+
+    # disable tf2onnx conversion messages
+    tf2onnx.logging.set_level(logging.WARN)
+
+    # Disable warning triggered at every training. get_config is actually implemented for each custom layer of ops module.
+    # The module responsible for this annoying warning: tensorflow\python\keras\utils\generic_utils.py, line 494
+    warnings.filterwarnings(action='ignore',
+                            message='Custom mask layers require a config and must override get_config. When loading, the custom mask layer must be passed to the custom_objects argument.')
