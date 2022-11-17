@@ -1,5 +1,4 @@
 import csv
-import gc
 import logging
 import os
 import shutil
@@ -9,7 +8,6 @@ from typing import Tuple
 import absl.logging
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.backend
 import tf2onnx
 from tensorflow.keras import Model
 from tensorflow.keras.utils import plot_model
@@ -21,7 +19,7 @@ from models.model_generator import ModelGenerator
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
-    TrainingResults
+    TrainingResults, perform_global_memory_clear
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
 absl.logging.set_verbosity(absl.logging.ERROR)  # disable strange useless warning in model saving, that is also present in TF tutorial...
@@ -271,9 +269,6 @@ class NetworkManager:
             save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
             self._logger.info('Model saved successfully')
 
-        # clean up resources and GPU memory (TODO: not solving leak on TPU_VM, maybe unnecessary)
-        tensorflow.keras.backend.clear_session()
-        del model
-        gc.collect()
+        perform_global_memory_clear()
 
         return TrainingResults(cell_spec, accuracy, f1_score, training_time, inference_time, total_params, flops)

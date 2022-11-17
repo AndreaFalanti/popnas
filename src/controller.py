@@ -1,10 +1,8 @@
 import csv
-import gc
 import sys
 from typing import Callable, Any
 
 import numpy as np
-import tensorflow
 from tqdm import tqdm
 
 import exploration
@@ -18,6 +16,7 @@ from utils.feature_utils import generate_time_features
 from utils.func_utils import to_list_of_tuples
 from utils.graph_generator import GraphGenerator
 from utils.model_estimate import ModelEstimate
+from utils.nn_utils import perform_global_memory_clear
 from utils.rstr import rstr
 
 
@@ -140,9 +139,7 @@ class ControllerManager:
 
                 pbar.update(len(cells_batch))
 
-        # clean up resources and GPU memory (TODO: not solving leak on TPU_VM, maybe unnecessary)
-        tensorflow.keras.backend.clear_session()
-        gc.collect()
+        perform_global_memory_clear()
 
         return model_estimations
 

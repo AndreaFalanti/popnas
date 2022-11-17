@@ -1,3 +1,4 @@
+import gc
 import operator
 import re
 import sys
@@ -251,3 +252,11 @@ def predict_and_save_confusion_matrix(model: Model, ds: tf.data.Dataset, multi_o
     # save both normalized and not normalized versions of confusion matrix
     save_confusion_matrix(y_true, y_pred, save_path=save_path, n_classes=n_classes, normalize=False)
     save_confusion_matrix(y_true, y_pred, save_path=f'{save_path}_norm', n_classes=n_classes, normalize=True)
+
+
+def perform_global_memory_clear():
+    ''' Clean up memory by forcing the deletion of python unreachable objects and clearing the Keras global state. '''
+    collected_count = gc.collect()
+    print(f'GC collected {collected_count} items')
+    print(f'GC has {len(gc.garbage)} items which are garbage but cannot be freed')
+    tf.keras.backend.clear_session()

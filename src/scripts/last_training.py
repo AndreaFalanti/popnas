@@ -15,7 +15,7 @@ from models.model_generator import ModelGenerator
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.network_graph import save_cell_dag_image
-from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix
+from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear
 from utils.post_search_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
     log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
     save_evaluation_results
@@ -136,6 +136,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     except:
         logger.info('Could not build the test dataset, or test dataset is not provided')
 
+    perform_global_memory_clear()
     save_cell_dag_image(cell_spec, save_path)
 
 

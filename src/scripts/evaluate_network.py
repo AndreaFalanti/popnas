@@ -10,7 +10,7 @@ import log_service
 from dataset.utils import dataset_generator_factory
 from models.model_generator import ModelGenerator
 from utils.func_utils import parse_cell_structures
-from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy
+from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear
 from utils.post_search_training_utils import MacroConfig, compile_post_search_model, save_evaluation_results
 
 # disable Tensorflow info and warning messages
@@ -110,6 +110,8 @@ def main():
             save_evaluation_results(model, test_ds, m_path)
             predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
                                               save_path=os.path.join(m_path, 'test_confusion_matrix'))
+
+    perform_global_memory_clear()
 
 
 if __name__ == '__main__':
