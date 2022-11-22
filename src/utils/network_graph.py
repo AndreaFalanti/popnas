@@ -358,7 +358,6 @@ class NetworkGraph:
         }
         g.add_vertices(2, attributes=v_attributes)
 
-        # TODO: adapt t
         # connect last cell to GAP and GAP to Softmax
         edge_attributes = {
             'tensor_h': [1, 1],
@@ -412,16 +411,20 @@ def save_cell_dag_image(cell_spec: Union[str, list], save_path: str):
                          graph_attr=dict(rankdir='LR', ordering='out', splines='true'),
                          edge_attr=dict(arrowhead='vee'))
 
+    # generate lookback nodes
     for i in used_lookbacks:
         g.node(f'lb{i}', f'{i}', shape='circle', color='red')
 
+    # generate operator nodes
     for i, op in enumerate(ops):
         g.node(f'op{i}', op, shape='rect', color='blue')
 
+    # generate "block join op" nodes and connect the two related operator nodes to it
     for i in range(block_count):
         g.node(f'add{i}', f'add{i}', shape='diamond', color='green')
         g.edges([(f'op{i * 2}', f'add{i}'), (f'op{i * 2 + 1}', f'add{i}')])
 
+    # connect the inputs (lookbacks and possibly internal blocks) to the operators using them
     for i, inp in enumerate(inputs):
         # lookback
         if inp < 0:
@@ -431,6 +434,7 @@ def save_cell_dag_image(cell_spec: Union[str, list], save_path: str):
         else:
             g.edge(tail_name=f'add{inp}', head_name=f'op{i}:w')
 
+    # add output node and connect the unused block to it (adding concat when there are multiple ones)
     g.node('out', 'out', shape='circle', color='red')
     if len(unused_blocks) > 1:
         g.node(f'concat', shape='rect')
