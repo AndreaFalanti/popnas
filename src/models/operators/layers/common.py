@@ -3,20 +3,10 @@ from abc import abstractmethod, ABC
 from typing import Optional
 
 import tensorflow as tf
+from tensorflow.keras.layers import BatchNormalization, Layer
 from tensorflow.keras.regularizers import Regularizer
-from tensorflow.keras.layers import Conv2D, Conv2DTranspose, SeparableConv2D, MaxPooling2D, AveragePooling2D, \
-    Conv1D, Conv1DTranspose, SeparableConv1D, MaxPooling1D, AveragePooling1D, \
-    BatchNormalization, Layer
 
-# TODO: it could be nice to import only the correct ones and rename them so that are recognized by layers,
-#  but input dims are given at runtime, making it difficult (inner classes with delayed import seems not possible)
-op_dim_selector = {
-    'conv': {1: Conv1D, 2: Conv2D},
-    'tconv': {1: Conv1DTranspose, 2: Conv2DTranspose},
-    'dconv': {1: SeparableConv1D, 2: SeparableConv2D},
-    'max_pool': {1: MaxPooling1D, 2: MaxPooling2D},
-    'avg_pool': {1: AveragePooling1D, 2: AveragePooling2D},
-}
+from ..layers import op_dim_selector
 
 
 class Identity(Layer):

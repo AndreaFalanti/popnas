@@ -1,8 +1,8 @@
-from tensorflow.keras.layers import Layer, GlobalAveragePooling2D, GlobalAveragePooling1D, Add, Average
+from tensorflow.keras.layers import Layer, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
-from models.operators.layers import Convolution
 from models.operators.allocators import *
+from models.operators.layers import Convolution, op_dim_selector
 
 
 class OpInstantiator:
@@ -18,8 +18,7 @@ class OpInstantiator:
         self.reduction_stride = tuple([reduction_stride_factor] * self.op_dims)
         self.normal_stride = tuple([1] * self.op_dims)
 
-        gap_selector = {1: GlobalAveragePooling1D, 2: GlobalAveragePooling2D}
-        self.gap = gap_selector[self.op_dims]
+        self.gap = op_dim_selector['gap'][self.op_dims]
 
         self.block_join_op_selector = {'add': Add, 'avg': Average}
         self.block_op_join = block_op_join
