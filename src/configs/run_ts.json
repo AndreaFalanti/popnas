@@ -47,6 +47,7 @@
         "lookback_reshape": false,
         "concat_only_unused_blocks": true,
         "residual_cells": true,
+        "se_cell_output": false,
         "multi_output": false
     },
     "dataset": {

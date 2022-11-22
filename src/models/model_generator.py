@@ -61,8 +61,11 @@ class ModelGenerator:
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         self.multi_output = arc_params['multi_output']
         self.residual_cells = arc_params['residual_cells']
+        self.se_cell_output = arc_params['se_cell_output']
         self.output_classes_count = output_classes_count
         self.input_shape = input_shape
+        # basically the space of application of the operators, as int (2-D for images, 1-D for time series)
+        self.op_dims = len(input_shape) - 1
 
         self.lr = cnn_hp['learning_rate']
         self.filters = cnn_hp['filters']
@@ -116,7 +119,7 @@ class ModelGenerator:
         output_shapes = []
         current_shape = list(self.input_shape)
         current_shape[-1] = self.filters
-        reduction_tx = [0.5] * (len(self.input_shape) - 1) + [2]
+        reduction_tx = [0.5] * self.op_dims + [2]
 
         for motif_index in range(self.motifs):
             # add N times a normal cell
@@ -181,7 +184,8 @@ class ModelGenerator:
         gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes_count, activation='softmax', name=f'Softmax{name_suffix}', kernel_regularizer=self.l2_weight_reg)(gap)
+        output = layers.Dense(self.output_classes_count, activation='softmax', kernel_regularizer=self.l2_weight_reg,
+                              name=f'Softmax{name_suffix}')(gap)
 
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
@@ -310,6 +314,12 @@ class ModelGenerator:
         else:
             cell_out = block_outputs[0]
 
+        # perform squeeze-excitation (SE) on cell output, if set in the configuration.
+        # Squeeze-excitation is performed before residual sum, following SE paper indications.
+        if self.se_cell_output:
+            cell_out = ops.SqueezeExcitation(self.op_dims, filters, se_ratio=8, use_bias=False, weight_reg=self.l2_weight_reg,
+                                             name=f'squeeze_excitation_c{self.cell_index}')(cell_out)
+
         # if option is set in configuration, make the cell a residual unit, by summing cell output with nearest lookback input
         if self.residual_cells:
             nearest_lookback = max(self.network_build_info.used_lookbacks)
@@ -319,11 +329,12 @@ class ModelGenerator:
             lb_shape = lb_input.shape.as_list()
             out_shape = cell_out.shape.as_list()
 
+            # 0 is the batch size, 1 is always related to spatial (for both 1D and 2D)
             different_depth = lb_shape[-1] != out_shape[-1]
-            different_spatial = lb_shape[1] != out_shape[1]  # 0 is the batch size, 1 is always related to spatial (for both 1D and 2D)
+            different_spatial = lb_shape[1] != out_shape[1]
 
             # if shapes are different, apply a linear projection, otherwise use the lookback as it is
-            pool_kernel_groups = 'x'.join(['2'] * (len(self.input_shape) - 1))
+            pool_kernel_groups = 'x'.join(['2'] * self.op_dims)
             pool_name = f'{pool_kernel_groups} maxpool'
             # linear projection = max pool + pointwise conv if also different depth (second and third arguments), otherwise just max pool
             if different_spatial:
@@ -417,7 +428,7 @@ class ModelGenerator:
 
         if self.save_weights:
             # Save best weights, using as metric the last output in case of multi-output models
-            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}'\
+            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}' \
                 if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.h5'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))

@@ -290,6 +290,7 @@ def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int
     return g
 
 
+# TODO: currently does not consider parameters added due to residual units (projection can have parameters) and squeeze-excitation layers
 class NetworkGraph:
     '''
     Generate and store a graph representing the whole neural network structure, without the learning functionalities
