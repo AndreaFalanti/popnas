@@ -17,7 +17,9 @@ from .common import Identity, SeparableConvolution, Convolution, DilatedConvBatc
 from .cvt import CVTStage, SimplifiedCVT
 from .sdp import ScheduledDropPath
 from .rnn import Lstm, Gru, RnnBatchReduce
+from .squeeze_excitation import SqueezeExcitation
+
 
 __all__ = ['Identity', 'SeparableConvolution', 'Convolution', 'StackedConvolution', 'TransposeConvolutionStack', 'DilatedConvBatchActivationPooling',
-           'Pooling', 'PoolingConv', 'ScheduledDropPath', 'CVTStage', 'SimplifiedCVT', 'Lstm', 'Gru', 'RnnBatchReduce',
+           'Pooling', 'PoolingConv', 'ScheduledDropPath', 'CVTStage', 'SimplifiedCVT', 'Lstm', 'Gru', 'RnnBatchReduce', 'SqueezeExcitation',
            'op_dim_selector']
