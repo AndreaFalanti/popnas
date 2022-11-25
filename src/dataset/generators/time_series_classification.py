@@ -63,8 +63,8 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 # check if there is a TS file ending with split name (both custom and UCR-UEA archives follow this convention)
                 ts_filename = [filename for filename in os.listdir(self.dataset_path) if filename.lower().endswith(f'{split_name}.ts')][0]
                 x, y = _load_ts(os.path.join(self.dataset_path, ts_filename))
-            except:
-                raise ValueError('No supported dataset format recognized at path provided in configuration')
+            except IndexError:
+                raise ValueError('No supported dataset format recognized at the path provided in configuration')
 
         # make a plain list to perform one_hot correctly in preprocessor
         y = np.squeeze(y)
