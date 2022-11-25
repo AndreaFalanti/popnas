@@ -52,6 +52,23 @@ def _convert_labels_to_zero_indexed_categorical(y: np.ndarray):
         return new_y.astype(np.int32)
 
 
+def reimmission_sample_in_monosample_classes(x: np.ndarray, y: np.ndarray, num_classes: int):
+    '''
+    Perform a reimmission in classes where there is a single sample, so that the train-val stratified split can be applied.
+    It is a no-OP if there aren't problematic classes with just one sample.
+    For an example, refer to the FiftyWords dataset of the UEA archive.
+
+    TODO: it would be better to data augment the new sample in some way, to avoid sharing data between the two splits.
+    Since it is a single sample and should be a very rare case, it is an "acceptable" workaround to solve the problem.
+    '''
+    monosample_classes = [i for i in range(num_classes) if len(y[y == i]) == 1]
+    for class_index in monosample_classes:
+        x = np.append(x, x[y == class_index], axis=0)
+        y = np.append(y, y[y == class_index], axis=0)
+
+    return x, y
+
+
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
@@ -103,6 +120,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 if self.val_size is None:
                     x_val, y_val = self._get_numpy_split('validation')
                 else:
+                    x_train, y_train = reimmission_sample_in_monosample_classes(x_train, y_train, num_classes=classes)
                     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, stratify=y_train,
                                                                       random_state=SEED)
 
