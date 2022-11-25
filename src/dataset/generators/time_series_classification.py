@@ -22,8 +22,13 @@ def _load_ts(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
     x_train, y_train = sktdata.load_from_tsfile(file_path, return_data_type='numpy3d')
     # ts use array format (num_series, ts_length), instead of TF 1D ops required format (ts_length, num_series). Swap the axis.
     x_train = np.swapaxes(x_train, -2, -1)
-    # ts encode labels as str (e.g. 1.0, 2.0). Cast to int for one-hot encoding (need intermediate conversion to float).
-    y_train = y_train.astype(np.float).astype(np.int32)
+    # in .ts format, labels are str, but are commonly str representation of int and float numbers.
+    # in this case converting them prior to other processing allows to maintain the order of the labels
+    # if they are really str labels, then the conversion fails, but it's not a problem because they will be ordered correctly
+    try:
+        y_train = y_train.astype(np.float).astype(np.int32)
+    except ValueError:
+        print('String labels detected')
 
     return x_train, y_train
 
@@ -43,7 +48,8 @@ def _convert_labels_to_zero_indexed_categorical(y: np.ndarray):
         for i, label in enumerate(class_labels):
             new_y[y == label] = i
 
-        return new_y
+        # if y labels are originally str, also new_y will be of str type, so an explicit conversion is needed
+        return new_y.astype(np.int32)
 
 
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
