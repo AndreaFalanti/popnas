@@ -79,12 +79,15 @@ def get_logger(name, filename='debug.log'):
 
 
 def create_critical_logger():
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('critical')
     file_handler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
     file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
+    # loggers with same name are actually the same logger, so they already have handlers in that case.
+    # clear them and add the new ones. In this way, when running multiple experiments with e2e scripts, each experiments has its isolated log file.
+    logger.handlers.clear()
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
