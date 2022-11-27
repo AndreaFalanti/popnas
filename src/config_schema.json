@@ -322,7 +322,8 @@
                     "enum": [
                         "CPU",
                         "GPU",
-                        "TPU"
+                        "TPU",
+                        "multi-GPU"
                     ]
                 }
             },
