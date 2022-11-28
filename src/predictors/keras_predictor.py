@@ -39,7 +39,12 @@ class KerasPredictor(Predictor, ABC):
 
         self.y_col = y_col
         self.save_weights = save_weights
-        self.train_strategy = train_strategy
+
+        # TODO: multi-GPU is bugged for predictors, probably related only to RNN layers,
+        #  see this: https://github.com/tensorflow/tensorflow/issues/45594.
+        #  As workaround, put the model only on the first GPU, the training is very fast anyway.
+        self.train_strategy = train_strategy if not isinstance(train_strategy, tf.distribute.MirroredStrategy) \
+            else tf.distribute.OneDeviceStrategy(device="/gpu:0")
 
         self.hp_tuning = hp_tuning
 
