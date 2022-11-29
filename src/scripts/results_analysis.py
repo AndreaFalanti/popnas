@@ -164,7 +164,7 @@ def write_search_infos(save_path: str, infos: 'Iterable[SearchInfo]'):
     ''' Write a CSV file about the search results (i.e. num of sampled architectures, best accuracy found, total search time, etc...). '''
     with open(save_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Dataset', '# Networks', 'Best Accuracy', 'Best-5 Mean Accuracy', 'Search Time'])
+        writer.writerow(['Dataset', '# Networks', 'Top Accuracy', 'Top-5 Cells Accuracy', 'Search Time'])
         writer.writerows([search_info.to_csv_row() for search_info in infos])
 
 
