@@ -48,12 +48,11 @@ def initialize_log_folders(folder_name: str = None):
     os.mkdir(os.path.join(log_path, 'plots', 'pdf'))
 
 
-def check_log_folder(folder_path: str):
+def restore_log_folder(folder_path: str):
     if not os.path.exists(folder_path):
         raise NotADirectoryError('Log directory not found')
 
-    global log_path
-    log_path = folder_path
+    set_log_path(folder_path)
 
 
 def get_logger(name, filename='debug.log'):

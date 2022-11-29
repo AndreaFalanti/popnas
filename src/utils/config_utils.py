@@ -36,7 +36,7 @@ def initialize_search_config_and_logs(log_folder_name: str, json_config_path: st
         the NAS run configuration
     '''
     if restore_path is not None:
-        log_service.check_log_folder(restore_path)
+        log_service.restore_log_folder(restore_path)
         # load the exact configuration provided when the run was started
         with open(log_service.build_path('restore', 'run.json'), 'r') as f:
             run_config = json.load(f)
