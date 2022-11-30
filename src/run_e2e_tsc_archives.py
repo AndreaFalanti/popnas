@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os.path
 import pickle
 import sys
@@ -26,17 +27,29 @@ def adapt_config_to_dataset_metadata(base_config: 'dict[str, Any]', ds_meta: TSC
     new_config['dataset']['path'] = os.path.join('datasets', 'UCR-UEA-archives', root_ds_path, ds_meta.name)
     new_config['dataset']['classes_count'] = ds_meta.classes
 
+    # adapt validation size
+    val_size = new_config['dataset']['validation_size']
+    # have at least 60 samples for validation, otherwise validation accuracy can become really noisy.
+    # as example, if you have 20 samples, you have 5% accuracy gaps between when an architecture predicts just one sample better than another one!
+    # accuracy predictor therefore can't reliably predict the quality.
+    val_min_samples = 60
+    if val_size is not None and val_size * ds_meta.train_size < val_min_samples:
+        # 100 factors are to keep it as a .2f fraction
+        val_size = math.ceil((val_min_samples * 100) / ds_meta.train_size) / 100
+
     # address rare case where validation set could have fewer samples than classes, which does not allow to correctly perform the train-val split
-    if new_config['dataset']['validation_size'] is not None and new_config['dataset']['validation_size'] * ds_meta.train_size < ds_meta.classes:
-        new_config['dataset']['validation_size'] = min([0.10 + i * 0.05 for i in range(8)
-                                                        if (0.10 + i * 0.05) * ds_meta.train_size >= ds_meta.classes])
+    if val_size is not None and val_size * ds_meta.train_size < ds_meta.classes:
+        val_size = min([0.10 + i * 0.05 for i in range(8) if (0.10 + i * 0.05) * ds_meta.train_size >= ds_meta.classes])
+
+    # override val_size with potential new value
+    new_config['dataset']['validation_size'] = val_size
 
     # adapt batch size to have at least 10 train batches per epoch
-    val_size = 0 if new_config['dataset']['validation_size'] is None else new_config['dataset']['validation_size']
+    val_size = 0 if val_size is None else val_size
     train_split_size = 1 - val_size
-    # batch size scales by 32. Min value is 32, max is 128.
-    batch_units = 32
-    batch_mult = int(clamp((ds_meta.train_size * train_split_size) // (10 * batch_units), 1, 4))
+    # batch size scales by 16. Min value is 16, max is 128.
+    batch_units = 16
+    batch_mult = int(clamp((ds_meta.train_size * train_split_size) // (10 * batch_units), 1, 8))
     new_config['dataset']['batch_size'] = batch_units * batch_mult
 
     # TODO: could be a good idea to adapt also motifs, based on the number of timesteps.
