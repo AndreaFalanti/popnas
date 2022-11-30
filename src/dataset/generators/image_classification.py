@@ -16,8 +16,8 @@ from dataset.preprocessing import ImagePreprocessor
 
 
 class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: dict):
-        super().__init__(dataset_config)
+    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
+        super().__init__(dataset_config, enable_tpu_tricks)
 
         resize_config = dataset_config['resize']
         self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None

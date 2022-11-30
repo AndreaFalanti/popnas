@@ -61,7 +61,7 @@ def main():
 
     # Load and prepare the dataset
     print('Preparing datasets...')
-    dataset_generator = dataset_generator_factory(config['dataset'])
+    dataset_generator = dataset_generator_factory(config['dataset'], isinstance(train_strategy, tf.distribute.TPUStrategy))
     test_ds, classes_count, image_shape, test_batches = dataset_generator.generate_test_dataset()
     print('Datasets generated successfully')
 

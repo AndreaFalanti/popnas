@@ -12,6 +12,7 @@ def test_data_augmentation(ds: tf.data.Dataset):
     '''
     Function helpful for debugging data augmentation and making sure it's working properly.
     DON'T USE IT IN ACTUAL RUNS.
+
     Args:
         ds: any TF dataset where data augmentation is applied
     '''
@@ -65,15 +66,15 @@ def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, flo
     return class_weights_dict
 
 
-def dataset_generator_factory(ds_config: dict) -> BaseDatasetGenerator:
+def dataset_generator_factory(ds_config: dict, enable_tpu_tricks: bool = False) -> BaseDatasetGenerator:
     '''
     Return the right dataset generator, based on task type.
     '''
     task_type = ds_config['type']
 
     if task_type == 'image_classification':
-        return ImageClassificationDatasetGenerator(ds_config)
+        return ImageClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
     elif task_type == 'time_series_classification':
-        return TimeSeriesClassificationDatasetGenerator(ds_config)
+        return TimeSeriesClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
     else:
         raise ValueError('Dataset task type is not supported by POPNAS or invalid')

@@ -18,7 +18,7 @@ class BaseDatasetGenerator(ABC):
     The right subclass should be instantiated from the task type given in configuration (e.g. image classification).
     '''
 
-    def __init__(self, dataset_config: dict):
+    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
         self._logger = log_service.get_logger(__name__)
 
         self.dataset_name = dataset_config['name']  # type: str
@@ -33,6 +33,8 @@ class BaseDatasetGenerator(ABC):
         data_augmentation_config = dataset_config['data_augmentation']
         self.use_data_augmentation = data_augmentation_config['enabled']
         self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
+
+        self.enable_tpu_tricks = enable_tpu_tricks
 
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
                           keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation_fns: 'Optional[list[Callable]]' = None,
@@ -65,6 +67,12 @@ class BaseDatasetGenerator(ABC):
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
+            # make all batches of the same size, avoids drop remainder to not loss data, instead duplicates some samples
+            if self.enable_tpu_tricks:
+                duplicated_samples_count = batch_size - (len(ds) % batch_size)
+                duplicate_ds = ds.take(duplicated_samples_count)
+                ds = ds.concatenate(duplicate_ds)
+
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
         # PREPROCESSING
