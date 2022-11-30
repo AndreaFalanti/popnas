@@ -15,10 +15,13 @@ def partition_ds_iterable(elems: Iterable[TSCDatasetMetadata], n: int):
 
     for ds_meta in elems:
         total, index = heapq.heappop(totals)
-        ds_cost = ds_meta.train_size * ds_meta.timesteps
+        # very simple heuristic for estimating the search cost, helps a bit in balancing the execution among multiple workers
+        cost_mult = 1.1 if ds_meta.multivariate else 1.0
+        ds_cost = ds_meta.train_size * ds_meta.timesteps * cost_mult
 
         lists[index].append(ds_meta)
-        heapq.heappush(totals, (total + ds_cost, index))
+        # 10000 extra cost to avoid large len imbalances between shards (simulates additional costs due to the algorithm)
+        heapq.heappush(totals, (total + ds_cost + 10000, index))
 
     return lists
 
@@ -48,11 +51,15 @@ def main(p: str, n: int):
     with open(json_path, 'r') as f:
         ds_metadata_json_list = json.load(f)
 
+    # invalid datasets due to NaN values or other problems
+    invalid_datasets = ['MelbournePedestrian']
+
     ds_metadata_list = [TSCDatasetMetadata(m) for m in ds_metadata_json_list]
     ds_metadata_filtered_list = [ds_meta for ds_meta in ds_metadata_list if ds_meta.name in ALL_DATASET_NAMES]
     print(f'Missmatch between {len(ds_metadata_list) - len(ds_metadata_filtered_list)} metadata name and dataset folders')
     # discard too small datasets and datasets with samples of unequal size (timesteps are = 0 if unequal)
-    ds_metadata_filtered_list = [ds_meta for ds_meta in ds_metadata_filtered_list if ds_meta.train_size >= 360 and ds_meta.timesteps > 0]
+    ds_metadata_filtered_list = [ds_meta for ds_meta in ds_metadata_filtered_list
+                                 if ds_meta.train_size >= 360 and ds_meta.timesteps > 0 and ds_meta.name not in invalid_datasets]
 
     partitions = partition_ds_iterable(ds_metadata_filtered_list, n)
     for i, partition in enumerate(partitions):
