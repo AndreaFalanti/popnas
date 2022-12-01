@@ -201,6 +201,17 @@ def save_multiple_experiments_info(log_paths: 'list[str]', summary_files_save_lo
     write_final_training_infos(os.path.join(summary_files_save_location, f'{summary_files_prefix}_final_training.csv'), final_training_infos)
 
 
+def save_tsc_aggregated_info(summary_files_save_location: str):
+    ''' Write csv aggregating univariate and multivariate results. '''
+    uni_search_df = pd.read_csv(os.path.join(summary_files_save_location, 'univariate_search.csv'), index_col='Dataset')
+    multi_search_df = pd.read_csv(os.path.join(summary_files_save_location, 'multivariate_search.csv'), index_col='Dataset')
+    pd.concat([uni_search_df, multi_search_df]).to_csv(os.path.join(summary_files_save_location, 'all_search.csv'), float_format='%.3f')
+
+    uni_final_df = pd.read_csv(os.path.join(summary_files_save_location, 'univariate_final_training.csv'), index_col='Dataset')
+    multi_final_df = pd.read_csv(os.path.join(summary_files_save_location, 'multivariate_final_training.csv'), index_col='Dataset')
+    pd.concat([uni_final_df, multi_final_df]).to_csv(os.path.join(summary_files_save_location, 'all_final_training.csv'), float_format='%.3f')
+
+
 def execute(p: 'list[str]', tsca: bool = False):
     ''' Refer to argparse help for more information about these arguments. '''
     if tsca:
@@ -213,6 +224,7 @@ def execute(p: 'list[str]', tsca: bool = False):
 
         save_multiple_experiments_info(univariate_paths, root_folder, summary_files_prefix='univariate')
         save_multiple_experiments_info(multivariate_paths, root_folder, summary_files_prefix='multivariate')
+        save_tsc_aggregated_info(root_folder)
     else:
         save_multiple_experiments_info(p, p[0])
 
