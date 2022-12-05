@@ -6,7 +6,7 @@ TODO WORKAROUND: to support 1D operators, tensor shapes have been kept in 3D but
 '''
 import re
 from collections import namedtuple
-from typing import Union
+from typing import Union, Any
 
 import graphviz
 from igraph import *
@@ -180,7 +180,7 @@ def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: i
 
 
 # TODO: inspired by feature_utils.compute_features_from_dag, maybe it is better to avoid duplication of first part of code
-def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShape):
+def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShape, residual_output: bool):
     blocks = len(cell_spec)
     flat_cell_spec = list_flatten(cell_spec)
     inputs = flat_cell_spec[::2]
@@ -243,11 +243,16 @@ def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShap
     else:
         unused_adds['name'] = [f'out_c{cell_index}']
 
+    if residual_output:
+        residual = g.add_vertex(f'residual_out_c{cell_index}', op='add', cell_index=cell_index, block_index=-1, connect_lookback=123, params=0)
+        g.add_edge(f'out_c{cell_index}', residual, tensor_h=output_shape.h, tensor_w=output_shape.w, tensor_c=output_shape.c)
+
     return g
 
 
 def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int, str]]', lookback_shapes: 'list[TensorShape]',
-                 lookback_reshape: bool, output_shape: TensorShape, cell_index: int, op_regex_dict: 'dict[str, re.Pattern]'):
+                 lookback_reshape: bool, nearest_used_lookback: int, output_shape: TensorShape, cell_index: int,
+                 op_regex_dict: 'dict[str, re.Pattern]'):
     # if shapes differ (and are not related to original input), then -2 lookback must be reshaped to the same dimension of -1 lookback
     # only height is checked since only one dimension is necessary to diverge to trigger the reshaping
     # avoid it in case lookback_reshape is set to false in configuration
@@ -284,13 +289,39 @@ def merge_graphs(main_g: Graph, cell_g: Graph, lookback_indexes: 'list[Union[int
     }
 
     g.add_edges(lb1_edges + lb2_edges, attributes=edge_attributes)
+
+    # if residual is used, add edge plus potential projection
+    residual_vs = cell_g.vs.select(connect_lookback=123)
+    if len(residual_vs) > 0:
+        # add spatial projection (maxpool + pointwise conv if also channels change)
+        proj = None
+        if output_shape.h != lookback_shapes[nearest_used_lookback].h:
+            proj_params = 0 if output_shape.c == lookback_shapes[nearest_used_lookback].c \
+                else compute_conv_params((1, 1), lookback_shapes[nearest_used_lookback].c, output_shape.c)
+            proj = g.add_vertex(f'residual_proj_c{cell_index}', op='spatial_proj', cell_index=cell_index, block_index=-1,
+                                connect_lookback=-100, params=proj_params)
+        elif output_shape.c != lookback_shapes[nearest_used_lookback].c:
+            proj = g.add_vertex(f'residual_proj_c{cell_index}', op='1x1 conv', cell_index=cell_index, block_index=-1,
+                                connect_lookback=-100, params=compute_conv_params((1, 1), lookback_shapes[nearest_used_lookback].c, output_shape.c))
+
+        # add edges: lb -> proj -> residual
+        if proj is not None:
+            g.add_edge(lookback_indexes[nearest_used_lookback], proj, tensor_h=output_shape.h, tensor_w=output_shape.w, tensor_c=output_shape.c)
+            g.add_edge(proj, f'residual_proj_c{cell_index}', tensor_h=output_shape.h, tensor_w=output_shape.w, tensor_c=output_shape.c)
+        # add edge: lb -> residual
+        else:
+            g.add_edge(lookback_indexes[nearest_used_lookback], f'residual_out_c{cell_index}',
+                       tensor_h=output_shape.h, tensor_w=output_shape.w, tensor_c=output_shape.c)
+
     # remove utility field otherwise it will be used in next merge, causing wrong edge connections
     del g.vs['connect_lookback']
 
     return g
 
 
-# TODO: currently does not consider parameters added due to residual units (projection can have parameters) and squeeze-excitation layers
+# TODO: needs a complete refactor, it is a total mess right now. Public interface should be kept unmodified if possible,
+#  but the internal graph construction could probably be drastically simplified
+# TODO: currently does not consider parameters added due to squeeze-excitation layers (recent addition, right now not used by default)
 class NetworkGraph:
     '''
     Generate and store a graph representing the whole neural network structure, without the learning functionalities
@@ -317,6 +348,7 @@ class NetworkGraph:
         used_lookbacks = set(filter(lambda el: el < 0, flat_inputs))
         # use_skips = any(x < -1 for x in used_lookbacks)
         used_cell_indices = list(range(cells_count - 1, -1, max(used_lookbacks, default=cells_count)))
+        max_used_lookback = max(used_lookbacks)
 
         reduction_cell_indices = list(range(normals_per_motif, cells_count, normals_per_motif + 1))
 
@@ -342,8 +374,9 @@ class NetworkGraph:
         # iterate on cells, using reduction bool list since we need the value later
         for cell_index, output_shape in enumerate(target_shapes):
             if cell_index in used_cell_indices:
-                cell_g = create_cell_graph(cell_spec, cell_index, output_shape)
-                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, lookback_reshape, output_shape, cell_index, op_regex_dict)
+                cell_g = create_cell_graph(cell_spec, cell_index, output_shape, residual_output=residual_cell_output)
+                g = merge_graphs(g, cell_g, lookback_vertex_indices, lookback_shapes, lookback_reshape, max_used_lookback,
+                                 output_shape, cell_index, op_regex_dict)
 
             # move -1 lookback to -2 position, than add new cell output as -1 lookback
             lookback_vertex_indices[-2] = lookback_vertex_indices[-1]
