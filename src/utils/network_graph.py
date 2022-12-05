@@ -302,10 +302,14 @@ class NetworkGraph:
     It is also useful to estimate quickly the amount of memory (parameters) required by the neural network.
     '''
 
-    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int,
-                 motifs: int, normals_per_motif: int, lookback_reshape: bool, op_regex_dict: 'dict[str, re.Pattern]') -> None:
+    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int, arc_config: 'dict[str, Any]',
+                 op_regex_dict: 'dict[str, re.Pattern]') -> None:
         super().__init__()
         self.op_regex_dict = op_regex_dict
+        motifs = arc_config['motifs']  # type: int
+        normals_per_motif = arc_config['normal_cells_per_motif']  # type: int
+        lookback_reshape = arc_config['lookback_reshape']  # type: bool
+        residual_cell_output = arc_config['residual_cells']  # type: bool
 
         flat_inputs = list_flatten(cell_spec)[::2]
         cells_count = motifs * (normals_per_motif + 1) - 1
