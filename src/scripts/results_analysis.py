@@ -219,8 +219,12 @@ def execute(p: 'list[str]', tsca: bool = False):
             raise AttributeError('Provide only the TSC archives root folder when using the --tsca option')
 
         root_folder = p[0]
-        univariate_paths = [f.path for f in os.scandir(os.path.join(root_folder, 'univariate')) if f.is_dir()]
-        multivariate_paths = [f.path for f in os.scandir(os.path.join(root_folder, 'multivariate')) if f.is_dir()]
+        # noinspection PyTypeChecker
+        univar_paths = sorted(os.scandir(os.path.join(root_folder, 'univariate')), key=lambda e: e.name)    # type: list[os.DirEntry]
+        # noinspection PyTypeChecker
+        multivar_paths = sorted(os.scandir(os.path.join(root_folder, 'multivariate')), key=lambda e: e.name)  # type: list[os.DirEntry]
+        univariate_paths = [f.path for f in univar_paths if f.is_dir()]
+        multivariate_paths = [f.path for f in multivar_paths if f.is_dir()]
 
         save_multiple_experiments_info(univariate_paths, root_folder, summary_files_prefix='univariate')
         save_multiple_experiments_info(multivariate_paths, root_folder, summary_files_prefix='multivariate')
