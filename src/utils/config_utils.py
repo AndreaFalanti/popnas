@@ -16,7 +16,7 @@ def validate_config_json(config: dict):
 
     # extra logic to check consistencies between multiple fields
     if not config['others']['pnas_mode'] and len(config['search_strategy']['additional_pareto_objectives']) == 0:
-        raise ValueError('POPNAS mode requires at least two Pareto objectives to optimize (score + at least 1 additional objective')
+        raise ValueError('POPNAS mode requires at least two Pareto objectives to optimize (score + at least 1 additional objective)')
 
     if config['others']['pnas_mode']:
         config['search_strategy']['additional_pareto_objectives'] = []
@@ -46,6 +46,11 @@ def initialize_search_config_and_logs(log_folder_name: str, json_config_path: st
         json_path = os.path.join('configs', 'run.json') if json_config_path is None else json_config_path
         with open(json_path, 'r') as f:
             run_config = json.load(f)
+
+        # retro-compatibility with previous configurations schemas
+        # set defaults for keys inserted after version 2.7
+        if run_config['architecture_parameters'].get('se_cell_output') is None:
+            run_config['architecture_parameters']['se_cell_output'] = False
 
         # copy config for possible run restore and post-search scripts
         with open(log_service.build_path('restore', 'run.json'), 'w') as f:
