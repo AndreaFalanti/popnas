@@ -1,15 +1,27 @@
-# POPNASv2
-Second version of Pareto-optimal Progressive Neural Architecture Search (POPNAS) algorithm, a neural architecture search method based on 
-[PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf).
+# POPNASv3
+Third version of Pareto-optimal Progressive Neural Architecture Search (POPNAS) algorithm, a neural architecture search method based on 
+[PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf), and direct extension
+and improvement of the second version.
 
-This new version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
+POPNASv2 has been developed by Andrea Falanti for his master's thesis at Politecnico di Milano, and the work has also been
+published at the IEEE IJCNN 2022.
+The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/document/9892073.
+The second version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
 an average 4x speed-up compared to PNAS on same experiment configurations.
-
-The top-accuracy neural network architectures found are now competitive with PNAS and other state-of-the-art methods,
+The top-accuracy neural network architectures found are competitive with PNAS and other state-of-the-art methods,
 solving the main drawback of the first POPNAS version.
 
-POPNASv2 has been developed by Andrea Falanti for his master's thesis at Politecnico di Milano, and the work has also have been published at the IEEE IJCNN 2022.
-The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/document/9892073.
+POPNASv3 extends the second version by addressing time series classification problems, adding new operators like LSTM, GRU
+and dilated convolutions to find network suited for these datasets.
+The general macro-architecture is improved by adding configuration options for residual connections and direct reshaping of the lookbacks
+in the block operators.
+Furthermore, the training procedure now supports multiple hardware environments, such as single GPU, multiple GPUs with a synchronized replica
+strategy and even TPU devices.
+Another major contribution is the addition of post-search procedures, namely the _model selection_ and _final training_ steps.
+The model selection trains more extensively the top networks found during the search, tuning also their macro-architecture.
+The final training finalize the process by training to convergence the best configuration found during the model selection,
+producing a deployment-ready neural network saved in ONNX format.
+You can read more about the latest version and its experiment results on the preprint available at: https://doi.org/10.48550/arXiv.2212.06735.
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
