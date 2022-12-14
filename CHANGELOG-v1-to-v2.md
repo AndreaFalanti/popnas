@@ -1,4 +1,4 @@
-# Changelog from v1 to v2.0
+# Changelog from v1.0 to v2.0
 
 The differences between the two major versions are shown here in details at a macro level.
 Most changes and WIP of versions 2.0+ are not tracked in this changelog (versions 2.0+ are refinement posterior to WCCI publication).
