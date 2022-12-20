@@ -7,15 +7,29 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 
 class ImagePreprocessor(DataPreprocessor):
-    def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], to_one_hot: Optional[int]):
+    def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], to_one_hot: Optional[int],
+                 resize_labels: bool = False):
+        '''
+        Preprocessor which can be applied to datasets composed of images to apply some basic transformations.
+
+        Args:
+            resize_dim: target size for image resizing.
+            rescaling: transformation to apply on pixel values, as multiplier and offset, e.g. (1/255., 0) to normalize RGB in [0, 1] interval.
+            to_one_hot: encode labels as one-hot. Can be used on int labels.
+            resize_labels: when labels are images (e.g. masks in segmentation tasks), set it to True to resize both X and Y.
+        '''
         super().__init__()
         self.resize_dim = resize_dim
         self.rescaling = rescaling
         self.to_one_hot = to_one_hot
+        self.resize_labels = resize_labels
 
     def _apply_preprocessing_on_dataset_pipeline(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         if self.resize_dim is not None:
-            ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
+            if self.resize_labels:
+                ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), tf.image.resize(y, self.resize_dim)), num_parallel_calls=AUTOTUNE)
+            else:
+                ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
 
         # rescale pixel values (usually to [-1, 1] or [0, 1] domain), independent from dataset values so can be directly applied
         if self.rescaling is not None:
