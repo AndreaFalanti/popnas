@@ -7,7 +7,7 @@ from tensorflow.keras import models
 
 import log_service
 from dataset.utils import dataset_generator_factory
-from models.model_generator import ModelGenerator
+from models.generators.factory import model_generator_factory
 from utils.func_utils import parse_cell_structures
 from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
@@ -75,8 +75,8 @@ def main():
                                           save_path=os.path.join(model_path, 'test_confusion_matrix'))
     else:
         with train_strategy.scope():
-            model_gen = ModelGenerator(cnn_config, arc_config, test_batches, output_classes_count=classes_count, input_shape=image_shape,
-                                       data_augmentation_model=None)
+            model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, test_batches,
+                                                output_classes_count=classes_count, input_shape=image_shape, data_augmentation_model=None)
 
         model_paths = [f.path for f in os.scandir(model_path) if f.is_dir()] if args.top else [model_path]
         for m_index, m_path in enumerate(model_paths):
@@ -97,7 +97,7 @@ def main():
 
             with train_strategy.scope():
                 model_gen.alter_macro_structure(*macro)
-                mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=False)
+                mo_model, _, _ = model_gen.build_model(cell_spec, add_imagenet_stem=False)
                 model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
             print('Model generated successfully')

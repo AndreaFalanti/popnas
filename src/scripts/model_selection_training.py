@@ -13,7 +13,7 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
-from models.model_generator import ModelGenerator
+from models.generators.factory import model_generator_factory
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str, create_empty_folder
 from utils.graph_generator import GraphGenerator
@@ -149,9 +149,10 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # create a model generator instance
     with train_strategy.scope():
-        model_gen = ModelGenerator(cnn_config, arc_config, train_batches, output_classes_count=classes_count, input_shape=input_shape,
-                                   data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
-                                   preprocessing_model=preprocessing_model)
+        model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, train_batches,
+                                            output_classes_count=classes_count, input_shape=input_shape,
+                                            data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
+                                            preprocessing_model=preprocessing_model)
 
     m = arc_config['motifs']
     n = arc_config['normal_cells_per_motif']

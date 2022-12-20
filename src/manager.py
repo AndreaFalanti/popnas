@@ -12,7 +12,7 @@ from tensorflow.keras.utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
-from models.model_generator import ModelGenerator
+from models.generators.factory import model_generator_factory
 from utils.func_utils import cell_spec_to_str
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
@@ -53,15 +53,15 @@ class NetworkManager:
         dataset_generator = dataset_generator_factory(dataset_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
         self.dataset_folds, ds_classes, input_shape, self.train_batches, self.validation_batches, preprocessing_model \
             = dataset_generator.generate_train_val_datasets()
-        self.dataset_classes_count = ds_classes or self.dataset_classes_count   # Javascript || operator
+        self.dataset_classes_count = ds_classes or self.dataset_classes_count  # Javascript || operator
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if self.balance_class_losses else None
 
-        self.model_gen = ModelGenerator(cnn_config, arc_config, self.train_batches,
-                                        output_classes_count=self.dataset_classes_count, input_shape=input_shape,
-                                        data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
-                                        preprocessing_model=preprocessing_model,
-                                        save_weights=save_network_weights)
+        self.model_gen = model_generator_factory(dataset_config['type'], cnn_config, arc_config, self.train_batches,
+                                                 output_classes_count=self.dataset_classes_count, input_shape=input_shape,
+                                                 data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
+                                                 preprocessing_model=preprocessing_model,
+                                                 save_weights=save_network_weights)
 
         # TODO: if not needed here, just generate it in train to pass it in controller
         self.graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, self.dataset_classes_count)
