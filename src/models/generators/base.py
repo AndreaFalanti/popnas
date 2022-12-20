@@ -1,51 +1,38 @@
-import math
 import os.path
 import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-from tensorflow.keras import layers, regularizers, optimizers, losses, callbacks, Model, Sequential
+from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, callbacks, Model, Sequential
 
 import log_service
 import models.operators.layers as ops
-from models.op_instantiator import OpInstantiator
-from utils.func_utils import list_flatten
+from models.operators.op_instantiator import OpInstantiator
 from utils.nn_utils import compute_tensor_byte_size
 
 
+@dataclass
 class NetworkBuildInfo:
     '''
-    Helper class that extrapolate and store some relevant info from the cell specification, used for building the actual CNN.
+    Helper class storing relevant info extracted from the cell specification, used for building the actual neural network model.
     '''
-
-    def __init__(self, cell_spec: 'list[tuple]', total_cells: int, normal_cells_per_motif: int, use_stem: bool) -> None:
-        self.cell_specification = cell_spec
-        # it's a list of tuples, so already grouped by 4
-        self.blocks = len(cell_spec)
-
-        flat_cell_spec = list_flatten(cell_spec)
-        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_block_outputs = set(filter(lambda el: el >= 0, flat_cell_spec[::2]))
-        self.used_lookbacks = set(filter(lambda el: el < 0, flat_cell_spec[::2]))
-        self.unused_block_outputs = [x for x in range(0, self.blocks) if x not in used_block_outputs]
-        self.use_skip = self.used_lookbacks.issuperset({-2})
-
-        # additional info regarding the cell stack, with stem the logic is similar but dividing the two cases make the code more clear
-        if use_stem:
-            total_cells = total_cells + 2
-            self.used_cell_indexes = list(range(total_cells - 1, -1, max(self.used_lookbacks, default=total_cells)))
-            self.reduction_cell_indexes = [0, 1] + list(range(2 + normal_cells_per_motif, total_cells, normal_cells_per_motif + 1))
-            self.need_input_norm_indexes = [0] + [el - min(self.used_lookbacks) - 1 for el in self.reduction_cell_indexes] if self.use_skip else []
-        else:
-            self.used_cell_indexes = list(range(total_cells - 1, -1, max(self.used_lookbacks, default=total_cells)))
-            self.reduction_cell_indexes = list(range(normal_cells_per_motif, total_cells, normal_cells_per_motif + 1))
-            self.need_input_norm_indexes = [el - min(self.used_lookbacks) - 1 for el in self.reduction_cell_indexes] if self.use_skip else []
+    cell_specification: 'list[tuple]'
+    blocks: int
+    used_lookbacks: 'set[int]'
+    unused_block_outputs: 'list[int]'
+    use_skip: bool
+    used_cell_indexes: 'list[int]'
+    reduction_cell_indexes: 'list[int]'
+    need_input_norm_indexes: 'list[int]'
 
 
-class ModelGenerator:
+class BaseModelGenerator(ABC):
     '''
-    Class used to build a CNN Keras model, given a cell specification.
+    Abstract class used as baseline for model generators concrete implementations.
+    This class contains all the shared logic between the models, like how the blocks and cells are built, while
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
@@ -88,7 +75,7 @@ class ModelGenerator:
         self.preprocessing_model = preprocessing_model
 
         # compute output shapes of each cell, to enable easier tensor shape management
-        self.cell_output_shapes = self.__compute_cell_output_shapes()
+        self.cell_output_shapes = self._compute_cell_output_shapes()
 
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
         self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
@@ -113,30 +100,36 @@ class ModelGenerator:
 
         # recompute properties associated to the macro structure parameters
         self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
-        self.cell_output_shapes = self.__compute_cell_output_shapes()
+        self.cell_output_shapes = self._compute_cell_output_shapes()
 
-    def __compute_cell_output_shapes(self):
-        output_shapes = []
-        current_shape = list(self.input_shape)
-        current_shape[-1] = self.filters
-        reduction_tx = [0.5] * self.op_dims + [2]
+    @abstractmethod
+    def _generate_network_info(self, cell_spec: 'list[tuple]', use_stem: bool) -> NetworkBuildInfo:
+        '''
+        Generate a NetworkBuildInfo instance, which stores metadata useful for generating the model from the given cell specification.
 
-        for motif_index in range(self.motifs):
-            # add N times a normal cell
-            for _ in range(self.normal_cells_per_motif):
-                output_shapes.append(current_shape)
+        Args:
+            cell_spec: cell specification which must be transformed into a TF model.
+            use_stem: if the model uses the "ImageNet stem" or not.
 
-            # add 1 time a reduction cell, except for last motif
-            if motif_index + 1 < self.motifs:
-                current_shape = [math.ceil(val * tx) for val, tx in zip(current_shape, reduction_tx)]
-                output_shapes.append(current_shape)
+        Returns:
+            NetworkBuildInfo instance for the provided cell specification.
+        '''
+        raise NotImplementedError()
 
-        return output_shapes
+    @abstractmethod
+    def _compute_cell_output_shapes(self) -> 'list[list[int, ...]]':
+        '''
+        Computes the expected output shapes of each cell included in the macro-structure.
 
-    def __cur_target_shape(self):
+        Returns:
+            a list of tensor shapes, one for each cell output.
+        '''
+        raise NotImplementedError()
+
+    def _cur_target_shape(self):
         return self.cell_output_shapes[self.cell_index]
 
-    def __compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
+    def _compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
         input_tensors_size = 0
 
         for lb in self.network_build_info.used_lookbacks:
@@ -144,7 +137,7 @@ class ModelGenerator:
 
         return input_tensors_size
 
-    def __build_cell_util(self, filters: int, inputs: list, partitions_dict: dict, reduction: bool = False):
+    def _build_cell_util(self, filters: int, inputs: list, partitions_dict: dict, reduction: bool = False):
         '''
         Simple helper function for building a cell and quickly return the inputs for next cell.
 
@@ -160,15 +153,15 @@ class ModelGenerator:
         # models in case of multi-output models without -1 lookback usage (it was like training parallel uncorrelated models for each branch)
         if self.cell_index in self.network_build_info.used_cell_indexes:
             input_name = 'input' if self.cell_index == 0 else f'cell_{self.prev_cell_index}'
-            partitions_dict[f'{input_name} -> cell_{self.cell_index}'] = self.__compute_partition_size(inputs)
+            partitions_dict[f'{input_name} -> cell_{self.cell_index}'] = self._compute_partition_size(inputs)
 
-            cell_output = self.__build_cell(filters, reduction, inputs)
+            cell_output = self._build_cell(filters, reduction, inputs)
             self.prev_cell_index = self.cell_index
 
             if self.multi_output:
                 # use a dropout rate which is proportional to the cell index
                 drop_rate = round(self.dropout_prob * ((self.cell_index + 1) / self.total_cells), 2)
-                self.__generate_output(cell_output, dropout_prob=drop_rate)
+                self._generate_output(cell_output, dropout_prob=drop_rate)
         # skip cell creation, since it will not be used
         else:
             cell_output = None
@@ -179,98 +172,43 @@ class ModelGenerator:
         # while -1 is the output of the created cell
         return [inputs[-1], cell_output]
 
-    def __generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0):
-        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.total_cells else ''  # don't add suffix in single output model
-        gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
-        if dropout_prob > 0.0:
-            gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes_count, activation='softmax', kernel_regularizer=self.l2_weight_reg,
-                              name=f'Softmax{name_suffix}')(gap)
-
-        self.output_layers.update({f'Softmax{name_suffix}': output})
-        return output
-
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False):
+    @abstractmethod
+    def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
         '''
-        Build a Keras model from a given cell specification
+        Generate the layers necessary to produce the target output of the network.
+        These layers can be stacked after any cell output to get the final output.
+        They are always used at the network end, but could also be used for intermediate outputs.
+
         Args:
-            cell_spec: cell encoding
-            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS
+            input_tensor: the tensor to process, i.e., any cell output.
+            dropout_prob: [0, 1] probability value for applying dropout on the exit.
 
         Returns:
-            (Model, dict, int): Keras model, partition dictionary and final cell index
+            a tensor containing an intermediate output or the final output of the network.
         '''
-        self.network_build_info = NetworkBuildInfo(cell_spec, self.total_cells, self.normal_cells_per_motif, add_imagenet_stem)
-        self.output_layers = {}
+        raise NotImplementedError()
 
-        if len(cell_spec) > 0:
-            M = self.motifs
-            N = self.normal_cells_per_motif
-        # initial thrust case, empty cell
-        else:
-            M = 0
-            N = 0
+    @abstractmethod
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, dict, int]':
+        '''
+        Build a Keras model from the given cell specification.
+        The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
 
-        # store partition sizes (computed between each two adjacent cells and between last cell and GAP)
-        partitions_dict = {}
+        Args:
+            cell_spec: the cell specification defining the model motifs.
+            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
 
-        filters = self.filters
-        # reset indexes
-        self.cell_index = 0
-        self.block_index = 0
-        self.prev_cell_index = 0
+        Returns:
+            Keras model, partition dictionary, and the final cell index.
+        '''
+        raise NotImplementedError()
 
-        model_input = layers.Input(shape=self.input_shape)
-
-        start_lookback_input = model_input
-        # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
-        if self.preprocessing_model is not None:
-            start_lookback_input = self.preprocessing_model(start_lookback_input)
-        # data augmentation integrated in the model to perform it in GPU. Update lookback inputs to be the output of the data augmentation model.
-        if self.data_augmentation_model is not None:
-            start_lookback_input = self.data_augmentation_model(start_lookback_input)
-
-        # define inputs usable by blocks, both set to input image (or preprocessed / data augmentation of the input) at start
-        cell_inputs = [start_lookback_input, start_lookback_input]  # [skip, last]
-
-        # TODO: adapt it for 1D (time-series)
-        # if stem is used, it will add a conv layer + 2 reduction cells at the start of the network
-        if add_imagenet_stem:
-            stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
-            cell_inputs = [model_input, stem_conv]
-            filters = filters * 2
-            cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
-            filters = filters * 2
-            cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
-
-        # add (M - 1) times N normal cells and a reduction cell
-        for motif_index in range(M):
-            # add N times a normal cell
-            for _ in range(N):
-                cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict)
-
-            # add 1 time a reduction cell, except for last motif
-            if motif_index + 1 < M:
-                filters = filters * 2
-                cell_inputs = self.__build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
-
-        # take last cell output and use it in GAP
-        last_output = cell_inputs[-1]
-
-        # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
-        if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, \
-                   max(self.network_build_info.used_cell_indexes, default=0)
-        else:
-            output = self.__generate_output(last_output, self.dropout_prob)
-            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
-
-    def __build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
+    def _build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
         Generate the cell neural network implementation from the cell encoding.
 
         Args:
-            filters: Amount of filters to use
+            filters: Number of filters to use
             reduction: if it's a reduction cell or not
             inputs: Tensors that can be used as input (lookback inputs, inputs from previous cells or dataset samples)
 
@@ -279,14 +217,14 @@ class ModelGenerator:
         '''
         # normalize inputs if necessary (different spatial dimension of at least one input, from the one expected by the actual cell)
         if self.lookback_reshape and self.cell_index in self.network_build_info.need_input_norm_indexes:
-            inputs = self.__normalize_inputs(inputs, filters)
+            inputs = self._normalize_inputs(inputs, filters)
 
         # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
         total_inputs = inputs  # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
         for i, block in enumerate(self.network_build_info.cell_specification):
             self.block_index = i
-            block_out = self.__build_block(block, filters, reduction, total_inputs)
+            block_out = self._build_block(block, filters, reduction, total_inputs)
 
             # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
@@ -349,7 +287,7 @@ class ModelGenerator:
 
         return cell_out
 
-    def __normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int):
+    def _normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int):
         '''
         Normalize tensor dimensions between -2 and -1 inputs if they diverge (both spatial and depth normalization is applied).
         In actual architecture, the normalization should happen only if -2 is a normal cell output and -1 is instead the output
@@ -370,7 +308,7 @@ class ModelGenerator:
 
         return inputs
 
-    def __build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
+    def _build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
         '''
         Generate a block, following PNAS conventions.
 
@@ -386,7 +324,7 @@ class ModelGenerator:
         input_L, op_L, input_R, op_R = block_spec
         input_L_shape = inputs[input_L].shape.as_list()
         input_R_shape = inputs[input_R].shape.as_list()
-        cur_cell_target_output_shape = self.__cur_target_shape()  # has no batch dimension, contrary to inputs
+        cur_cell_target_output_shape = self._cur_target_shape()  # has no batch dimension, contrary to inputs
 
         # in reduction cells, stride only on lookback inputs (first level of cell DAG)
         strided_L = reduction and input_L < 0
@@ -416,12 +354,12 @@ class ModelGenerator:
         else:
             return self.op_instantiator.generate_block_join_operator(name_suffix)([left_layer, right_layer])
 
-    def define_callbacks(self, tb_logdir: str, score_metric: str):
+    def define_callbacks(self, tb_logdir: str, score_metric: str) -> 'list[callbacks.Callback]':
         '''
         Define callbacks used in model training.
 
         Returns:
-            (list[callbacks.Callback]): Keras callbacks
+            Keras callbacks to apply in model.fit() function.
         '''
         # By default shows losses and metrics for both training and validation
         model_callbacks = [callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')]
@@ -438,7 +376,14 @@ class ModelGenerator:
 
         return model_callbacks
 
-    def define_training_hyperparams_and_metrics(self):
+    def define_training_hyperparams_and_metrics(self) -> 'tuple[losses.Loss, Optional[dict[str, float]], optimizers.Optimizer, list[metrics.Metric]]':
+        '''
+        Get elements to finalize the training procedure of the network and compile the model.
+        Mainly, returns a suited loss function and optimizer for the model, plus the metrics to analyze during training.
+
+        Returns:
+            loss function, loss weights for each class, optimizer, and a list of metrics to compute during training.
+        '''
         if self.multi_output and len(self.output_layers) > 1:
             loss = {}
             loss_weights = {}
@@ -450,7 +395,8 @@ class ModelGenerator:
             loss = losses.CategoricalCrossentropy()
             loss_weights = None
 
-        metrics = ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
+        # accuracy is better as string, since it automatically converted to binary or categorical based on loss
+        model_metrics = ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
 
         if self.cdr_config['enabled']:
             decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
@@ -466,4 +412,4 @@ class ModelGenerator:
 
         optimizer = tfa.optimizers.AdamW(wd_schedule, lr_schedule) if self.use_adamW else optimizers.Adam(learning_rate=lr_schedule)
 
-        return loss, loss_weights, optimizer, metrics
+        return loss, loss_weights, optimizer, model_metrics

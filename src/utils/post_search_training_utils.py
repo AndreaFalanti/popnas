@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.keras import callbacks, Model, metrics, losses
 
 import log_service
-from models.model_generator import ModelGenerator
+from models.generators.base import BaseModelGenerator
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
@@ -198,7 +198,7 @@ class MacroConfig(NamedTuple):
                            config['cnn_hp']['filters'])
 
 
-def compile_post_search_model(mo_model: Model, model_gen: ModelGenerator, train_strategy: tf.distribute.Strategy):
+def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy):
     '''
     Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
     '''
