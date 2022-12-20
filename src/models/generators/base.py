@@ -378,6 +378,12 @@ class BaseModelGenerator(ABC):
 
         return model_callbacks
 
+    def _get_loss_function(self) -> losses.Loss:
+        return losses.CategoricalCrossentropy()
+
+    def _get_metrics(self) -> 'list[metrics.Metric]':
+        return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
+
     def define_training_hyperparams_and_metrics(self) -> 'tuple[losses.Loss, Optional[dict[str, float]], optimizers.Optimizer, list[metrics.Metric]]':
         '''
         Get elements to finalize the training procedure of the network and compile the model.
@@ -391,14 +397,14 @@ class BaseModelGenerator(ABC):
             loss_weights = {}
             for key in self.output_layers:
                 index = int(re.match(r'Softmax_c(\d+)', key).group(1))
-                loss.update({key: losses.CategoricalCrossentropy()})
+                loss.update({key: self._get_loss_function()})
                 loss_weights.update({key: 1 / (2 ** (self.total_cells - index))})
         else:
-            loss = losses.CategoricalCrossentropy()
+            loss = self._get_loss_function()
             loss_weights = None
 
         # accuracy is better as string, since it automatically converted to binary or categorical based on loss
-        model_metrics = ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
+        model_metrics = self._get_metrics()
 
         if self.cdr_config['enabled']:
             decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
