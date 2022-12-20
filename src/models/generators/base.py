@@ -32,7 +32,9 @@ class NetworkBuildInfo:
 class BaseModelGenerator(ABC):
     '''
     Abstract class used as baseline for model generators concrete implementations.
-    This class contains all the shared logic between the models, like how the blocks and cells are built, while
+    This class contains all the shared logic between the models, like how the blocks and cells are built, while the macro-implementation can
+    be defined ad-hoc for the type of tasks addressed.
+    Default loss function, optimizer and metrics are provided, but can be overridden and extended when necessary.
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
@@ -382,7 +384,7 @@ class BaseModelGenerator(ABC):
         Mainly, returns a suited loss function and optimizer for the model, plus the metrics to analyze during training.
 
         Returns:
-            loss function, loss weights for each class, optimizer, and a list of metrics to compute during training.
+            loss function, loss weights for each output, optimizer, and a list of metrics to compute during training.
         '''
         if self.multi_output and len(self.output_layers) > 1:
             loss = {}
