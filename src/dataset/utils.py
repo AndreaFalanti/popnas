@@ -76,5 +76,7 @@ def dataset_generator_factory(ds_config: dict, enable_tpu_tricks: bool = False) 
         return ImageClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
     elif task_type == 'time_series_classification':
         return TimeSeriesClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
+    elif task_type == 'image_segmentation':
+        return ImageSegmentationDatasetGenerator(ds_config, enable_tpu_tricks)
     else:
         raise ValueError('Dataset task type is not supported by POPNAS or invalid')

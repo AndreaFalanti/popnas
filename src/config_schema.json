@@ -185,7 +185,8 @@
                     "type": "string",
                     "enum": [
                         "image_classification",
-                        "time_series_classification"
+                        "time_series_classification",
+                        "image_segmentation"
                     ]
                 },
                 "name": {
