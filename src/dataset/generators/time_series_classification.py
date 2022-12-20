@@ -8,13 +8,8 @@ from sklearn.utils import shuffle
 from sktime import datasets as sktdata
 from tensorflow.keras import Sequential
 
-from dataset.generators.base import BaseDatasetGenerator, SEED
+from dataset.generators.base import BaseDatasetGenerator, SEED, load_npz
 from dataset.preprocessing import TimeSeriesPreprocessor
-
-
-def _load_npz(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
-    npz = np.load(file_path)
-    return npz['x'], npz['y']
 
 
 def _load_ts(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
@@ -79,7 +74,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def _get_numpy_split(self, split_name: str):
         # numpy case
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):
-            x, y = _load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'))
+            x, y = load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'))
         # ts (sktime) case
         else:
             try:

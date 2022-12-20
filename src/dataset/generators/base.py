@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Callable
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Sequential
 
@@ -10,6 +11,11 @@ from dataset.preprocessing import DataPreprocessor
 AUTOTUNE = tf.data.AUTOTUNE
 AutoShardPolicy = tf.data.experimental.AutoShardPolicy
 SEED = 1234
+
+
+def load_npz(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
+    npz = np.load(file_path)
+    return npz['x'], npz['y']
 
 
 class BaseDatasetGenerator(ABC):
