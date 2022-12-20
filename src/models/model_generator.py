@@ -64,7 +64,7 @@ class ModelGenerator:
         self.se_cell_output = arc_params['se_cell_output']
         self.output_classes_count = output_classes_count
         self.input_shape = input_shape
-        # basically the space of application of the operators, as int (2-D for images, 1-D for time series)
+        # basically, it indicates the application domain of the operators, as int (2D for images, 1D for time series)
         self.op_dims = len(input_shape) - 1
 
         self.lr = cnn_hp['learning_rate']

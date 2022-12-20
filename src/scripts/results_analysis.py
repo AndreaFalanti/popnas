@@ -235,7 +235,7 @@ def execute(p: 'list[str]', tsca: bool = False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('-p', metavar='FOLDER', nargs='+', type=str, help="log folders", required=True)
+    parser.add_argument('-p', metavar='FOLDERS', nargs='+', type=str, help="log folders", required=True)
     parser.add_argument('--tsca', help="process a folder composed of multiple experiments on UCR/UEA archives", action="store_true")
     args = parser.parse_args()
 

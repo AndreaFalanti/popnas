@@ -6,8 +6,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
-from tensorflow.keras import Sequential
-from tensorflow.keras import datasets
+from tensorflow.keras import datasets, Sequential
 from tensorflow.keras.utils import image_dataset_from_directory
 
 from dataset.augmentation import get_image_data_augmentation_model, get_image_tf_data_augmentation_functions
