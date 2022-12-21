@@ -12,14 +12,14 @@ op_dim_selector = {
     'gap': {1: GlobalAveragePooling1D, 2: GlobalAveragePooling2D}
 }
 
-from .common import Identity, SeparableConvolution, Convolution, DilatedConvBatchActivationPooling, StackedConvolution, TransposeConvolutionStack, \
-    Pooling, PoolingConv
+from .common import Identity, SeparableConvolution, Convolution, DilatedConvBatchActivationPooling, StackedConvolution, \
+    TransposeConvolution, TransposeConvolutionStack, Pooling, PoolingConv
 from .cvt import CVTStage, SimplifiedCVT
 from .sdp import ScheduledDropPath
 from .rnn import Lstm, Gru, RnnBatchReduce
 from .squeeze_excitation import SqueezeExcitation
 
 
-__all__ = ['Identity', 'SeparableConvolution', 'Convolution', 'StackedConvolution', 'TransposeConvolutionStack', 'DilatedConvBatchActivationPooling',
-           'Pooling', 'PoolingConv', 'ScheduledDropPath', 'CVTStage', 'SimplifiedCVT', 'Lstm', 'Gru', 'RnnBatchReduce', 'SqueezeExcitation',
-           'op_dim_selector']
+__all__ = ['Identity', 'SeparableConvolution', 'Convolution', 'StackedConvolution', 'TransposeConvolution', 'TransposeConvolutionStack',
+           'DilatedConvBatchActivationPooling', 'Pooling', 'PoolingConv', 'ScheduledDropPath', 'CVTStage', 'SimplifiedCVT', 'Lstm', 'Gru',
+           'RnnBatchReduce', 'SqueezeExcitation', 'op_dim_selector']
