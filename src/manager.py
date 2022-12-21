@@ -32,7 +32,7 @@ class NetworkManager:
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
-        It also preprocess the dataset, based on the run configuration.
+        It also initializes the dataset pipeline, based on the run configuration.
         '''
         self._logger = log_service.get_logger(__name__)
 
@@ -45,7 +45,14 @@ class NetworkManager:
         self.train_strategy = train_strategy
         self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
-        self.num_child = 0  # SUMMARY
+        # integer id assigned to each network trained, name of the folder containing the training outputs (see tensorboard_cnn) folder
+        self.current_network_id = 0
+        # fix for correcting the network id automatically when restoring a previous run
+        train_csv_path = log_service.build_path('csv', 'training_results.csv')
+        if os.path.isfile(train_csv_path):
+            with open(train_csv_path, 'r') as f:
+                self.current_network_id = len(f.readlines()) - 1
+
         self.best_score = 0.0
         self.score_objective = score_objective
 
@@ -86,7 +93,7 @@ class NetworkManager:
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
 
         with open(save_dir, 'w') as f:
-            # writelines function usually add \n automatically, but not in python...
+            # writelines function usually adds \n automatically, but not in python...
             f.writelines(line + '\n' for line in lines)
 
     def __write_multi_output_file(self, cell_spec: list, outputs_dict: dict):
@@ -94,7 +101,7 @@ class NetworkManager:
         outputs_dict['cell_spec'] = cell_spec_to_str(cell_spec)
 
         with open(log_service.build_path('csv', 'multi_output.csv'), mode='a+', newline='') as f:
-            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
+            # append mode, so if file handler is in position 0 it means is empty. In this case, write the headers too.
             if f.tell() == 0:
                 writer = csv.writer(f)
                 writer.writerow(self.multi_output_csv_headers)
@@ -166,14 +173,13 @@ class NetworkManager:
             (TrainingResults): (reward, timer, total_params, flops, inference_time) of trained network
         '''
 
-        # TODO: legacy function, don't know why it was called. Doesn't seem to harm the execution, if you feel brave
-        #  try to remove it and check if something is wrong.
+        # reset Keras layer naming counters
         tf.keras.backend.reset_uids()
 
         # create children folder on Tensorboard
-        self.num_child = self.num_child + 1
+        self.current_network_id = self.current_network_id + 1
         # grouped for block count and enumerated progressively
-        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.num_child))
+        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.current_network_id))
         os.makedirs(tb_logdir, exist_ok=True)
 
         # store training results for each fold

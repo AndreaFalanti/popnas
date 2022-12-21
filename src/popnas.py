@@ -66,13 +66,6 @@ class Popnas:
         # build a search space
         self.search_space = SearchSpace(ss_config, max_cells, benchmarking=benchmarking)
 
-        # create the Network Manager
-        if benchmarking:
-            self.cnn_manager = NetworkBenchManager(ds_config)
-        else:
-            self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
-                                              others_config['save_children_weights'], others_config['save_children_as_onnx'])
-
         plotter.initialize_logger()
 
         restore_info_save_path = log_service.build_path('restore', 'info.pickle')
@@ -96,6 +89,13 @@ class Popnas:
 
         if self.restore_info.must_restore_search_space_children():
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
+
+        # create the Network Manager
+        if benchmarking:
+            self.cnn_manager = NetworkBenchManager(ds_config)
+        else:
+            self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
+                                              others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         # create the predictors
         acc_pred_func, time_pred_func = self.initialize_predictors(train_strategy)
