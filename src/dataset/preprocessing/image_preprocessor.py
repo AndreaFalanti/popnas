@@ -27,7 +27,9 @@ class ImagePreprocessor(DataPreprocessor):
     def _apply_preprocessing_on_dataset_pipeline(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         if self.resize_dim is not None:
             if self.resize_labels:
-                ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), tf.image.resize(y, self.resize_dim)), num_parallel_calls=AUTOTUNE)
+                # resize labels with nearest neighbors interpolation to avoid class artifacts
+                ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), tf.image.resize(y, self.resize_dim, method='nearest')),
+                            num_parallel_calls=AUTOTUNE)
             else:
                 ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
 
