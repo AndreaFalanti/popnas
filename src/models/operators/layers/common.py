@@ -1,6 +1,6 @@
 import operator
 from abc import abstractmethod, ABC
-from typing import Optional
+from typing import Optional, Callable
 
 import tensorflow as tf
 from tensorflow.keras.layers import BatchNormalization, Layer
@@ -53,7 +53,7 @@ class Identity(Layer):
 
 class ConvBatchActivation(Layer, ABC):
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', dilation_rate: int = 1,
-                 weight_reg: Optional[Regularizer] = None, name='abstract', **kwargs):
+                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='abstract', **kwargs):
         ''' Abstract utility class used as baseline for any {Convolution operator - Batch Normalization - Activation} layer. '''
         super().__init__(name=name, **kwargs)
         self.filters = filters
@@ -61,6 +61,7 @@ class ConvBatchActivation(Layer, ABC):
         self.strides = strides
         self.dilation_rate = dilation_rate
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         if any(map(lambda x: x > 1, self.strides)) and dilation_rate > 1:
             # TensorFlow does not support using strides and dilation at same time. Strides are set to 1 to avoid problems.
@@ -80,7 +81,7 @@ class ConvBatchActivation(Layer, ABC):
     def call(self, inputs, training=None, mask=None):
         x = self.op(inputs)
         x = self.bn(x, training=training)
-        return tf.nn.silu(x)
+        return self.activation_f(x)
 
     def get_config(self):
         config = super().get_config()
@@ -89,7 +90,8 @@ class ConvBatchActivation(Layer, ABC):
             'kernel': self.kernel,
             'strides': self.strides,
             'dilation_rate': self.dilation_rate,
-            'weight_reg': self.weight_reg
+            'weight_reg': self.weight_reg,
+            'activation_f': self.activation_f
         })
         return config
 
@@ -147,7 +149,7 @@ class TransposeConvolution(ConvBatchActivation):
 
 class TransposeConvolutionStack(Layer):
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]',
-                 weight_reg: Optional[Regularizer] = None, name='tconv', **kwargs):
+                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='tconv', **kwargs):
         '''
         Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
         '''
@@ -156,12 +158,13 @@ class TransposeConvolutionStack(Layer):
         self.kernel = kernel
         self.strides = strides
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         transpose_stride = tuple([2] * len(strides))
         conv_strides = tuple(map(operator.mul, transpose_stride, strides))
 
-        self.transposeConv = TransposeConvolution(filters, kernel, transpose_stride, 1, weight_reg)
-        self.conv = Convolution(filters, kernel, conv_strides, 1, weight_reg)
+        self.transposeConv = TransposeConvolution(filters, kernel, transpose_stride, 1, weight_reg, activation_f=activation_f)
+        self.conv = Convolution(filters, kernel, conv_strides, 1, weight_reg, activation_f=activation_f)
 
     def call(self, inputs, training=None, mask=None):
         x = self.transposeConv(inputs)
@@ -173,14 +176,15 @@ class TransposeConvolutionStack(Layer):
             'filters': self.filters,
             'kernel': self.kernel,
             'strides': self.strides,
-            'weight_reg': self.weight_reg
+            'weight_reg': self.weight_reg,
+            'activation_f': self.activation_f
         })
         return config
 
 
 class StackedConvolution(Layer):
     def __init__(self, filter_list: 'list[int]', kernel_list: 'list[tuple]', stride_list: 'list[tuple]', weight_reg: Optional[Regularizer] = None,
-                 name='stack_conv', **kwargs):
+                 activation_f: Callable = tf.nn.silu, name='stack_conv', **kwargs):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
@@ -189,10 +193,12 @@ class StackedConvolution(Layer):
         self.kernel_list = kernel_list
         self.stride_list = stride_list
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         assert len(filter_list) == len(kernel_list) and len(kernel_list) == len(stride_list), "List lengths must match"
 
-        self.convs = [Convolution(f, k, s, weight_reg=weight_reg) for (f, k, s) in zip(filter_list, kernel_list, stride_list)]
+        self.convs = [Convolution(f, k, s, weight_reg=weight_reg, activation_f=activation_f)
+                      for (f, k, s) in zip(filter_list, kernel_list, stride_list)]
 
     def call(self, inputs, training=None, mask=None):
         x = inputs
@@ -208,7 +214,8 @@ class StackedConvolution(Layer):
             'filter_list': self.filter_list,
             'kernel_list': self.kernel_list,
             'stride_list': self.stride_list,
-            'weight_reg': self.weight_reg
+            'weight_reg': self.weight_reg,
+            'activation_f': self.activation_f
         })
         return config
 
@@ -240,15 +247,16 @@ class Pooling(Layer):
 
 
 class PoolingConv(Layer):
-    def __init__(self, pool_layer: Pooling, filters: int, weight_reg: Optional[Regularizer] = None, **kwargs):
+    def __init__(self, pool_layer: Pooling, filters: int, weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, **kwargs):
         ''' Adds a pointwise convolution (using Convolution class) to a Pooling layer, to adapt the output depth to filters size. '''
         super().__init__(name=f'{pool_layer.name}_pw', **kwargs)
         self.pool_layer = pool_layer
         self.filters = filters
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         ones = tuple([1] * len(self.pool_layer.size))
-        self.pointwise_conv = Convolution(filters, kernel=ones, strides=ones, weight_reg=weight_reg)
+        self.pointwise_conv = Convolution(filters, kernel=ones, strides=ones, weight_reg=weight_reg, activation_f=activation_f)
 
     def call(self, inputs, training=None, mask=None):
         x = self.pool_layer(inputs)
@@ -259,6 +267,7 @@ class PoolingConv(Layer):
         config.update({
             'pool_layer': self.pool_layer,
             'filters': self.filters,
-            'weight_reg': self.weight_reg
+            'weight_reg': self.weight_reg,
+            'activation_f': self.activation_f
         })
         return config

@@ -1,3 +1,6 @@
+from typing import Callable
+
+import tensorflow as tf
 from tensorflow.keras.layers import Layer, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
@@ -56,12 +59,12 @@ class OpInstantiator:
     def generate_block_join_operator(self, name_suffix: str):
         return self.block_join_op_selector[self.block_op_join](name=f'{self.block_op_join}{name_suffix}')
 
-    def generate_pointwise_conv(self, filters: int, strided: bool, name: str):
+    def generate_pointwise_conv(self, filters: int, strided: bool, name: str, activation_f: Callable = tf.nn.silu):
         '''
         Provide builder for generating a pointwise convolution easily, for tensor shape regularization purposes.
         '''
         strides = self.reduction_stride if strided else self.normal_stride
-        return Convolution(filters, tuple([1] * self.op_dims), strides=strides, name=name)
+        return Convolution(filters, tuple([1] * self.op_dims), strides=strides, activation_f=activation_f, name=name)
 
     def build_op_layer(self, op_name: str, filters: int, input_filters: int, layer_name_suffix: str, strided: bool = False) -> Layer:
         '''
