@@ -3,7 +3,6 @@ import math
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 
-import models.operators.layers as ops
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
 from utils.func_utils import list_flatten
 
@@ -73,46 +72,20 @@ class ClassificationModelGenerator(BaseModelGenerator):
     def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, dict, int]':
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)
         self.output_layers = {}
-
-        if len(cell_spec) > 0:
-            M = self.motifs
-            N = self.normal_cells_per_motif
-        # initial thrust case, empty cell
-        else:
-            M = 0
-            N = 0
-
         # store partition sizes (computed between each two adjacent cells and between last cell and GAP)
         partitions_dict = {}
 
+        M, N = self._get_macro_params(cell_spec)
         filters = self.filters
-        # reset indexes
-        self.cell_index = 0
-        self.block_index = 0
-        self.prev_cell_index = 0
+        self._reset_metadata_indexes()
 
         model_input = layers.Input(shape=self.input_shape)
-
-        start_lookback_input = model_input
-        # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
-        if self.preprocessing_model is not None:
-            start_lookback_input = self.preprocessing_model(start_lookback_input)
-        # data augmentation integrated in the model to perform it in GPU. Update lookback inputs to be the output of the data augmentation model.
-        if self.data_augmentation_model is not None:
-            start_lookback_input = self.data_augmentation_model(start_lookback_input)
-
+        initial_lookback_input = self._apply_preprocessing_and_augmentation(model_input)
         # define inputs usable by blocks, both set to input image (or preprocessed / data augmentation of the input) at start
-        cell_inputs = [start_lookback_input, start_lookback_input]  # [skip, last]
+        cell_inputs = [initial_lookback_input, initial_lookback_input]  # [skip, last]
 
-        # TODO: adapt it for 1D (time-series)
-        # if stem is used, it will add a conv layer + 2 reduction cells at the start of the network
         if add_imagenet_stem:
-            stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
-            cell_inputs = [model_input, stem_conv]
-            filters = filters * 2
-            cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
-            filters = filters * 2
-            cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+            cell_inputs, filters = self._prepend_imagenet_stem(cell_inputs, filters, partitions_dict)
 
         # add (M - 1) times N normal cells and a reduction cell
         for motif_index in range(M):
@@ -120,7 +93,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
             for _ in range(N):
                 cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict)
 
-            # add 1 time a reduction cell, except for last motif
+            # add 1 time a reduction cell, except for the last motif
             if motif_index + 1 < M:
                 filters = filters * 2
                 cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
@@ -128,10 +101,6 @@ class ClassificationModelGenerator(BaseModelGenerator):
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
-        # force to build output in case of initial thrust, since no cells are present (outputs are built in __build_cell_util if using multi-output)
-        if self.multi_output and len(self.output_layers) > 0:
-            return Model(inputs=model_input, outputs=self.output_layers.values()), partitions_dict, \
-                   max(self.network_build_info.used_cell_indexes, default=0)
-        else:
-            output = self._generate_output(last_output, self.dropout_prob)
-            return Model(inputs=model_input, outputs=output), partitions_dict, max(self.network_build_info.used_cell_indexes, default=0)
+        model = self._finalize_model(model_input, last_output)
+        last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
+        return model, partitions_dict, last_cell_index

@@ -139,19 +139,19 @@ class BaseModelGenerator(ABC):
 
         return input_tensors_size
 
-    def _build_cell_util(self, filters: int, inputs: list, partitions_dict: dict, reduction: bool = False):
+    def _build_cell_util(self, filters: int, inputs: 'list[tf.Tensor]', partitions_dict: dict, reduction: bool = False) -> 'list[tf.Tensor]':
         '''
-        Simple helper function for building a cell and quickly return the inputs for next cell.
+        Simple helper function for building a cell and quickly return the inputs for the next cell.
 
         Args:
-            filters (int): number of filters
-            inputs (list<tf.Tensor>): previous cells output, that can be used as inputs in the current cell
-            reduction (bool, optional): Build a reduction cell? Defaults to False.
+            filters: number of filters
+            inputs: previous cells output, that can be used as inputs in the current cell
+            reduction: set it to true in reduction cells
 
         Returns:
-            (list<tf.Tensor>): Usable inputs for next cell
+            lookback inputs for the next cell
         '''
-        # this check avoids building cells not used in actual final model (cells not linked to output), also removing the problem of multi-branch
+        # this check avoids building cells not used in the final model (cells not linked to output), also removing the problem of multi-branch
         # models in case of multi-output models without -1 lookback usage (it was like training parallel uncorrelated models for each branch)
         if self.cell_index in self.network_build_info.used_cell_indexes:
             input_name = 'input' if self.cell_index == 0 else f'cell_{self.prev_cell_index}'
@@ -205,7 +205,62 @@ class BaseModelGenerator(ABC):
         '''
         raise NotImplementedError()
 
-    def _build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
+    def _get_macro_params(self, cell_spec: list) -> 'tuple[int, int]':
+        ''' Returns M and N, setting them to 0 if the cell specification is the empty cell. '''
+        return (self.motifs, self.normal_cells_per_motif) if len(cell_spec) > 0 else (0, 0)
+
+    def _reset_metadata_indexes(self):
+        ''' Reset metadata indexes associated to cells and blocks. '''
+        self.cell_index = 0
+        self.block_index = 0
+        self.prev_cell_index = 0
+
+    def _apply_preprocessing_and_augmentation(self, model_input: tf.Tensor) -> tf.Tensor:
+        initial_lookback_input = model_input
+        # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
+        if self.preprocessing_model is not None:
+            initial_lookback_input = self.preprocessing_model(initial_lookback_input)
+        # data augmentation integrated in the model to perform it in GPU. Update lookback inputs to be the output of the data augmentation model.
+        if self.data_augmentation_model is not None:
+            initial_lookback_input = self.data_augmentation_model(initial_lookback_input)
+
+        return initial_lookback_input
+
+    # TODO: adapt it for 1D (time-series)
+    def _prepend_imagenet_stem(self, cell_inputs: list, filters: int, partitions_dict: dict) -> 'tuple[list[tf.Tensor], int]':
+        '''
+        Add a stride-2 3x3 convolution layer followed by 2 reduction cells at the start of the network.
+        The stem originates from PNAS and NASNet works, which used this stack of layers to quickly reduce the input dimensionality when
+        using larger images than the ones for which the network was designed.
+
+        Args:
+            cell_inputs:
+            filters:
+            partitions_dict:
+
+        Returns:
+            the new tensors usable as lookbacks, and the new number of filters.
+        '''
+        model_input = cell_inputs[-1]
+        stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
+        cell_inputs = [model_input, stem_conv]
+        filters = filters * 2
+        cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+        filters = filters * 2
+        cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+
+        return cell_inputs, filters
+
+    def _finalize_model(self, model_input: tf.Tensor, last_cell_output: tf.Tensor) -> Model:
+        # outputs are built in _build_cell_util if using multi-output, so just finalize the Model instance in this case.
+        # second condition is used to force output building in case of the empty cell, since no cells are present even in multi_output mode.
+        if self.multi_output and len(self.output_layers) > 0:
+            return Model(inputs=model_input, outputs=self.output_layers.values())
+        else:
+            output = self._generate_output(last_cell_output, self.dropout_prob)
+            return Model(inputs=model_input, outputs=output)
+
+    def _build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]') -> tf.Tensor:
         '''
         Generate the cell neural network implementation from the cell encoding.
 
@@ -215,7 +270,7 @@ class BaseModelGenerator(ABC):
             inputs: Tensors that can be used as input (lookback inputs, inputs from previous cells or dataset samples)
 
         Returns:
-            (tf.Tensor): output tensor of the cell
+            output tensor of the cell
         '''
         # normalize inputs if necessary (different spatial dimension of at least one input, from the one expected by the actual cell)
         if self.lookback_reshape and self.cell_index in self.network_build_info.need_input_norm_indexes:
@@ -255,7 +310,7 @@ class BaseModelGenerator(ABC):
             cell_out = block_outputs[0]
 
         # perform squeeze-excitation (SE) on cell output, if set in the configuration.
-        # Squeeze-excitation is performed before residual sum, following SE paper indications.
+        # Squeeze-excitation is performed before the residual sum, following SE paper indications.
         if self.se_cell_output:
             cell_out = ops.SqueezeExcitation(self.op_dims, filters, se_ratio=8, use_bias=False, weight_reg=self.l2_weight_reg,
                                              name=f'squeeze_excitation_c{self.cell_index}')(cell_out)
@@ -289,7 +344,7 @@ class BaseModelGenerator(ABC):
 
         return cell_out
 
-    def _normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int):
+    def _normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
         '''
         Normalize tensor dimensions between -2 and -1 inputs if they diverge (both spatial and depth normalization is applied).
         In actual architecture, the normalization should happen only if -2 is a normal cell output and -1 is instead the output
@@ -299,7 +354,7 @@ class BaseModelGenerator(ABC):
             inputs (list<tf.Tensor>): -2 and -1 input tensors
 
         Returns:
-            (list[tf.Tensor]): updated tensor list
+            updated tensor list
         '''
 
         # uniform the depth and spatial dimension between the two inputs, using a pointwise convolution
@@ -310,7 +365,7 @@ class BaseModelGenerator(ABC):
 
         return inputs
 
-    def _build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]'):
+    def _build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]') -> tf.Tensor:
         '''
         Generate a block, following PNAS conventions.
 
@@ -321,7 +376,7 @@ class BaseModelGenerator(ABC):
             inputs: tensors that can be used as inputs for this block
 
         Returns:
-            (tf.tensor): Output of Add keras layer
+            Output of Add keras layer
         '''
         input_L, op_L, input_R, op_R = block_spec
         input_L_shape = inputs[input_L].shape.as_list()
