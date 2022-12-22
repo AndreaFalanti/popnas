@@ -87,7 +87,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         if add_imagenet_stem:
             cell_inputs, filters = self._prepend_imagenet_stem(cell_inputs, filters, partitions_dict)
 
-        # add (M - 1) times N normal cells and a reduction cell
+        # add M times N normal cells and a reduction cell (except in the last motif where the reduction cell is skipped)
         for motif_index in range(M):
             # add N times a normal cell
             for _ in range(N):

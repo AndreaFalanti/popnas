@@ -216,6 +216,17 @@ class BaseModelGenerator(ABC):
         self.prev_cell_index = 0
 
     def _apply_preprocessing_and_augmentation(self, model_input: tf.Tensor) -> tf.Tensor:
+        '''
+        Apply the preprocessing and data augmentation Keras models, stacking them to the model input.
+        The preprocessing is usually done in the dataset pipeline, but procedures like normalization are better integrated in the model.
+        The augmentation is usually done on CPU, but could be integrated in the model (GPU) if the related configuration flag is set to True.
+
+        Args:
+            model_input: the initial model input
+
+        Returns:
+            the input tensor itself, or its modification due to the preprocessing and augmentation models when defined.
+        '''
         initial_lookback_input = model_input
         # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
         if self.preprocessing_model is not None:
@@ -252,6 +263,17 @@ class BaseModelGenerator(ABC):
         return cell_inputs, filters
 
     def _finalize_model(self, model_input: tf.Tensor, last_cell_output: tf.Tensor) -> Model:
+        '''
+        Finalize the generation of the Keras functional model.
+        It transparently handles both single output and multi output models.
+
+        Args:
+            model_input: the initial model input
+            last_cell_output: the final output tensor
+
+        Returns:
+            the instance of the Keras model built.
+        '''
         # outputs are built in _build_cell_util if using multi-output, so just finalize the Model instance in this case.
         # second condition is used to force output building in case of the empty cell, since no cells are present even in multi_output mode.
         if self.multi_output and len(self.output_layers) > 0:
