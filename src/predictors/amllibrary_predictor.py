@@ -2,7 +2,7 @@ import os
 from configparser import ConfigParser
 from contextlib import redirect_stdout, redirect_stderr
 from logging import Logger
-from typing import Union, Tuple
+from typing import Union, Tuple, Sequence
 
 import numpy as np
 import pandas as pd
@@ -108,7 +108,7 @@ class AMLLibraryPredictor(Predictor):
         features_df = pd.DataFrame([x], columns=self.feature_names)
         return self.model.predict(features_df)[0]
 
-    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+    def predict_batch(self, x: 'Sequence[list]') -> np.ndarray:
         features_df = pd.DataFrame(x, columns=self.feature_names)
         preds = self.model.predict(features_df)     # type: np.ndarray
         return preds.reshape(-1)

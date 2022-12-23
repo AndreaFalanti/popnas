@@ -1,3 +1,6 @@
+from typing import Sequence, Optional
+
+import tensorflow as tf
 from tensorflow.keras import layers, regularizers, Model
 
 from keras_predictor import KerasPredictor
@@ -42,6 +45,7 @@ class Conv1D1IPredictor(KerasPredictor):
 
         return Model(inputs=block_series, outputs=score)
 
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
-                          validation_split: bool = True, shuffle: bool = True):
+    def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
+                          use_data_augmentation: bool = True, validation_split: bool = True,
+                          shuffle: bool = True) -> 'tuple[tf.data.Dataset, Optional[tf.data.Dataset]]':
         return build_temporal_series_dataset(self.search_space, cell_specs, rewards, batch_size, validation_split, use_data_augmentation, shuffle)

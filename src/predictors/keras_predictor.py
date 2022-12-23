@@ -2,7 +2,7 @@ import os
 from abc import abstractmethod, ABC
 from logging import Logger
 from statistics import mean
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, Sequence
 
 import keras
 import keras_tuner as kt
@@ -89,8 +89,9 @@ class KerasPredictor(Predictor, ABC):
         pass
 
     @abstractmethod
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
-                          validation_split: bool = True, shuffle: bool = True) -> 'tuple[tf.data.Dataset, tf.data.Dataset]':
+    def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
+                          use_data_augmentation: bool = True, validation_split: bool = True,
+                          shuffle: bool = True) -> 'tuple[tf.data.Dataset, Optional[tf.data.Dataset]]':
         '''
         Build a dataset to be used in the Keras predictor.
 
@@ -253,7 +254,7 @@ class KerasPredictor(Predictor, ABC):
         else:
             return mean([model.predict(x=pred_dataset)[0, 0] for model in self.model_ensemble])
 
-    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+    def predict_batch(self, x: 'Sequence[list]') -> np.ndarray:
         pred_dataset, _ = self._build_tf_dataset(x, batch_size=len(x), validation_split=False, shuffle=False)  # preserve order
 
         # predict using a single model

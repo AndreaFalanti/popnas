@@ -1,3 +1,5 @@
+from typing import Sequence, Optional
+
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
@@ -45,7 +47,7 @@ def __prepare_rnn_inputs(search_space: SearchSpace, cell_spec: list):
     return search_space.encode_cell_spec(cell_spec, flatten=False)
 
 
-def __generate_equivalent_cells_and_rewards(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None):
+def __generate_equivalent_cells_and_rewards(search_space: SearchSpace, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None):
     # generate the equivalent cell specifications.
     # this provides a data augmentation mechanism that can help the LSTM to learn better.
     eqv_cell_specs, eqv_rewards = [], []
@@ -65,7 +67,7 @@ def __generate_equivalent_cells_and_rewards(search_space: SearchSpace, cell_spec
     return eqv_cell_specs, eqv_rewards
 
 
-def __preprocess_cell_specs_and_rewards(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]', use_data_augmentation):
+def __preprocess_cell_specs_and_rewards(search_space: SearchSpace, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]', use_data_augmentation):
     # data augmentation is used only in training (rewards are given), if the respective flag is set. For prediction it's never used.
     if use_data_augmentation and rewards is not None:
         cell_specs, rewards = __generate_equivalent_cells_and_rewards(search_space, cell_specs, rewards)
@@ -81,8 +83,9 @@ def __preprocess_cell_specs_and_rewards(search_space: SearchSpace, cell_specs: '
     return cell_specs, rewards
 
 
-def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4,
-                                     validation_split: bool = True, use_data_augmentation: bool = True, shuffle: bool = True):
+def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 4,
+                                     validation_split: bool = True, use_data_augmentation: bool = True,
+                                     shuffle: bool = True) -> 'tuple[tf.data.Dataset, Optional[tf.data.Dataset]]':
     '''
     Build a dataset to be used in the RNN controller, 2 separate series for inputs and operators.
 
@@ -132,8 +135,9 @@ def build_temporal_series_dataset_2i(search_space: SearchSpace, cell_specs: 'lis
         return build_dataset(cells_train, rewards_train), None
 
 
-def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 4,
-                                  validation_split: bool = True, use_data_augmentation: bool = True, shuffle: bool = True):
+def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 4,
+                                  validation_split: bool = True, use_data_augmentation: bool = True,
+                                  shuffle: bool = True) -> 'tuple[tf.data.Dataset, Optional[tf.data.Dataset]]':
     '''
     Build a dataset to be used in the RNN controller, using whole blocks as a temporal serie.
 
@@ -148,7 +152,7 @@ def build_temporal_series_dataset(search_space: SearchSpace, cell_specs: 'list[l
     Returns:
         tf.data.Dataset: [description]
     '''
-    def build_dataset(x_cell_specs, y_rewards):
+    def build_dataset(x_cell_specs, y_rewards) -> tf.data.Dataset:
         cell_series = list(map(lambda cell: __prepare_rnn_inputs(search_space, cell), x_cell_specs))
 
         ds = tf.data.Dataset.from_tensor_slices(cell_series)

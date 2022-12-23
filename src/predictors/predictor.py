@@ -1,9 +1,10 @@
 import os
 from abc import ABC, abstractmethod
 from logging import Logger
-from typing import Union, Optional
+from typing import Union, Optional, Sequence
 
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.metrics import r2_score
 
 from plotter import plot_squared_scatter_chart
@@ -103,7 +104,7 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+    def predict_batch(self, x: 'Sequence[list]') -> np.ndarray:
         '''
         Predict a value for a batch of samples.
         Args:

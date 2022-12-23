@@ -1,6 +1,6 @@
 import os
 from logging import Logger
-from typing import Union, Tuple
+from typing import Union, Tuple, Sequence
 
 import catboost
 import numpy as np
@@ -115,7 +115,7 @@ class CatBoostPredictor(Predictor):
         # returned as a numpy array of single element
         return self.model.predict(features_pool)[0]
 
-    def predict_batch(self, x: 'list[list]') -> 'list[float]':
+    def predict_batch(self, x: 'Sequence[list]') -> np.ndarray:
         # make sure categorical features are integers (and not float, pandas converts them to floats like 1.0)
         if self.cat_indexes is not None:
             for sample in x:

@@ -1,7 +1,7 @@
 import os
 from abc import ABC
 from logging import Logger
-from typing import Union, Iterable, Optional
+from typing import Union, Iterable, Optional, Sequence
 
 import keras_tuner as kt
 import numpy as np
@@ -179,8 +179,9 @@ class SpektralPredictor(KerasPredictor, ABC):
         # expand dims to fake the batch size first dimension (set to 1).
         return np.expand_dims(g['x'], axis=0), np.expand_dims(g['a'], axis=0)
 
-    def _build_tf_dataset(self, cell_specs: 'list[list]', rewards: 'list[float]' = None, batch_size: int = 8, use_data_augmentation: bool = True,
-                          validation_split: bool = True, shuffle: bool = True) -> 'tuple[Loader, Optional[Loader]]':
+    def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
+                          use_data_augmentation: bool = True, validation_split: bool = True,
+                          shuffle: bool = True) -> 'tuple[Loader, Optional[Loader]]':
         # NOTE: instead of TF Datasets, this function returns spektral loaders, which are generators. Still, they should work fine in Keras functions.
 
         # prune empty cell, since it's not possible to feed an empty graph.
