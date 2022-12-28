@@ -12,11 +12,11 @@ class SearchSpace:
 
     Provides utility functions for holding cell specifications for each step, that the network manager then use
     for building the actual CNNs.
-    It also contains functions for expanding these network progressively and the encoders to adapt the cell specifications representation
+    It also contains functions for expanding these networks progressively, and the encoders to adapt the cell specifications representation
     for various use cases.
     '''
 
-    def __init__(self, ss_config: 'dict[str, Any]', cell_stack_depth: int, benchmarking: bool = False):
+    def __init__(self, ss_config: 'dict[str, Any]', benchmarking: bool = False):
         '''
         Constructs a search space which models the NASNet and PNAS papers, producing encodings for blocks and cells.
         The encodings are useful to store architecture information, from which the models can be generated.
@@ -29,8 +29,7 @@ class SearchSpace:
 
         Args:
             ss_config: search space configuration provided in the input configuration file
-
-            cell_stack_depth: maximum cell depth that the networks can achieve
+            benchmarking: set it to True when performing NATS-bench runs
         '''
         self._logger = log_service.get_logger(__name__)
         self.benchmarking = benchmarking
@@ -50,8 +49,6 @@ class SearchSpace:
             raise ValueError('Invalid lookback_depth value')
         if self.operator_values is None or len(self.operator_values) == 0:
             raise ValueError('No operators have been provided in search space')
-
-        self.cell_stack_depth = cell_stack_depth
 
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
@@ -248,7 +245,6 @@ class SearchSpace:
         self._logger.info('Block values: %s', rstr(list(range(1, self.B + 1))))
         self._logger.info('Inputs: %s', rstr(self.input_values))
         self._logger.info('Operators: %s', rstr(self.operator_values))
-        self._logger.info('Total cells stacked in each CNN: %d', self.cell_stack_depth)
         self._logger.info('%s', '*' * 100)
 
     def print_cell_spec(self, cell_spec):

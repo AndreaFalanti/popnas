@@ -55,7 +55,7 @@ class ControllerManager:
 
     def __init__(self, search_space: SearchSpace, sstr_config: 'dict[str, Any]', others_config: 'dict[str, Any]',
                  get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 graph_generator: GraphGenerator, current_b: int = 1):
+                 graph_generator: GraphGenerator, compute_real_cell_depth: Callable[[list], int], current_b: int = 1):
         '''
         Manages the Controller network training and prediction process.
         '''
@@ -76,6 +76,9 @@ class ControllerManager:
         self.get_time_predictor = get_time_predictor
         self.get_acc_predictor = get_acc_predictor
         self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
+
+        # function from model generator, needed for generating the time features
+        self.compute_real_cell_depth = compute_real_cell_depth
 
         self.pnas_mode = others_config['pnas_mode']
 
@@ -124,7 +127,8 @@ class ControllerManager:
                     # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
                     #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
                     if 'time' in self.pareto_objectives:
-                        batch_time_features = [generate_time_features(cell_spec, self.search_space) for cell_spec in cells_batch]
+                        batch_time_features = [generate_time_features(cell_spec, self.search_space, self.compute_real_cell_depth)
+                                               for cell_spec in cells_batch]
                         estimated_times = time_predictor.predict_batch(batch_time_features)
                     else:
                         estimated_times = [0] * len(cells_batch)

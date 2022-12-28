@@ -1,8 +1,7 @@
 # Module that contains helper functions for producing some regressor features
 import csv
-import math
 import os.path
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Callable
 
 import igraph
 
@@ -87,25 +86,6 @@ def initialize_features_csv_files(time_headers: list, time_feature_types: list, 
 
 
 # region SHARED_FEATURES_GEN
-def compute_real_cnn_cell_stack_depth(cell_spec: list, max_cells: int):
-    '''
-    Compute the real amount of cells stacked in a CNN, based on the cell specification and the actual cell stack target.
-    Usually the number of cells stacked in a CNN is the target imposed, but if the inputs use only lookback input values < -1,
-    then some of them are actually skipped, leading to a CNN with less cells than the imposed number.
-
-    Args:
-        cell_spec: plain cell specification
-        max_cells: cells to be stacked in a CNN, based on the run configuration
-
-    Returns:
-        (int): number of cells actually stacked in the CNN for given cell specification
-    '''
-    lookback_inputs = [inp for inp in list_flatten(cell_spec)[::2] if inp is not None and inp < 0]
-    nearest_lookback_abs = abs(max(lookback_inputs))
-
-    return math.ceil(max_cells / nearest_lookback_abs)
-
-
 def compute_blocks(cell_spec: list):
     ''' Trivial function, but useful to exclude None tuples if present in the specification '''
     return len([t for t in cell_spec if t != (None, None, None, None)])
@@ -175,13 +155,13 @@ def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int,
     return [dag_depth, concat_inputs_len, heaviest_path_op_score_fraction]
 
 
-def generate_time_features(cell_spec: list, search_space: SearchSpace):
+def generate_time_features(cell_spec: list, search_space: SearchSpace, compute_real_cell_depth: Callable[[list], int]):
     op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
     op_time_features = to_list_of_tuples(op_time_features_flat, 2)
     inputs = list_flatten(cell_spec)[::2]
 
     blocks = len(cell_spec)
-    total_cells = compute_real_cnn_cell_stack_depth(cell_spec, search_space.cell_stack_depth)
+    total_cells = compute_real_cell_depth(cell_spec)
 
     total_op_score = sum(op_time_features_flat)
     use_different_lookbacks = 1 if len(set([inp for inp in inputs if inp < 0])) > 1 else 0
@@ -265,7 +245,7 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lo
     return incidence_features
 
 
-def generate_acc_features(cell_spec: list, search_space: SearchSpace):
+def generate_acc_features(cell_spec: list, search_space: SearchSpace, compute_real_cell_depth: Callable[[list], int]):
     # expand cell spec to maximum amount of blocks, if needed
     blocks = compute_blocks(cell_spec)
     cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - len(cell_spec))
@@ -274,7 +254,7 @@ def generate_acc_features(cell_spec: list, search_space: SearchSpace):
     max_blocks = search_space.B
     max_lookback_depth = abs(search_space.input_lookback_depth)
 
-    total_cells = compute_real_cnn_cell_stack_depth(cell_spec, search_space.cell_stack_depth)
+    total_cells = compute_real_cell_depth(cell_spec)
     lookback_usage_features = compute_lookback_usage_features(cell_spec, max_lookback_depth)
     lookback_incidence_features = compute_blocks_lookback_incidence_matrix(cell_spec, max_blocks, max_lookback_depth)
     block_incidence_features = compute_blocks_incidence_matrix(cell_spec, max_blocks)

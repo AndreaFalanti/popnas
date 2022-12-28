@@ -52,7 +52,6 @@ class Popnas:
 
         # CNN architecture parameters
         arc_config = run_config['architecture_parameters']
-        max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
         self.multi_output_models = arc_config['multi_output']
 
         # Other parameters (last category including heterogeneous parameters not classifiable in previous sections)
@@ -64,7 +63,7 @@ class Popnas:
         self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
 
         # build a search space
-        self.search_space = SearchSpace(ss_config, max_cells, benchmarking=benchmarking)
+        self.search_space = SearchSpace(ss_config, benchmarking=benchmarking)
 
         plotter.initialize_logger()
 
@@ -91,11 +90,9 @@ class Popnas:
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
 
         # create the Network Manager
-        if benchmarking:
-            self.cnn_manager = NetworkBenchManager(ds_config)
-        else:
-            self.cnn_manager = NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
-                                              others_config['save_children_weights'], others_config['save_children_as_onnx'])
+        self.nn_manager = NetworkBenchManager(ds_config) if benchmarking else \
+            NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
+                           others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         # create the predictors
         acc_pred_func, time_pred_func = self.initialize_predictors(train_strategy)
@@ -103,8 +100,8 @@ class Popnas:
         # set controller step to the correct one (in case of restore is not b=1)
         controller_b = self.starting_b if self.starting_b > 1 else 1
         self.controller = ControllerManager(self.search_space, sstr_config, others_config,
-                                            acc_pred_func, time_pred_func,
-                                            graph_generator=self.cnn_manager.graph_gen, current_b=controller_b)
+                                            acc_pred_func, time_pred_func, self.nn_manager.graph_gen, self.nn_manager.model_gen.get_real_cell_depth,
+                                            current_b=controller_b)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
@@ -122,7 +119,7 @@ class Popnas:
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
-        train_res = self.cnn_manager.perform_proxy_training(cell_spec, save_best_model=last_block_train)
+        train_res = self.nn_manager.perform_proxy_training(cell_spec, save_best_model=last_block_train)
 
         self._logger.info("Best accuracy reached: %0.6f", train_res.accuracy)
         self._logger.info("Best F1 score reached: %0.6f", train_res.f1_score)
@@ -189,7 +186,8 @@ class Popnas:
             exploration:
         '''
         # single record, no data augmentation needed
-        time_row = [train_res.training_time] + generate_time_features(train_res.cell_spec, self.search_space) + [exploration]
+        cell_time_features = generate_time_features(train_res.cell_spec, self.search_space, self.nn_manager.model_gen.get_real_cell_depth)
+        time_row = [train_res.training_time] + cell_time_features + [exploration]
 
         # accuracy features need data augmentation to generalize on equivalent cell specifications
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
@@ -197,7 +195,8 @@ class Popnas:
         full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
         score = getattr(train_res, self.score_metric)
 
-        acc_rows = [[score] + generate_acc_features(eqv_cell, self.search_space) + [exploration, eqv_cell != full_cell_spec]
+        acc_rows = [[score] + generate_acc_features(eqv_cell, self.search_space, self.nn_manager.model_gen.get_real_cell_depth)
+                    + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -336,7 +335,7 @@ class Popnas:
         time_headers, time_feature_types = build_time_feature_names()
         score_headers, score_feature_types = build_score_feature_names(self.blocks, self.input_lookback_depth)
 
-        self.cnn_manager.bootstrap_dataset_lazy_initialization()
+        self.nn_manager.bootstrap_dataset_lazy_initialization()
 
         initial_thrust_time = 0
         # if B = 0, perform initial thrust before starting actual training procedure

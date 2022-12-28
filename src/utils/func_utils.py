@@ -142,10 +142,7 @@ def instantiate_search_space_from_logs(log_folder_path: str):
         run_config = json.load(f)
 
     ss_config = run_config['search_space']
-    arc_config = run_config['architecture_parameters']
-    max_cells = arc_config['motifs'] * (arc_config['normal_cells_per_motif'] + 1) - 1
-
-    return SearchSpace(ss_config, max_cells)
+    return SearchSpace(ss_config)
 
 
 def cell_spec_to_str(cell_spec: list):
