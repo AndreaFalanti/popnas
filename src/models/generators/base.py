@@ -1,3 +1,4 @@
+import math
 import os.path
 import re
 from abc import ABC, abstractmethod
@@ -11,6 +12,7 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, 
 import log_service
 import models.operators.layers as ops
 from models.operators.op_instantiator import OpInstantiator
+from utils.func_utils import list_flatten
 from utils.nn_utils import compute_tensor_byte_size
 
 
@@ -47,7 +49,7 @@ class BaseModelGenerator(ABC):
         self.lookback_reshape = arc_params['lookback_reshape']
         self.motifs = arc_params['motifs']
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
-        self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+        self.total_cells = self.get_maximum_cells()
         self.multi_output = arc_params['multi_output']
         self.residual_cells = arc_params['residual_cells']
         self.se_cell_output = arc_params['se_cell_output']
@@ -95,13 +97,33 @@ class BaseModelGenerator(ABC):
         self.network_build_info = None  # type: NetworkBuildInfo
         self.output_layers = {}
 
+    def get_maximum_cells(self):
+        return self.motifs * (self.normal_cells_per_motif + 1) - 1
+
+    def get_real_cell_depth(self, cell_spec: 'list[tuple]') -> int:
+        '''
+        Compute the real number of cells stacked in a CNN, based on the cell specification and the actual cell stack target.
+        Usually, the number of cells stacked in a CNN is the target imposed, but if the inputs use only lookback input values < -1,
+        then some of them are actually skipped, leading to a CNN with fewer cells than the imposed number.
+
+        Args:
+            cell_spec: the cell specification
+
+        Returns:
+            the number of cells stacked in the architecture
+        '''
+        lookback_inputs = [inp for inp in list_flatten(cell_spec)[::2] if inp is not None and inp < 0]
+        nearest_lookback_abs = abs(max(lookback_inputs))
+
+        return math.ceil(self.total_cells / nearest_lookback_abs)
+
     def alter_macro_structure(self, m: int, n: int, f: int):
         self.motifs = m
         self.normal_cells_per_motif = n
         self.filters = f
 
         # recompute properties associated to the macro structure parameters
-        self.total_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+        self.total_cells = self.get_maximum_cells()
         self.cell_output_shapes = self._compute_cell_output_shapes()
 
     @abstractmethod
