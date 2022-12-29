@@ -1,6 +1,6 @@
 import csv
 import sys
-from typing import Callable, Any
+from typing import Any
 
 import numpy as np
 from tqdm import tqdm
@@ -8,13 +8,12 @@ from tqdm import tqdm
 import exploration
 import log_service
 from encoder import SearchSpace
-from predictors import Predictor
+from predictors.initializer import PredictorsHandler
+from predictors.models import Predictor
 from utils import cell_pruning
 from utils.cell_counter import CellCounter
 from utils.cell_pruning import CellEncoding
-from utils.feature_utils import generate_time_features
 from utils.func_utils import to_list_of_tuples
-from utils.graph_generator import GraphGenerator
 from utils.model_estimate import ModelEstimate
 from utils.nn_utils import perform_global_memory_clear
 from utils.rstr import rstr
@@ -54,14 +53,13 @@ class ControllerManager:
     '''
 
     def __init__(self, search_space: SearchSpace, sstr_config: 'dict[str, Any]', others_config: 'dict[str, Any]',
-                 get_acc_predictor: Callable[[int], Predictor], get_time_predictor: Callable[[int], Predictor],
-                 graph_generator: GraphGenerator, compute_real_cell_depth: Callable[[list], int], current_b: int = 1):
+                 predictor_handler: PredictorsHandler, current_b: int = 1):
         '''
         Manages the Controller network training and prediction process.
         '''
         self._logger = log_service.get_logger(__name__)
         self.search_space = search_space
-        self.graph_generator = graph_generator
+        self.predictor_handler = predictor_handler
 
         self.B = search_space.B
         self.K = sstr_config['max_children']
@@ -72,13 +70,7 @@ class ControllerManager:
 
         self.pareto_objectives = sstr_config['additional_pareto_objectives']
         self.predictions_batch_size = others_config['predictions_batch_size']
-
-        self.get_time_predictor = get_time_predictor
-        self.get_acc_predictor = get_acc_predictor
         self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
-
-        # function from model generator, needed for generating the time features
-        self.compute_real_cell_depth = compute_real_cell_depth
 
         self.pnas_mode = others_config['pnas_mode']
 
@@ -86,7 +78,7 @@ class ControllerManager:
         '''
         Train both accuracy and time predictors
         '''
-        acc_predictor = self.get_acc_predictor(self.current_b)
+        acc_predictor = self.predictor_handler.get_score_predictor(self.current_b)
 
         # train accuracy predictor with all data available
         if self.acc_ensemble_units > 1:
@@ -98,7 +90,7 @@ class ControllerManager:
         # train time predictor with new data
         if not self.pnas_mode and 'time' in self.pareto_objectives:
             csv_path = log_service.build_path('csv', 'training_time.csv')
-            time_predictor = self.get_time_predictor(self.current_b)
+            time_predictor = self.predictor_handler.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
 
         self._logger.info('Predictors training complete')
@@ -127,13 +119,12 @@ class ControllerManager:
                     # TODO: conversion to features should be made in Predictor to make the interface consistent between NN and ML techniques
                     #  and make them fully swappable. A ML predictor class should be made in this case, since all models use the same feature set.
                     if 'time' in self.pareto_objectives:
-                        batch_time_features = [generate_time_features(cell_spec, self.search_space, self.compute_real_cell_depth)
-                                               for cell_spec in cells_batch]
+                        batch_time_features = [self.predictor_handler.generate_cell_time_features(cell_spec) for cell_spec in cells_batch]
                         estimated_times = time_predictor.predict_batch(batch_time_features)
                     else:
                         estimated_times = [0] * len(cells_batch)
 
-                    params_count = [self.graph_generator.generate_network_graph(cell_spec).get_total_params() for cell_spec in cells_batch] \
+                    params_count = [self.predictor_handler.get_architecture_dag(cell_spec).get_total_params() for cell_spec in cells_batch] \
                         if 'params' in self.pareto_objectives else [0] * len(cells_batch)
 
                     # apply also time constraint
@@ -239,8 +230,8 @@ class ControllerManager:
             self._logger.info('No more updates necessary as target B has been reached!')
             return
 
-        time_predictor = self.get_time_predictor(self.current_b)
-        acc_predictor = self.get_acc_predictor(self.current_b)
+        time_predictor = self.predictor_handler.get_time_predictor(self.current_b)
+        acc_predictor = self.predictor_handler.get_score_predictor(self.current_b)
 
         self.current_b += 1
         # closure that returns a function that returns the model generator for current generation step

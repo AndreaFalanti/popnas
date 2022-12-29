@@ -14,7 +14,6 @@ from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
 from models.generators.factory import model_generator_factory
 from utils.func_utils import cell_spec_to_str
-from utils.graph_generator import GraphGenerator
 from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
     TrainingResults, perform_global_memory_clear
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
@@ -69,9 +68,6 @@ class NetworkManager:
                                                  data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
                                                  save_weights=save_network_weights)
-
-        # TODO: if not needed here, just generate it in train to pass it in controller
-        self.graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, self.dataset_classes_count)
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + \

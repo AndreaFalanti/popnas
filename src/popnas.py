@@ -13,10 +13,9 @@ from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
 from manager_bench_proxy import NetworkBenchManager
-from predictors import *
+from predictors.initializer import PredictorsHandler
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
-    generate_dynamic_reindex_function, build_score_feature_names, \
-    generate_time_features, generate_acc_features, metrics_fields_dict
+    generate_dynamic_reindex_function, build_score_feature_names
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
 from utils.nn_utils import TrainingResults, remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
@@ -26,7 +25,6 @@ remove_annoying_tensorflow_messages()
 
 
 class Popnas:
-
     def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy, benchmarking: bool = False):
         ''' Configure and set up POPNASv2 algorithm for execution. Use start() function to start the NAS procedure. '''
         self._logger = log_service.get_logger(__name__)
@@ -95,13 +93,13 @@ class Popnas:
                            others_config['save_children_weights'], others_config['save_children_as_onnx'])
 
         # create the predictors
-        acc_pred_func, time_pred_func = self.initialize_predictors(train_strategy)
+        score_domain = (0, 1)   # TODO: for now it is always [0, 1] interval for each supported metric, should be put in JSON config in the future
+        self.predictors_handler = PredictorsHandler(self.search_space, self.score_metric, score_domain,
+                                                    self.nn_manager.model_gen, train_strategy, self.pnas_mode)
 
         # set controller step to the correct one (in case of restore is not b=1)
         controller_b = self.starting_b if self.starting_b > 1 else 1
-        self.controller = ControllerManager(self.search_space, sstr_config, others_config,
-                                            acc_pred_func, time_pred_func, self.nn_manager.graph_gen, self.nn_manager.model_gen.get_real_cell_depth,
-                                            current_b=controller_b)
+        self.controller = ControllerManager(self.search_space, sstr_config, others_config, self.predictors_handler, current_b=controller_b)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
@@ -186,7 +184,7 @@ class Popnas:
             exploration:
         '''
         # single record, no data augmentation needed
-        cell_time_features = generate_time_features(train_res.cell_spec, self.search_space, self.nn_manager.model_gen.get_real_cell_depth)
+        cell_time_features = self.predictors_handler.generate_cell_time_features(train_res.cell_spec)
         time_row = [train_res.training_time] + cell_time_features + [exploration]
 
         # accuracy features need data augmentation to generalize on equivalent cell specifications
@@ -195,8 +193,7 @@ class Popnas:
         full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
         score = getattr(train_res, self.score_metric)
 
-        acc_rows = [[score] + generate_acc_features(eqv_cell, self.search_space, self.nn_manager.model_gen.get_real_cell_depth)
-                    + [exploration, eqv_cell != full_cell_spec]
+        acc_rows = [[score] + self.predictors_handler.generate_cell_score_features(eqv_cell) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
 
         with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
@@ -223,35 +220,6 @@ class Popnas:
             data = train_res.to_csv_list()[:-1] + [cell_structure_str, exploration]
 
             writer.writerow(data)
-
-    def initialize_predictors(self, train_strategy: tf.distribute.Strategy):
-        acc_col = metrics_fields_dict[self.score_metric].real_column
-        acc_domain = (0, 1)
-        predictors_log_path = log_service.build_path('predictors')
-        catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
-        amllibrary_config_path = os.path.join('configs', 'regressors_hyperopt.ini')
-
-        self._logger.info('Initializing predictors...')
-
-        # accuracy predictors to be used
-        acc_lstm = AttentionRNNPredictor(self.search_space, acc_col, acc_domain, train_strategy,
-                                         self._logger, predictors_log_path, override_logs=False,
-                                         save_weights=True, hp_config=self.rnn_config)
-
-        # time predictors to be used
-        if not self.pnas_mode:
-            time_catboost = CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
-            # time_lrridge = AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, override_logs=False)
-
-        def get_acc_predictor_for_b(b: int):
-            return acc_lstm
-
-        def get_time_predictor_for_b(b: int):
-            return None if self.pnas_mode else time_catboost
-
-        self._logger.info('Predictors generated successfully')
-
-        return get_acc_predictor_for_b, get_time_predictor_for_b
 
     def write_smb_times(self, monoblocks_train_info: 'list[TrainingResults]'):
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
