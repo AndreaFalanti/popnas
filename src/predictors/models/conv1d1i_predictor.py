@@ -3,8 +3,8 @@ from typing import Sequence, Optional
 import tensorflow as tf
 from tensorflow.keras import layers, regularizers, Model
 
-from keras_predictor import KerasPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset
+from .keras_predictor import KerasPredictor
 
 
 class Conv1D1IPredictor(KerasPredictor):

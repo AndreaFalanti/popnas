@@ -11,8 +11,8 @@ from lightgbm import early_stopping, log_evaluation
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 
-from predictor import Predictor
 from utils.func_utils import create_empty_folder
+from .predictor import Predictor
 
 
 class LGBMPredictor(Predictor):

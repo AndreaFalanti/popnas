@@ -3,18 +3,16 @@ from typing import Sequence, Optional
 import tensorflow as tf
 from tensorflow.keras import layers, regularizers, Model
 
-from keras_predictor import KerasPredictor
 from predictors.common.datasets_gen import build_temporal_series_dataset_2i
+from .keras_predictor import KerasPredictor
 
 
-class AttentionRNNPredictor(KerasPredictor):
+class RNNPredictor(KerasPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'wr': 1e-5,
             'use_er': False,
             'er': 0,
-            'conv_filters': 16,
-            'conv_kernel': 1,
             'cells': 48,
             'embedding_dim': 10,
             'rnn_type': 'lstm'
@@ -25,8 +23,6 @@ class AttentionRNNPredictor(KerasPredictor):
         hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Boolean('use_er')
         hp.Float('er', 1e-7, 1e-4, sampling='log', parent_name='use_er', parent_values=[True])
-        hp.Int('conv_filters', 8, 64, sampling='linear')
-        hp.Choice('conv_kernel', [1, 2])
         hp.Int('cells', 20, 100, sampling='linear')
         hp.Int('embedding_dim', 10, 100, sampling='linear')
         hp.Choice('rnn_type', ['lstm', 'gru'])
@@ -58,12 +54,8 @@ class AttentionRNNPredictor(KerasPredictor):
         # indicating [batch_size, serie_length, features(whole block embedding)]
         embed = layers.Reshape((self.search_space.B, 4 * config['embedding_dim']))(embed)
 
-        attention_q = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu')(embed)
-        attention_k = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu')(embed)
-        attention = layers.Attention()([attention_q, attention_k])
-
         # many-to-one, so must have return_sequences = False (it is by default)
-        lstm = layers.Bidirectional(rnn(config['cells'], kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg))(attention)
+        lstm = layers.Bidirectional(rnn(config['cells'], kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg))(embed)
         score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=weight_reg)(lstm)
 
         return Model(inputs=(inputs, ops), outputs=score)

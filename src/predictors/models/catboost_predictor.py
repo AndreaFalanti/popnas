@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import randint, uniform
 
-from predictor import Predictor
 from utils.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import create_empty_folder
+from .predictor import Predictor
 
 
 class CatBoostPredictor(Predictor):

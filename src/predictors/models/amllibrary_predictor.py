@@ -9,10 +9,10 @@ import pandas as pd
 import psutil
 
 from aMLLibrary import sequence_data_processing, regressor
-from predictor import Predictor
 from utils.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import strip_unused_amllibrary_config_sections
 from utils.stream_to_logger import StreamToLogger
+from .predictor import Predictor
 
 
 class AMLLibraryPredictor(Predictor):

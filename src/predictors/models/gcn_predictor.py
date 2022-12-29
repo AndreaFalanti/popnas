@@ -2,7 +2,7 @@ import spektral.layers as g_layers
 from spektral.transforms import GCNFilter
 from tensorflow.keras import activations, regularizers, layers, Model
 
-from predictors.spektral_predictor import SpektralPredictor
+from .spektral_predictor import SpektralPredictor
 
 
 class GCNPredictor(SpektralPredictor):

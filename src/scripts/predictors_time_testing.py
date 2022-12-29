@@ -3,7 +3,7 @@ import math
 import os
 
 import log_service
-from predictors import *
+from predictors.models import *
 from utils.feature_analysis import generate_dataset_correlation_heatmap
 from utils.func_utils import instantiate_search_space_from_logs
 from utils.nn_utils import remove_annoying_tensorflow_messages
