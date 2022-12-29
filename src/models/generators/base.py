@@ -13,6 +13,7 @@ import log_service
 import models.operators.layers as ops
 from models.operators.op_instantiator import OpInstantiator
 from utils.func_utils import list_flatten
+from utils.graph_generator import GraphGenerator
 from utils.nn_utils import compute_tensor_byte_size
 
 
@@ -84,7 +85,12 @@ class BaseModelGenerator(ABC):
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
         self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
 
-        # attributes defined below are manipulated and used during model building.
+        # graph generator used to create the DAG of the network without creating it in TF, good for analyzing networks and extracting features
+        # for the predictors without the Keras model large overhead (instantiation of the tensors is very costly).
+        # TODO: should be modified based on the model generator (also graph generator should become an abstract class hierarchy...)
+        self.graph_gen = GraphGenerator(cnn_hp, arc_params, input_shape, output_classes_count)
+
+        # attributes defined below this comment are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
 
         # used for layers naming and partition dictionary
@@ -122,9 +128,12 @@ class BaseModelGenerator(ABC):
         self.normal_cells_per_motif = n
         self.filters = f
 
-        # recompute properties associated to the macro structure parameters
+        # recompute properties associated to the macro-structure parameters
         self.total_cells = self.get_maximum_cells()
         self.cell_output_shapes = self._compute_cell_output_shapes()
+
+        # update also the graph generator with the new macro-structure
+        self.graph_gen.alter_macro_structure(m, n, f)
 
     @abstractmethod
     def _generate_network_info(self, cell_spec: 'list[tuple]', use_stem: bool) -> NetworkBuildInfo:
