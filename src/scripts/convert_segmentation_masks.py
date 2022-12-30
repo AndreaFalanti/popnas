@@ -32,6 +32,11 @@ def extract_palette(folder: str):
     return colors_set
 
 
+def save_palette_info(palette: set, save_folder: str):
+    with open(os.path.join(save_folder, 'classes.txt'), 'w') as f:
+        f.writelines(f'{class_index}: {color_value}\n' for class_index, color_value in enumerate(palette))
+
+
 def convert_from_rgb_to_tensor(folder: str, colors: set):
     mask_files = [f for f in os.scandir(folder) if f.is_file()]  # type: list[os.DirEntry]
     # store all masks in a dictionary, which will be saved into a compressed npz file.
@@ -58,7 +63,7 @@ def convert_from_rgb_to_tensor(folder: str, colors: set):
             save_key = mask.name.split('.')[0]
             np_masks_dict.update({save_key: converted_array})
 
-    save_folder = os.path.join(os.path.dirname(folder))
+    save_folder = os.path.dirname(folder)
     np.savez_compressed(os.path.join(save_folder, 'masks.npz'), **np_masks_dict)
 
 
@@ -77,6 +82,7 @@ def main(mask_paths: 'list[str]', conversion_mode: str):
 
         if target_type == ConversionType.TENSOR.value:
             for mask_path in mask_paths:
+                save_palette_info(colors, os.path.dirname(mask_path))
                 convert_from_rgb_to_tensor(mask_path, colors)
 
 
