@@ -7,13 +7,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_tf_dataset_from_numpy_ragged_array
 from dataset.preprocessing import ImagePreprocessor
 
 
 class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
-
-
     def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
         super().__init__(dataset_config, enable_tpu_tricks)
 
@@ -27,35 +25,44 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         preprocessing_model = None
         keras_aug = None
         tf_aug = None
+        # tf_aug = get_image_segmentation_tf_data_augmentation_functions(self.resize_dim)
 
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
             shard_policy = AutoShardPolicy.DATA
 
+            # TODO: currently resizing is not working, neither random crop. There is a problem due to ragged tensors special format...
             # Custom dataset, loaded from numpy npz files
             if self.dataset_path is not None:
-                x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'))
+                classes = self.dataset_classes_count
+                image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
+
+                x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'), possibly_ragged=True)
                 # shuffle samples, then stratify in train-val split if needed.
                 # sample limit will also be applied in case it is not None
                 x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
 
                 if self.val_size is None:
-                    x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'))
+                    x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'), possibly_ragged=True)
                 # extract a validation split from training samples
                 else:
-                    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, stratify=y_train, random_state=SEED)
+                    # TODO: stratification removed since not working properly on 2D labels. Find a way to add it.
+                    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, random_state=SEED)
 
-                train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-                val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-
-                classes = self.dataset_classes_count
-                image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
+                # if type is object, then the dataset was saved in a ragged array format
+                if x_train.dtype == np.object:
+                    train_ds = generate_tf_dataset_from_numpy_ragged_array(x_train, y_train, dtype=None)
+                    val_ds = generate_tf_dataset_from_numpy_ragged_array(x_train, y_train, dtype=np.uint8)
+                # normal case, samples of the same dimensions are expected
+                else:
+                    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+                    val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
             # Keras dataset case
             else:
                 raise NotImplementedError('Only custom datasets are supported right now')
 
             # finalize dataset generation, common logic to all dataset formats
-            data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
+            data_preprocessor = ImagePreprocessor(resize_dim=None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=False)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
