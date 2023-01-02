@@ -1,6 +1,9 @@
+import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras import layers
 from tensorflow.python.keras import Sequential
+
+SEED = 1234
 
 
 def get_image_data_augmentation_model():
@@ -25,4 +28,10 @@ def get_image_data_augmentation_model():
 def get_image_tf_data_augmentation_functions():
     return [
         lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
+    ]
+
+
+def get_image_segmentation_tf_data_augmentation_functions(crop_size: 'tuple[int, int]'):
+    return [
+        lambda x, y: (tf.image.random_crop(x, crop_size, seed=SEED), tf.image.random_crop(y, crop_size, seed=SEED))
     ]
