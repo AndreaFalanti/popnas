@@ -13,9 +13,29 @@ AutoShardPolicy = tf.data.experimental.AutoShardPolicy
 SEED = 1234
 
 
-def load_npz(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
-    npz = np.load(file_path)
+def load_npz(file_path: str, possibly_ragged: bool = False) -> 'tuple[np.ndarray, np.ndarray]':
+    ''' Load an .npz numpy file from disk. Set possibly_ragged flag to True if the array contains arrays of different dimensions. '''
+    npz = np.load(file_path, allow_pickle=possibly_ragged)
     return npz['x'], npz['y']
+
+
+def generate_tf_dataset_from_numpy_ragged_array(x_arr: np.ndarray, y_arr: np.ndarray, dtype: Optional[np.dtype.type] = None):
+    '''
+    Generates a TF dataset from arrays of different dimensions (ragged).
+    The original arrays should have dtype = object, since numpy does not support directly ragged arrays.
+
+    Args:
+        x_arr: samples in numpy array object type
+        y_arr: labels in numpy array object type
+        dtype: optional dtype if explicit conversion is needed
+
+    Returns:
+        a TF dataset containing ragged tensors
+    '''
+    x_ragged = tf.ragged.stack([np.asarray(x, dtype=dtype) for x in x_arr])
+    y_ragged = tf.ragged.stack([np.asarray(y, dtype=dtype) for y in y_arr])
+
+    return tf.data.Dataset.from_tensor_slices((x_ragged, y_ragged))
 
 
 class BaseDatasetGenerator(ABC):
