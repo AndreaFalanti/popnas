@@ -486,11 +486,13 @@ class BaseModelGenerator(ABC):
 
         return model_callbacks
 
+    @abstractmethod
     def _get_loss_function(self) -> losses.Loss:
-        return losses.CategoricalCrossentropy()
+        raise NotImplementedError()
 
+    @abstractmethod
     def _get_metrics(self) -> 'list[metrics.Metric]':
-        return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
+        raise NotImplementedError()
 
     def define_training_hyperparams_and_metrics(self) -> 'tuple[losses.Loss, Optional[dict[str, float]], optimizers.Optimizer, list[metrics.Metric]]':
         '''

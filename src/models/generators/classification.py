@@ -1,7 +1,8 @@
 import math
 
 import tensorflow as tf
-from tensorflow.keras import layers, Model
+import tensorflow_addons as tfa
+from tensorflow.keras import layers, Model, losses, metrics
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
 from utils.func_utils import list_flatten
@@ -104,3 +105,11 @@ class ClassificationModelGenerator(BaseModelGenerator):
         model = self._finalize_model(model_input, last_output)
         last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
         return model, partitions_dict, last_cell_index
+
+    def _get_loss_function(self) -> losses.Loss:
+        return losses.CategoricalCrossentropy()
+
+    def _get_metrics(self) -> 'list[metrics.Metric]':
+        return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
+
+
