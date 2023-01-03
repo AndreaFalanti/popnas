@@ -5,7 +5,7 @@ from tensorflow.keras.layers import Layer, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
 from models.operators.allocators import *
-from models.operators.layers import Convolution, op_dim_selector
+from models.operators.layers import Convolution, TransposeConvolution, op_dim_selector
 
 
 class OpInstantiator:
@@ -61,10 +61,26 @@ class OpInstantiator:
 
     def generate_pointwise_conv(self, filters: int, strided: bool, name: str, activation_f: Callable = tf.nn.silu):
         '''
-        Provide builder for generating a pointwise convolution easily, for tensor shape regularization purposes.
+        Provide builder for easily generating a pointwise convolution, for tensor shape regularization purposes.
         '''
         strides = self.reduction_stride if strided else self.normal_stride
         return Convolution(filters, tuple([1] * self.op_dims), strides=strides, activation_f=activation_f, name=name)
+
+    def generate_transpose_conv(self, filters: int, upsample_factor: int, name: str, activation_f: Callable = tf.nn.silu):
+        '''
+        Provide builder for easily generating a transpose convolution, for tensor shape regularization purposes in specific networks types,
+        e.g, segmentation networks, which could require a way of upsampling the spatial resolution of a tensor.
+        '''
+        kernel = tuple([upsample_factor] * self.op_dims)
+        stride = tuple([upsample_factor] * self.op_dims)
+        return TransposeConvolution(filters, kernel, stride, weight_reg=self.weight_reg, activation_f=activation_f, name=name)
+
+    def generate_linear_upsample(self, upsample_factor: int, name: str):
+        upsampler = op_dim_selector['upsample'][self.op_dims]
+        interpolation_type = 'bilinear' if self.op_dims == 2 else 'linear'
+        # TODO: currently Upsample1D is the one implemented in Keras, which does not support linear upsample.
+        #  Refer to this issue for extending it: https://github.com/tensorflow/tensorflow/issues/46609
+        return upsampler(upsample_factor, interpolation=interpolation_type, name=name)
 
     def build_op_layer(self, op_name: str, filters: int, input_filters: int, layer_name_suffix: str, strided: bool = False) -> Layer:
         '''
