@@ -1,9 +1,11 @@
 import math
+from typing import Type
 
 import tensorflow as tf
 from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
+from models.results import BaseTrainingResults, SegmentationTrainingResults
 from utils.func_utils import list_flatten
 
 
@@ -192,3 +194,6 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
     def _get_metrics(self) -> 'list[metrics.Metric]':
         return ['accuracy', metrics.MeanIoU(self.output_classes_count)]
+
+    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+        return SegmentationTrainingResults

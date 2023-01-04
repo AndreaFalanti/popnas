@@ -1,10 +1,12 @@
 import math
+from typing import Type
 
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras import layers, Model, losses, metrics
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
+from models.results import BaseTrainingResults, ClassificationTrainingResults
 from utils.func_utils import list_flatten
 
 
@@ -112,4 +114,5 @@ class ClassificationModelGenerator(BaseModelGenerator):
     def _get_metrics(self) -> 'list[metrics.Metric]':
         return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
 
-
+    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+        return ClassificationTrainingResults

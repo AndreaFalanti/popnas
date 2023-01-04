@@ -3,7 +3,7 @@ import os.path
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Type
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -12,6 +12,7 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, 
 import log_service
 import models.operators.layers as ops
 from models.operators.op_instantiator import OpInstantiator
+from models.results.base import BaseTrainingResults
 from utils.func_utils import list_flatten
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import compute_tensor_byte_size
@@ -531,3 +532,7 @@ class BaseModelGenerator(ABC):
         optimizer = tfa.optimizers.AdamW(wd_schedule, lr_schedule) if self.use_adamW else optimizers.Adam(learning_rate=lr_schedule)
 
         return loss, loss_weights, optimizer, model_metrics
+
+    @abstractmethod
+    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+        raise NotImplementedError()
