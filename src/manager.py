@@ -85,12 +85,19 @@ class NetworkManager:
         # DEBUG ONLY
         # test_data_augmentation(self.dataset_folds[0][0])
 
-    def __write_partitions_file(self, partition_dict: dict, save_dir: str):
+    def _write_partitions_file(self, partition_dict: dict, save_dir: str):
         lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
 
         with open(save_dir, 'w') as f:
             # writelines function usually adds \n automatically, but not in python...
             f.writelines(line + '\n' for line in lines)
+
+    def _write_model_summary_file(self, cell_spec: list, flops: float, model: Model, save_path: str):
+        with open(save_path, 'w') as f:
+            # str casting is required since inputs are int
+            f.write('Cell specification: ' + ';'.join(map(str, cell_spec)) + '\n\n')
+            model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
+            f.write(f'\nFLOPS: {flops:,}')
 
     def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, dict]:
         '''
@@ -118,6 +125,13 @@ class NetworkManager:
             self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
         return model, self.model_gen.define_callbacks(tb_logdir, self.score_objective), partition_dict
+
+    def _save_model(self, model: Model):
+        ''' Save the model in ONNX format. Any previous model is automatically overwritten, leaving only the last model saved. '''
+        self._logger.info('Saving model...')
+        model.save(log_service.build_path('best_model', 'tf_model'))
+        save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
+        self._logger.info('Model saved successfully')
 
     def bootstrap_dataset_lazy_initialization(self):
         '''
@@ -159,12 +173,63 @@ class NetworkManager:
         # reset Keras layer naming counters
         tf.keras.backend.reset_uids()
 
-        # create children folder on Tensorboard
+        # create children folder for Tensorboard logs, grouped for block count and enumerated progressively
         self.current_network_id = self.current_network_id + 1
-        # grouped for block count and enumerated progressively
         tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.current_network_id))
         os.makedirs(tb_logdir, exist_ok=True)
 
+        model, histories, times, partition_dict = self.train_model(cell_spec, tb_logdir)
+
+        training_time = times.mean()
+        total_params = model.count_params()
+        # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
+        #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
+        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
+            else 0
+
+        # compute inference time from a prediction session
+        inference_time_cb = InferenceTimingCallback()
+        model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
+        # discard first batch time since it is pretty noisy due to initialization of the process
+        inference_time = mean(inference_time_cb.logs[1:])
+
+        # empty cell has a single output even if the multi-output flag is set
+        is_multi_output = self.multi_output_model and len(cell_spec) > 0
+        training_res = self.TrainingResults.from_training_histories(cell_spec, training_time, inference_time, total_params, flops,
+                                                                    histories, is_multi_output)
+
+        # write additional model files
+        self._write_model_summary_file(cell_spec, flops, model, os.path.join(tb_logdir, 'summary.txt'))
+        self._write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
+        plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
+        if is_multi_output:
+            multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')
+            write_multi_output_results_to_csv(multi_output_csv_path, cell_spec, histories,
+                                              self.TrainingResults.metrics_considered(), self.multi_output_csv_headers)
+
+        # if the algorithm is training the last batch of models (B = value provided in command line),
+        # save the best model in a folder, so that can be trained from scratch later on.
+        score = getattr(training_res, self.score_objective)
+        # avoid saving ONNX on TPU (CPU:0 device not found, same as flops)
+        if save_best_model and score > self.best_score and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
+            self.best_score = score
+            self._save_model(model)
+
+        perform_global_memory_clear()
+
+        return training_res
+
+    def train_model(self, cell_spec: 'list[tuple]', tb_logdir: str):
+        '''
+        Generate and train the model on all the dataset folds, returning the results of each training session.
+
+        Args:
+            cell_spec: cell specification
+            tb_logdir: log path for tensorboard callbacks
+
+        Returns:
+            the model, the training results for each session performed, the training time for each session and the partition dictionary
+        '''
         # store training results for each fold
         times = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
         histories = []
@@ -194,55 +259,4 @@ class NetworkManager:
             times[i] = sum(time_cb.logs)
             histories.append(hist.history)
 
-        training_time = times.mean()
-        total_params = model.count_params()
-        # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
-        #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
-        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
-            else 0
-
-        # compute inference time from a prediction session
-        inference_time_cb = InferenceTimingCallback()
-        model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
-        # discard first batch time since it is pretty noisy due to initialization of the process
-        inference_time = mean(inference_time_cb.logs[1:])
-
-        # empty cell has a single output even if the multi-output flag is set
-        is_multi_output = self.multi_output_model and len(cell_spec) > 0
-        training_res = self.TrainingResults.from_training_histories(cell_spec, training_time, inference_time, total_params, flops,
-                                                                    histories, is_multi_output)
-
-        # write file with metrics results of each output in the model, in case multiple outputs are present
-        if is_multi_output:
-            multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')
-            write_multi_output_results_to_csv(multi_output_csv_path, cell_spec, histories,
-                                              self.TrainingResults.metrics_considered(), self.multi_output_csv_headers)
-
-        # write model summary to file
-        with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
-            # str casting is required since inputs are int
-            f.write('Cell specification: ' + ';'.join(map(str, cell_spec)) + '\n\n')
-            model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
-            f.write(f'\nFLOPS: {flops:,}')
-
-        # write partitions file
-        self.__write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
-
-        # save also an overview diagram of the network
-        plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
-
-        # if the algorithm is training the last batch of models (B = value provided in command line),
-        # save the best model in a folder, so that can be trained from scratch later on.
-        score = getattr(training_res, self.score_objective)
-        # avoid saving ONNX on TPU (CPU:0 device not found, same as flops)
-        if save_best_model and score > self.best_score and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
-            self.best_score = score
-            # last model should be automatically overwritten, leaving only one model
-            self._logger.info('Saving model...')
-            model.save(log_service.build_path('best_model', 'tf_model'))
-            save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
-            self._logger.info('Model saved successfully')
-
-        perform_global_memory_clear()
-
-        return training_res
+        return model, histories, times, partition_dict
