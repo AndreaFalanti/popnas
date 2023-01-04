@@ -1,12 +1,13 @@
 import os
 import pickle
+from typing import Type
 
 import pandas as pd
 
 import log_service
 from encoder import SearchSpace
+from models.results import BaseTrainingResults
 from utils.func_utils import parse_cell_structures
-from utils.nn_utils import TrainingResults
 
 
 class RestoreInfo:
@@ -58,13 +59,13 @@ def restore_dynamic_reindex_function():
     return op_times, initial_thrust_data['training time(seconds)'][0]
 
 
-def restore_train_info(b: int):
+def restore_train_info(b: int, results_class: Type[BaseTrainingResults]):
     training_df = pd.read_csv(log_service.build_path('csv', 'training_results.csv'))
     # filter on current block level
     training_df = training_df[training_df['# blocks'] == b].drop(columns=['exploration'])
     training_df['cell structure'] = parse_cell_structures(training_df['cell structure'])
 
-    return [TrainingResults.from_csv_row(row) for row in training_df.itertuples(index=False)]
+    return [results_class.from_csv_row(row) for row in training_df.itertuples(index=False)]
 
 
 def restore_search_space_children(search_space: SearchSpace, b: int, max_children: int, pnas_mode: bool):

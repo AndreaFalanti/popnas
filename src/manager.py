@@ -1,4 +1,3 @@
-import csv
 import os
 import shutil
 from statistics import mean
@@ -7,15 +6,15 @@ from typing import Tuple
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
+from tensorflow.keras.callbacks import History
 from tensorflow.keras.utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
 from models.generators.factory import model_generator_factory
-from utils.func_utils import cell_spec_to_str
-from utils.nn_utils import get_best_metric_per_output, get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, \
-    TrainingResults, perform_global_memory_clear
+from models.results.base import write_multi_output_results_to_csv
+from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
 from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
 AUTOTUNE = tf.data.AUTOTUNE
@@ -68,10 +67,11 @@ class NetworkManager:
                                                  data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
                                                  save_weights=save_network_weights)
+        self.TrainingResults = self.model_gen.get_results_processor_class()
 
         self.multi_output_model = arc_config['multi_output']
-        self.multi_output_csv_headers = [f'c{i}_accuracy' for i in range(self.model_gen.total_cells)] + \
-                                        [f'c{i}_f1_score' for i in range(self.model_gen.total_cells)] + ['cell_spec']
+        self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.metrics_considered()
+                                         for i in range(self.model_gen.total_cells)] + ['cell_spec']
 
         self.save_onnx = save_as_onnx
 
@@ -91,19 +91,6 @@ class NetworkManager:
         with open(save_dir, 'w') as f:
             # writelines function usually adds \n automatically, but not in python...
             f.writelines(line + '\n' for line in lines)
-
-    def __write_multi_output_file(self, cell_spec: list, outputs_dict: dict):
-        # add cell spec to dictionary and write it into the csv
-        outputs_dict['cell_spec'] = cell_spec_to_str(cell_spec)
-
-        with open(log_service.build_path('csv', 'multi_output.csv'), mode='a+', newline='') as f:
-            # append mode, so if file handler is in position 0 it means is empty. In this case, write the headers too.
-            if f.tell() == 0:
-                writer = csv.writer(f)
-                writer.writerow(self.multi_output_csv_headers)
-
-            writer = csv.DictWriter(f, self.multi_output_csv_headers)
-            writer.writerow(outputs_dict)
 
     def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, dict]:
         '''
@@ -162,11 +149,11 @@ class NetworkManager:
         of its quality. Other relevant metrics of the NN architecture, like the params and flops, are returned together with the training results.
 
         Args:
-            cell_spec (list[tuple]): plain cell specification. Used to build the CNN.
-            save_best_model (bool, optional): [description]. Defaults to False.
+            cell_spec: plain cell specification. Used to build the CNN.
+            save_best_model: if best model of b=B should be saved as ONNX. Defaults to False.
 
         Returns:
-            (TrainingResults): (reward, timer, total_params, flops, inference_time) of trained network
+            results and characteristics of trained network
         '''
 
         # reset Keras layer naming counters
@@ -180,8 +167,7 @@ class NetworkManager:
 
         # store training results for each fold
         times = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
-        accuracies = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
-        f1_scores = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
+        histories = []
 
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
             if self.dataset_folds_count > 1:
@@ -191,8 +177,8 @@ class NetworkManager:
             # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
             model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
 
-            # add callback to register as accurate as possible the training time
-            # it must be the first callback, so that it register the time before other callbacks are executed, registering "almost" only the
+            # add callback to register as accurate as possible the training time.
+            # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the
             # time due to the training operations (some keras callbacks could be executed before this).
             time_cb = TimingCallback()
             callbacks.insert(0, time_cb)
@@ -203,36 +189,34 @@ class NetworkManager:
                              validation_data=val_ds,
                              validation_steps=self.validation_batches,
                              callbacks=callbacks,
-                             class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)
+                             class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)  # type: History
 
             times[i] = sum(time_cb.logs)
-            # compute the reward (best validation accuracy)
-            if self.multi_output_model and len(cell_spec) > 0:
-                multi_output_accuracies = get_best_metric_per_output(hist, 'accuracy')
-                multi_output_f1 = get_best_metric_per_output(hist, 'f1_score')
-
-                # use as val accuracy metric the best one among all softmax layers
-                accuracies[i] = max(multi_output_accuracies.values())
-                f1_scores[i] = max(multi_output_f1.values())
-                self.__write_multi_output_file(cell_spec, {**multi_output_accuracies, **multi_output_f1})
-            else:
-                accuracies[i] = max(hist.history['val_accuracy'])
-                f1_scores[i] = max(hist.history['val_f1_score'])
+            histories.append(hist.history)
 
         training_time = times.mean()
-        accuracy = accuracies.mean()
-        f1_score = f1_scores.mean()
         total_params = model.count_params()
         # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
         flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
             else 0
 
-        # compute inference time
+        # compute inference time from a prediction session
         inference_time_cb = InferenceTimingCallback()
         model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
-        # discard first batch time since it is very noisy due to initialization of the process
+        # discard first batch time since it is pretty noisy due to initialization of the process
         inference_time = mean(inference_time_cb.logs[1:])
+
+        # empty cell has a single output even if the multi-output flag is set
+        is_multi_output = self.multi_output_model and len(cell_spec) > 0
+        training_res = self.TrainingResults.from_training_histories(cell_spec, training_time, inference_time, total_params, flops,
+                                                                    histories, is_multi_output)
+
+        # write file with metrics results of each output in the model, in case multiple outputs are present
+        if is_multi_output:
+            multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')
+            write_multi_output_results_to_csv(multi_output_csv_path, cell_spec, histories,
+                                              self.TrainingResults.metrics_considered(), self.multi_output_csv_headers)
 
         # write model summary to file
         with open(os.path.join(tb_logdir, 'summary.txt'), 'w') as f:
@@ -247,9 +231,9 @@ class NetworkManager:
         # save also an overview diagram of the network
         plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
-        # if algorithm is training the last models batch (B = value provided in command line)
-        # save the best model in a folder, so that can be trained from scratch later on
-        score = accuracy if self.score_objective == 'accuracy' else f1_score
+        # if the algorithm is training the last batch of models (B = value provided in command line),
+        # save the best model in a folder, so that can be trained from scratch later on.
+        score = getattr(training_res, self.score_objective)
         # avoid saving ONNX on TPU (CPU:0 device not found, same as flops)
         if save_best_model and score > self.best_score and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
             self.best_score = score
@@ -261,4 +245,4 @@ class NetworkManager:
 
         perform_global_memory_clear()
 
-        return TrainingResults(cell_spec, accuracy, f1_score, training_time, inference_time, total_params, flops)
+        return training_res

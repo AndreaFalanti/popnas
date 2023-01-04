@@ -1,8 +1,8 @@
 import nats_bench
 
 import log_service
+from models.results import ClassificationTrainingResults
 from utils.func_utils import list_flatten
-from utils.nn_utils import TrainingResults
 from utils.rstr import rstr
 
 
@@ -78,7 +78,7 @@ class NATSbench:
 
         self._logger.info('Cumulative current GPU seconds dedicated to NN training: %0.4f', current_total_time_cost)
 
-        return TrainingResults(cell_spec, validation_accuracy, validation_accuracy, time_cost, latency, cost_info['params'], cost_info['flops'])
+        return ClassificationTrainingResults(cell_spec, time_cost, latency, cost_info['params'], cost_info['flops'], validation_accuracy, 0)
 
     def simulate_testing_on_nas_bench_201(self, cell_spec: list, dataset_name: str):
         architecture_spec = self.map_cell_spec_to_nas_bench_201(cell_spec)

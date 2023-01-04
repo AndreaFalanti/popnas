@@ -1,6 +1,5 @@
 import benchmarking
 import log_service
-from utils.nn_utils import TrainingResults
 
 
 class GraphProxy:
@@ -45,7 +44,7 @@ class NetworkBenchManager:
         bench_path = dataset_config['path']
         self.nas_bench = benchmarking.NATSbench(bench_path)
 
-        # make possible for controller to retrieve params
+        # make possible for the controller to retrieve params
         self.graph_gen = GraphGeneratorProxy(self.nas_bench)
 
     def bootstrap_dataset_lazy_initialization(self):
@@ -57,17 +56,8 @@ class NetworkBenchManager:
 
     def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
         '''
-        Generate a neural network from the cell specification and trains it for a short amount of epochs to get an estimate
-        of its quality. Other relevant metrics of the NN architecture, like the params and flops, are returned together with the training results.
-
-        Args:
-            cell_spec (list[tuple]): plain cell specification. Used to build the CNN.
-            save_best_model (bool, optional): [description]. Defaults to False.
-
-        Returns:
-            (TrainingResults): (reward, timer, total_params, flops, inference_time) of trained network
+        Queries the results of the specified network from the NAS bench, simulating the proxy training.
         '''
 
-        # convert cell spec to NAS-Bench-201 specifications
-        # then directly produce the TrainingResults
+        # convert cell spec to NAS-Bench-201 specifications, then directly produce the TrainingResults
         return self.nas_bench.simulate_training_on_nas_bench_201(cell_spec, self.dataset_name, hp='200')

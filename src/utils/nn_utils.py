@@ -20,59 +20,6 @@ from tensorflow.keras.callbacks import History
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
 
-class TrainingResults:
-    ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
-    def __init__(self, cell_spec: 'list[tuple]', accuracy: float, f1_score: float, training_time: float, inference_time: float,
-                 params: int, flops: int) -> None:
-        self.cell_spec = cell_spec
-        self.accuracy = accuracy
-        self.f1_score = f1_score
-        self.training_time = training_time
-        self.inference_time = inference_time
-        self.params = params
-        self.flops = flops
-
-        self.blocks = len(cell_spec)
-
-    @staticmethod
-    def get_csv_headers():
-        return ['best val accuracy', 'val F1 score', 'training time(seconds)', 'inference time(seconds)', 'total params',
-                'flops', '# blocks', 'cell structure']
-
-    def to_csv_list(self):
-        ''' Return a list with fields ordered for csv insertion '''
-        return [self.accuracy, self.f1_score, self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
-
-    @staticmethod
-    def from_csv_row(row: list) -> 'TrainingResults':
-        ''' Some code parts use an ordered tuple (time, acc, cell_spec), so return it to support more easily their logic without refactors. '''
-        return TrainingResults(row[7], *row[0:6])
-
-
-def get_best_metric_per_output(hist: History, metric: str, maximize: bool = True):
-    '''
-    Produce a dictionary with a key for each model output.
-     The value associated is the best one found for that output during the whole train procedure.
-    Args:
-        hist: train history
-        metric: metric name
-        maximize: True if max is best, false instead if min is best
-
-    Returns:
-        (dict[str, float]): dictionary with best metric values, for each output.
-    '''
-    r = re.compile(rf'val_Softmax_c(\d+)_{metric}')
-    output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
-
-    # save best score reached for each output
-    multi_output_scores = {}
-    for output_index in output_indexes:
-        multi_output_scores[f'c{output_index}_{metric}'] = max(hist.history[f'val_Softmax_c{output_index}_{metric}']) if maximize \
-            else min(hist.history[f'val_Softmax_c{output_index}_{metric}'])
-
-    return multi_output_scores
-
-
 def get_multi_output_best_epoch_stats(hist: History, score_metric: str, using_val: bool = True):
     '''
     Produce a dictionary with a key for each model output, that contains the metrics of the best epoch for that output.

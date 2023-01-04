@@ -13,11 +13,12 @@ from controller import ControllerManager
 from encoder import SearchSpace
 from manager import NetworkManager
 from manager_bench_proxy import NetworkBenchManager
+from models.results import BaseTrainingResults
 from predictors.initializer import PredictorsHandler
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
 from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
-from utils.nn_utils import TrainingResults, remove_annoying_tensorflow_messages
+from utils.nn_utils import remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
 
@@ -153,7 +154,7 @@ class Popnas:
 
         return train_res.training_time
 
-    def write_overall_cnn_training_results(self, blocks: int, train_results: 'list[TrainingResults]'):
+    def write_overall_cnn_training_results(self, blocks: int, train_results: 'list[BaseTrainingResults]'):
         def get_metric_aggregate_values(metric_values: 'list[float]'):
             return statistics.mean(metric_values), max(metric_values), min(metric_values)
 
@@ -174,7 +175,7 @@ class Popnas:
 
             writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
-    def write_predictors_training_data(self, current_blocks: int, train_res: TrainingResults, exploration: bool = False):
+    def write_predictors_training_data(self, current_blocks: int, train_res: BaseTrainingResults, exploration: bool = False):
         '''
         Write the training results of a sampled architecture, as formatted features that will be used for training the predictors.
 
@@ -204,7 +205,7 @@ class Popnas:
             writer = csv.writer(f)
             writer.writerows(acc_rows)
 
-    def write_training_results_into_csv(self, train_res: TrainingResults, exploration: bool = False):
+    def write_training_results_into_csv(self, train_res: BaseTrainingResults, exploration: bool = False):
         '''
         Append info about a single CNN training to the results csv file.
         '''
@@ -221,7 +222,7 @@ class Popnas:
 
             writer.writerow(data)
 
-    def write_smb_times(self, monoblocks_train_info: 'list[TrainingResults]'):
+    def write_smb_times(self, monoblocks_train_info: 'list[BaseTrainingResults]'):
         # dictionary to store specular monoblock (-1 input) times for dynamic reindex
         op_times = {}
 
@@ -269,7 +270,7 @@ class Popnas:
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 
-    def train_selected_architectures(self, cnns_train_info: 'list[TrainingResults]', current_blocks: int, exploration: bool):
+    def train_selected_architectures(self, train_infos: 'list[BaseTrainingResults]', current_blocks: int, exploration: bool):
         cell_specs = self.search_space.exploration_front if exploration else self.search_space.children
         restore_index = self.restore_exploration_train_index if exploration else self.restore_pareto_train_index
 
@@ -282,7 +283,7 @@ class Popnas:
             self._logger.debug("\t%s", cell_spec)
 
             train_res = self.generate_and_train_model_from_spec(cell_spec)
-            cnns_train_info.append(train_res)
+            train_infos.append(train_res)
             self._logger.info("Finished %d out of %d %s!", model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
 
             self.write_training_results_into_csv(train_res, exploration=exploration)
@@ -318,7 +319,7 @@ class Popnas:
         # train the selected CNN networks for each number of blocks (algorithm step)
         for current_blocks in range(self.starting_b, self.blocks + 1):
             training_results = [] if self.restore_pareto_train_index == 0 \
-                else restore_train_info(current_blocks)  # type: list[TrainingResults]
+                else restore_train_info(current_blocks, self.nn_manager.model_gen.get_results_processor_class())
 
             self.train_selected_architectures(training_results, current_blocks, exploration=False)
             # train the models built from exploration pareto front
