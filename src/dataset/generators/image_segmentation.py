@@ -62,7 +62,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError('Only custom datasets are supported right now')
 
             # finalize dataset generation, common logic to all dataset formats
-            data_preprocessor = ImagePreprocessor(resize_dim=None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=False)
+            data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)

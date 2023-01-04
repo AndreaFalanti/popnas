@@ -35,7 +35,8 @@ def generate_tf_dataset_from_numpy_ragged_array(x_arr: np.ndarray, y_arr: np.nda
     x_ragged = tf.ragged.stack([np.asarray(x, dtype=dtype) for x in x_arr])
     y_ragged = tf.ragged.stack([np.asarray(y, dtype=dtype) for y in y_arr])
 
-    return tf.data.Dataset.from_tensor_slices((x_ragged, y_ragged))
+    # to_tensor is required to use map functions in the pipeline. It's strange, maybe ragged tensors are not necessary?
+    return tf.data.Dataset.from_tensor_slices((x_ragged, y_ragged)).map(lambda x, y: (x.to_tensor(), y.to_tensor()))
 
 
 class BaseDatasetGenerator(ABC):
@@ -91,6 +92,10 @@ class BaseDatasetGenerator(ABC):
         if shuffle:
             ds = ds.shuffle(len(ds), seed=SEED)
 
+        # PREPROCESSING
+        # TODO: should be done after batching, to exploit vectorization. Right now there is a problem with ragged tensors, so moved before batching.
+        ds = preprocessor.apply_preprocessing(ds, fit_preprocessing_layers)
+
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
             # make all batches of the same size, avoids drop remainder to not loss data, instead duplicates some samples
@@ -100,9 +105,6 @@ class BaseDatasetGenerator(ABC):
                 ds = ds.concatenate(duplicate_ds)
 
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
-
-        # PREPROCESSING
-        ds = preprocessor.apply_preprocessing(ds, fit_preprocessing_layers)
 
         # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
         if self.cache:
