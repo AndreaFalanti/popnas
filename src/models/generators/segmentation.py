@@ -104,14 +104,12 @@ class SegmentationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Pointwise_Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, dict, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
         # stores the final cell's output of each U-net structure "level", the ones used in the skip connections.
         level_outputs = []
 
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)
         self.output_layers = {}
-        # store partition sizes (computed between each two adjacent cells and between last cell and GAP)
-        partitions_dict = {}
 
         M, N = self._get_macro_params(cell_spec)
         filters = self.filters
@@ -130,14 +128,14 @@ class SegmentationModelGenerator(BaseModelGenerator):
         for motif_index in range(M):
             # add N times a normal cell
             for _ in range(N):
-                cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict)
+                cell_inputs = self._build_cell_util(filters, cell_inputs)
 
             level_outputs.append(cell_inputs[-1])
 
             # add 1 time a reduction cell, except for the last motif
             if motif_index + 1 < M:
                 filters = filters * 2
-                cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+                cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
         # DECODER part of the U-net structure
         # add (M - 1) times an upsample unit followed by N normal cells
@@ -147,14 +145,14 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
             # add N times a normal cell
             for _ in range(N):
-                cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict)
+                cell_inputs = self._build_cell_util(filters, cell_inputs)
 
         # take last cell output and use it in the final output
         last_output = cell_inputs[-1]
 
         model = self._finalize_model(model_input, last_output)
         last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
-        return model, partitions_dict, last_cell_index
+        return model, last_cell_index
 
     def _build_upsample_unit(self, cell_inputs: 'list[tf.Tensor]', level_outputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
         '''

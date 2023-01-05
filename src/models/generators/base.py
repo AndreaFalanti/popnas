@@ -15,7 +15,7 @@ from models.operators.op_instantiator import OpInstantiator
 from models.results.base import BaseTrainingResults
 from utils.func_utils import list_flatten
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import compute_tensor_byte_size
+from utils.nn_utils import compute_bytes_from_tensor_shape
 
 
 @dataclass
@@ -163,15 +163,35 @@ class BaseModelGenerator(ABC):
     def _cur_target_shape(self):
         return self.cell_output_shapes[self.cell_index]
 
-    def _compute_partition_size(self, cell_inputs: 'list[tf.Tensor]'):
-        input_tensors_size = 0
+    def compute_network_partitions(self, cell_spec: 'list[tuple]', tensor_dtype: tf.dtypes.DType = tf.float32):
+        # empty cell has no partitions
+        if len(cell_spec) == 0:
+            return {}
 
-        for lb in self.network_build_info.used_lookbacks:
-            input_tensors_size += compute_tensor_byte_size(cell_inputs[lb])
+        network_info = self._generate_network_info(cell_spec, use_stem=False)
+        max_lookback = max(abs(lb) for lb in network_info.used_lookbacks)
+        output_shapes = ([list(self.input_shape)] * max_lookback) + self.cell_output_shapes
 
-        return input_tensors_size
+        dtype_sizes = {
+            tf.float16: 2,
+            tf.float32: 4,
+            tf.float64: 8,
+            tf.int32: 4,
+            tf.int64: 8
+        }
+        dtype_size = dtype_sizes[tensor_dtype]
 
-    def _build_cell_util(self, filters: int, inputs: 'list[tf.Tensor]', partitions_dict: dict, reduction: bool = False) -> 'list[tf.Tensor]':
+        partitions_dict = {}
+        previous_name = 'input'
+        for cell_index in sorted(network_info.used_cell_indexes):
+            current_name = f'cell_{cell_index}'
+            partitions_dict[f'{previous_name} -> {current_name}'] = \
+                sum(compute_bytes_from_tensor_shape(output_shapes[lb + max_lookback + cell_index], dtype_size) for lb in network_info.used_lookbacks)
+            previous_name = current_name
+
+        return partitions_dict
+
+    def _build_cell_util(self, filters: int, inputs: 'list[tf.Tensor]', reduction: bool = False) -> 'list[tf.Tensor]':
         '''
         Simple helper function for building a cell and quickly return the inputs for the next cell.
 
@@ -186,9 +206,6 @@ class BaseModelGenerator(ABC):
         # this check avoids building cells not used in the final model (cells not linked to output), also removing the problem of multi-branch
         # models in case of multi-output models without -1 lookback usage (it was like training parallel uncorrelated models for each branch)
         if self.cell_index in self.network_build_info.used_cell_indexes:
-            input_name = 'input' if self.cell_index == 0 else f'cell_{self.prev_cell_index}'
-            partitions_dict[f'{input_name} -> cell_{self.cell_index}'] = self._compute_partition_size(inputs)
-
             cell_output = self._build_cell(filters, reduction, inputs)
             self.prev_cell_index = self.cell_index
 
@@ -223,7 +240,7 @@ class BaseModelGenerator(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, dict, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
         '''
         Build a Keras model from the given cell specification.
         The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
@@ -233,7 +250,7 @@ class BaseModelGenerator(ABC):
             add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
 
         Returns:
-            Keras model, partition dictionary, and the final cell index.
+            Keras model, and the final cell index.
         '''
         raise NotImplementedError()
 
@@ -270,7 +287,7 @@ class BaseModelGenerator(ABC):
         return initial_lookback_input
 
     # TODO: adapt it for 1D (time-series)
-    def _prepend_imagenet_stem(self, cell_inputs: list, filters: int, partitions_dict: dict) -> 'tuple[list[tf.Tensor], int]':
+    def _prepend_imagenet_stem(self, cell_inputs: list, filters: int) -> 'tuple[list[tf.Tensor], int]':
         '''
         Add a stride-2 3x3 convolution layer followed by 2 reduction cells at the start of the network.
         The stem originates from PNAS and NASNet works, which used this stack of layers to quickly reduce the input dimensionality when
@@ -279,7 +296,6 @@ class BaseModelGenerator(ABC):
         Args:
             cell_inputs:
             filters:
-            partitions_dict:
 
         Returns:
             the new tensors usable as lookbacks, and the new number of filters.
@@ -288,9 +304,9 @@ class BaseModelGenerator(ABC):
         stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
         cell_inputs = [model_input, stem_conv]
         filters = filters * 2
-        cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+        cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
         filters = filters * 2
-        cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+        cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
         return cell_inputs, filters
 

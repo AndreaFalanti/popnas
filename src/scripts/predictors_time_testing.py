@@ -60,16 +60,17 @@ def main():
     search_space = instantiate_search_space_from_logs(args.p)
 
     predictors_to_test = [
-        # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path, name='aMLLibrary_NNLS_NEW'),
-        # AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path, name='aMLLibrary_LRRidge_NEW'),
-        # AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
-        # AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path, name='aMLLibrary_XGBoost (new features)'),
+        AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
+        AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], logger, log_path),
+        AMLLibraryPredictor(amllibrary_config_path, ['SVR'], logger, log_path),
+        AMLLibraryPredictor(amllibrary_config_path, ['XGBoost'], logger, log_path),
+        AMLLibraryPredictor(amllibrary_config_path, ['NNLS', 'LRRidge', 'SVR', 'XGBoost'], logger, log_path, name='aMLLibrary_ALL'),
         # RNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=False),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU', name='CatBoost_GPU_NEW'),
-        LGBMPredictor(logger, log_path, drop_feature_names=['exploration'], use_random_search=True)
+        # LGBMPredictor(logger, log_path, drop_feature_names=['exploration'], use_random_search=True)
     ]  # type: 'list[Predictor]'
 
     for p in predictors_to_test:

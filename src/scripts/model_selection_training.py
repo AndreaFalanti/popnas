@@ -190,7 +190,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             # alter macro parameters of model generator, before building the model
             model_gen.alter_macro_structure(*macro)
 
-            mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
+            mo_model, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
             model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
         model_logger.info('Model generated successfully')

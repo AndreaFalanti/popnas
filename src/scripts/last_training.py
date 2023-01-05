@@ -95,7 +95,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
 
-        mo_model, _, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
+        mo_model, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
         model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
     logger.info('Model generated successfully')

@@ -6,7 +6,7 @@ import re
 import sys
 import warnings
 from functools import reduce
-from typing import Optional
+from typing import Optional, Iterable
 
 import absl.logging
 import numpy as np
@@ -87,8 +87,10 @@ def get_model_flops(model: Model, write_path=None):
     return flops.total_float_ops
 
 
+# TODO: not used anymore for simplicity, but is still a great utility function if will be needed in the future
 def compute_tensor_byte_size(tensor: tf.Tensor):
     dtype_sizes = {
+        tf.float16: 2,
         tf.float32: 4,
         tf.float64: 8,
         tf.int32: 4,
@@ -101,6 +103,11 @@ def compute_tensor_byte_size(tensor: tf.Tensor):
 
     # byte size is: (number of weights) * (size of each weight)
     return reduce(operator.mul, tensor_shape, 1) * dtype_size
+
+
+def compute_bytes_from_tensor_shape(tensor_shape: Iterable[int], dtype_byte_size: int):
+    # byte size is: (number of weights) * (size of each weight)
+    return reduce(operator.mul, tensor_shape, 1) * dtype_byte_size
 
 
 def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distribute.Strategy:

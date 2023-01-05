@@ -1,12 +1,11 @@
 import os
 import shutil
 from statistics import mean
-from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.callbacks import History
+from tensorflow.keras.callbacks import History, Callback
 from tensorflow.keras.utils import plot_model
 
 import log_service
@@ -99,7 +98,7 @@ class NetworkManager:
             model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
             f.write(f'\nFLOPS: {flops:,}')
 
-    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> Tuple[Model, list, dict]:
+    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> 'tuple[Model, list[Callback]]':
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
@@ -108,11 +107,11 @@ class NetworkManager:
             tb_logdir (str): path for tensorboard logging
 
         Returns:
-            (tf.keras.Model, list[tf.keras.callbacks.Callback], dict): model and callbacks to use while training
+            model and callbacks to use while training
         '''
 
         with self.train_strategy.scope():
-            model, partition_dict, _ = self.model_gen.build_model(cell_spec)
+            model, _ = self.model_gen.build_model(cell_spec)
 
             loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
             model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics, steps_per_execution=self.execution_steps)
@@ -124,7 +123,7 @@ class NetworkManager:
             save_keras_model_to_onnx(model, os.path.join(tb_logdir, 'model.onnx'))
             self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
-        return model, self.model_gen.define_callbacks(tb_logdir, self.score_objective), partition_dict
+        return model, self.model_gen.define_callbacks(tb_logdir, self.score_objective)
 
     def _save_model(self, model: Model):
         ''' Save the model in ONNX format. Any previous model is automatically overwritten, leaving only the last model saved. '''
@@ -140,7 +139,7 @@ class NetworkManager:
         '''
         self._logger.info('Performing an epoch of training to lazy load and cache the dataset')
         fake_tb_logdir = log_service.build_path('tensorboard_cnn', f'Bx')
-        model, callbacks, partition_dict = self.__compile_model([], fake_tb_logdir)
+        model, callbacks = self.__compile_model([], fake_tb_logdir)
 
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
             if self.dataset_folds_count > 1:
@@ -178,7 +177,7 @@ class NetworkManager:
         tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.current_network_id))
         os.makedirs(tb_logdir, exist_ok=True)
 
-        model, histories, times, partition_dict = self.train_model(cell_spec, tb_logdir)
+        model, histories, times = self.train_model(cell_spec, tb_logdir)
 
         training_time = times.mean()
         total_params = model.count_params()
@@ -200,6 +199,7 @@ class NetworkManager:
 
         # write additional model files
         self._write_model_summary_file(cell_spec, flops, model, os.path.join(tb_logdir, 'summary.txt'))
+        partition_dict = self.model_gen.compute_network_partitions(cell_spec, tensor_dtype=tf.float32)
         self._write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
         plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
         if is_multi_output:
@@ -228,7 +228,7 @@ class NetworkManager:
             tb_logdir: log path for tensorboard callbacks
 
         Returns:
-            the model, the training results for each session performed, the training time for each session and the partition dictionary
+            the model, the training results for each session performed, and the training time for each session
         '''
         # store training results for each fold
         times = np.empty(shape=self.dataset_folds_count, dtype=np.float64)
@@ -240,7 +240,7 @@ class NetworkManager:
 
             # generate a CNN model given the cell specification
             # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
-            model, callbacks, partition_dict = self.__compile_model(cell_spec, tb_logdir)
+            model, callbacks = self.__compile_model(cell_spec, tb_logdir)
 
             # add callback to register as accurate as possible the training time.
             # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the
@@ -259,4 +259,4 @@ class NetworkManager:
             times[i] = sum(time_cb.logs)
             histories.append(hist.history)
 
-        return model, histories, times, partition_dict
+        return model, histories, times

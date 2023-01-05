@@ -97,7 +97,7 @@ def main():
 
             with train_strategy.scope():
                 model_gen.alter_macro_structure(*macro)
-                mo_model, _, _ = model_gen.build_model(cell_spec, add_imagenet_stem=False)
+                mo_model, _ = model_gen.build_model(cell_spec, add_imagenet_stem=False)
                 model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
             print('Model generated successfully')

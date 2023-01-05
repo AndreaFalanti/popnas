@@ -72,11 +72,9 @@ class ClassificationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, dict, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)
         self.output_layers = {}
-        # store partition sizes (computed between each two adjacent cells and between last cell and GAP)
-        partitions_dict = {}
 
         M, N = self._get_macro_params(cell_spec)
         filters = self.filters
@@ -88,25 +86,25 @@ class ClassificationModelGenerator(BaseModelGenerator):
         cell_inputs = [initial_lookback_input, initial_lookback_input]  # [skip, last]
 
         if add_imagenet_stem:
-            cell_inputs, filters = self._prepend_imagenet_stem(cell_inputs, filters, partitions_dict)
+            cell_inputs, filters = self._prepend_imagenet_stem(cell_inputs, filters)
 
         # add M times N normal cells and a reduction cell (except in the last motif where the reduction cell is skipped)
         for motif_index in range(M):
             # add N times a normal cell
             for _ in range(N):
-                cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict)
+                cell_inputs = self._build_cell_util(filters, cell_inputs)
 
             # add 1 time a reduction cell, except for the last motif
             if motif_index + 1 < M:
                 filters = filters * 2
-                cell_inputs = self._build_cell_util(filters, cell_inputs, partitions_dict, reduction=True)
+                cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
         model = self._finalize_model(model_input, last_output)
         last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
-        return model, partitions_dict, last_cell_index
+        return model, last_cell_index
 
     def _get_loss_function(self) -> losses.Loss:
         return losses.CategoricalCrossentropy()
