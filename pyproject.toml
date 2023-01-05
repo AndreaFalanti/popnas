@@ -35,11 +35,12 @@ nats-bench = "1.7"
 spektral = "1.2.0"
 onnxruntime = "1.13.1"
 graphviz = "0.20.1"
-# aMLLibrary only
-xgboost = "1.4.2"
-mlxtend = "0.18.0"
-hyperopt = "0.2.5"
+# aMLLibrary extra dependencies
+xgboost = "1.6.1"
+mlxtend = "0.19.0"
 eli5 = "0.13.0"
+py4j = "0.10.9.5"
+future = "0.18.2"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "*"
