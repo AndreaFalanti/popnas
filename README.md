@@ -64,6 +64,12 @@ You can activate the new environment with command:
 poetry shell
 ```
 
+The _aMLLibrary_ dependency is integrated in the project as a git submodule, since it is not possible to install it with package managers.
+_aMLLibrary_ dependencies are handled by Poetry, but the library must be downloaded separately with the command:
+```
+git submodule update --init --recursive
+```
+
 After that you should be able to run POPNASv2 with this command:
 ```
 python run.py
