@@ -27,7 +27,12 @@ class SegmentationTrainingResults(BaseTrainingResults):
 
     @staticmethod
     def get_csv_headers() -> 'list[str]':
-        return ['best val accuracy', 'val mean IoU'] + super().get_csv_headers()
+        return ['best val accuracy', 'val mean IoU'] + BaseTrainingResults.get_csv_headers()
 
     def to_csv_list(self) -> list:
         return [self.accuracy, self.mean_io_u] + super().to_csv_list()
+
+    def log_results(self):
+        self._logger.info("Best accuracy reached: %0.4f", self.accuracy)
+        self._logger.info("Best mean IoU reached: %0.4f", self.mean_io_u)
+        super().log_results()

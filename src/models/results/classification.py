@@ -31,3 +31,8 @@ class ClassificationTrainingResults(BaseTrainingResults):
 
     def to_csv_list(self) -> list:
         return [self.accuracy, self.f1_score] + super().to_csv_list()
+
+    def log_results(self):
+        self._logger.info("Best accuracy reached: %0.4f", self.accuracy)
+        self._logger.info("Best F1 score reached: %0.4f", self.f1_score)
+        super().log_results()

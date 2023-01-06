@@ -118,14 +118,7 @@ class Popnas:
         last_block_train = len(cell_spec) == self.blocks
         # build a model, train and get reward and accuracy from the network manager
         train_res = self.nn_manager.perform_proxy_training(cell_spec, save_best_model=last_block_train)
-
-        self._logger.info("Best accuracy reached: %0.6f", train_res.accuracy)
-        self._logger.info("Best F1 score reached: %0.6f", train_res.f1_score)
-        self._logger.info("Training time: %0.6f", train_res.training_time)
-        self._logger.info('Inference time: %0.6f', train_res.inference_time)
-        # format is a workaround for thousands separator, since the python logger has no such feature 
-        self._logger.info("Total parameters: %s", format(train_res.params, ','))
-        self._logger.info("Total FLOPS: %s", format(train_res.flops, ','))
+        train_res.log_results()
 
         return train_res
 

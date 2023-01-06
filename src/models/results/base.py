@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from statistics import mean
 from typing import Iterable, Callable, NamedTuple
 
+import log_service
 from utils.func_utils import cell_spec_to_str
 
 
@@ -91,6 +92,7 @@ class BaseTrainingResults(ABC):
         self.flops = flops
 
         self.blocks = len(cell_spec)
+        self._logger = log_service.get_logger('TrainingResults')
 
     @staticmethod
     @abstractmethod
@@ -122,3 +124,12 @@ class BaseTrainingResults(ABC):
     def to_csv_list(self) -> list:
         ''' Return a list with fields ordered for csv insertion. '''
         return [self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
+
+    @abstractmethod
+    def log_results(self):
+        ''' Print the results, in a human-readable format, to the logger. '''
+        self._logger.info("Training time: %0.4f", self.training_time)
+        self._logger.info('Inference time: %0.4f', self.inference_time)
+        # format is a workaround for thousands separator, since the python logger has no such feature
+        self._logger.info("Total parameters: %s", format(self.params, ','))
+        self._logger.info("Total FLOPS: %s", format(self.flops, ','))
