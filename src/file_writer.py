@@ -75,7 +75,7 @@ def write_specular_monoblock_times(smb_time_dict: 'dict[str, float]', save_path:
     ''' Save specular monoblock training times, so that on restore it is easier to restore the dynamic reindex map. '''
     with open(save_path, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerows([k, v] for k, v in smb_time_dict.items())
+        writer.writerows([v, k] for k, v in smb_time_dict.items())
 
 
 def append_to_time_features_csv(cell_time_features: list):
@@ -92,16 +92,11 @@ def append_to_score_features_csv(cell_score_features: list):
         writer.writerow(cell_score_features)
 
 
-def append_cell_spec_to_csv(children_specs: list):
-    '''
-    Append all cell specifications that will be trained in the next step (Pareto front + exploration Pareto front), in a csv file.
-
-    Args:
-        children_specs: all cells to train in next step (Pareto front + exploration Pareto front)
-    '''
+def append_cell_spec_to_csv(cell_specs: list):
+    ''' Append all cell specifications that will be trained in the next step (Pareto front + exploration Pareto front), in a csv file. '''
     with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
         writer = csv.writer(f)
-        writer.writerows(children_specs)
+        writer.writerows(cell_specs)
 
 
 def save_predictions_to_csv(predictions: 'list[ModelEstimate]', filename: str):
