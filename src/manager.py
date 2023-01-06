@@ -8,6 +8,7 @@ from tensorflow.keras import Model
 from tensorflow.keras.callbacks import History, Callback
 from tensorflow.keras.utils import plot_model
 
+import file_writer as fw
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
@@ -84,27 +85,13 @@ class NetworkManager:
         # DEBUG ONLY
         # test_data_augmentation(self.dataset_folds[0][0])
 
-    def _write_partitions_file(self, partition_dict: dict, save_dir: str):
-        lines = [f'{key}: {value:,} bytes' for key, value in partition_dict.items()]
-
-        with open(save_dir, 'w') as f:
-            # writelines function usually adds \n automatically, but not in python...
-            f.writelines(line + '\n' for line in lines)
-
-    def _write_model_summary_file(self, cell_spec: list, flops: float, model: Model, save_path: str):
-        with open(save_path, 'w') as f:
-            # str casting is required since inputs are int
-            f.write('Cell specification: ' + ';'.join(map(str, cell_spec)) + '\n\n')
-            model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
-            f.write(f'\nFLOPS: {flops:,}')
-
     def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> 'tuple[Model, list[Callback]]':
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
         Args:
-            cell_spec (list): [description]
-            tb_logdir (str): path for tensorboard logging
+            cell_spec: cell specification
+            tb_logdir: path for tensorboard logging
 
         Returns:
             model and callbacks to use while training
@@ -198,9 +185,9 @@ class NetworkManager:
                                                                     histories, is_multi_output)
 
         # write additional model files
-        self._write_model_summary_file(cell_spec, flops, model, os.path.join(tb_logdir, 'summary.txt'))
+        fw.write_model_summary_file(cell_spec, flops, model, os.path.join(tb_logdir, 'summary.txt'))
         partition_dict = self.model_gen.compute_network_partitions(cell_spec, tensor_dtype=tf.float32)
-        self._write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
+        fw.write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
         plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
         if is_multi_output:
             multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')

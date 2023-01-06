@@ -1,4 +1,3 @@
-import csv
 import sys
 from typing import Any
 
@@ -6,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 import exploration
+import file_writer as fw
 import log_service
 from encoder import SearchSpace
 from predictors.initializer import PredictorsHandler
@@ -17,31 +17,6 @@ from utils.func_utils import to_list_of_tuples
 from utils.model_estimate import ModelEstimate
 from utils.nn_utils import perform_global_memory_clear
 from utils.rstr import rstr
-
-
-def _save_children_specs_to_file(children_specs: list):
-    '''
-    Append all cell specifications, that will be trained in the next step, in the children.csv file.
-
-    Args:
-        children_specs: all cells to train in next step (Pareto front + exploration Pareto front)
-    '''
-    with open(log_service.build_path('csv', 'children.csv'), mode='a+', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(children_specs)
-
-
-def _save_model_estimates_to_csv_file(filename: str, model_estimates: 'list[ModelEstimate]'):
-    '''
-    Save a list of model estimation objects to a csv file.
-    Args:
-        filename:
-        model_estimates:
-    '''
-    with open(log_service.build_path('csv', filename), mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(ModelEstimate.get_csv_headers())
-        writer.writerows(map(lambda est: est.to_csv_array(), model_estimates))
 
 
 class ControllerManager:
@@ -250,7 +225,7 @@ class ControllerManager:
 
         # sort the children according to their score
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
-        _save_model_estimates_to_csv_file(f'predictions_B{self.current_b}.csv', model_estimations)
+        fw.save_predictions_to_csv(model_estimations, f'predictions_B{self.current_b}.csv')
 
         self._logger.info('Models performance estimation completed')
 
@@ -258,7 +233,7 @@ class ControllerManager:
         # Same for exploration Pareto front, if it is needed
         if not self.pnas_mode:
             pareto_front, existing_model_reprs = self.__build_pareto_front(model_estimations)
-            _save_model_estimates_to_csv_file(f'pareto_front_B{self.current_b}.csv', pareto_front)
+            fw.save_predictions_to_csv(pareto_front, f'pareto_front_B{self.current_b}.csv')
 
             # TODO: already limited right now
             # limit the Pareto front to K elements if necessary
@@ -274,7 +249,7 @@ class ControllerManager:
                 exploration_pareto_front, existing_model_reprs = self.__build_exploration_pareto_front(model_estimations, existing_model_reprs,
                                                                                                        op_exp, input_exp)
 
-                _save_model_estimates_to_csv_file(f'exploration_pareto_front_B{self.current_b}.csv', exploration_pareto_front)
+                fw.save_predictions_to_csv(exploration_pareto_front, f'exploration_pareto_front_B{self.current_b}.csv')
 
                 self.search_space.exploration_front = [child.cell_spec for child in exploration_pareto_front]
                 self._logger.info('Exploration pareto front built successfully')
@@ -296,7 +271,7 @@ class ControllerManager:
             children, pruned_count = cell_pruning.prune_equivalent_cell_models(models, children_limit)
             self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)
 
-        _save_children_specs_to_file(children + self.search_space.exploration_front)
+        fw.append_cell_spec_to_csv(children + self.search_space.exploration_front)
 
         # save these children for next round
         # exploration networks are saved in another separate variable (state_space.exploration_front)

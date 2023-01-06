@@ -1,12 +1,11 @@
-import csv
 import os
 import pickle
-import statistics
 from timeit import default_timer as timer
 from typing import Any
 
 import tensorflow as tf
 
+import file_writer as fw
 import log_service
 import plotter
 from controller import ControllerManager
@@ -17,7 +16,7 @@ from models.results import BaseTrainingResults
 from predictors.initializer import PredictorsHandler
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
-from utils.func_utils import get_valid_inputs_for_block_size, cell_spec_to_str
+from utils.func_utils import get_valid_inputs_for_block_size
 from utils.nn_utils import remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
@@ -142,38 +141,11 @@ class Popnas:
         time_data = [train_res.training_time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
         acc_data = [train_res.accuracy] + [0] * (acc_features_len - 3) + [False, False]
 
-        with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(time_data)
-
-        with open(log_service.build_path('csv', 'training_score.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(acc_data)
-
-        self.write_training_results_into_csv(train_res)
+        fw.append_to_time_features_csv(time_data)
+        fw.append_to_score_features_csv(acc_data)
+        fw.write_training_results_into_csv(train_res)
 
         return train_res.training_time
-
-    def write_overall_cnn_training_results(self, blocks: int, train_results: 'list[BaseTrainingResults]'):
-        def get_metric_aggregate_values(metric_values: 'list[float]'):
-            return statistics.mean(metric_values), max(metric_values), min(metric_values)
-
-        times, scores = [], []
-        for train_res in train_results:
-            times.append(train_res.training_time)
-            scores.append(getattr(train_res, self.score_metric))
-
-        with open(log_service.build_path('csv', 'training_overview.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-
-            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
-            if f.tell() == 0:
-                writer.writerow(['# blocks', 'avg training time(s)', 'max time', 'min time', 'avg val score', 'max score', 'min score'])
-
-            avg_time, max_time, min_time = get_metric_aggregate_values(times)
-            avg_acc, max_acc, min_acc = get_metric_aggregate_values(scores)
-
-            writer.writerow([blocks, avg_time, max_time, min_time, avg_acc, max_acc, min_acc])
 
     def write_predictors_training_data(self, current_blocks: int, train_res: BaseTrainingResults, exploration: bool = False):
         '''
@@ -197,50 +169,27 @@ class Popnas:
         acc_rows = [[score] + self.predictors_handler.generate_cell_score_features(eqv_cell) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
 
-        with open(log_service.build_path('csv', 'training_time.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(time_row)
+        fw.append_to_time_features_csv(time_row)
+        # not efficient, but consistent with the API. Anyway, the file is re-opened only like 3-4 times, so it's not a problem.
+        for acc_row in acc_rows:
+            fw.append_to_score_features_csv(acc_row)
 
-        with open(log_service.build_path('csv', 'training_score.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(acc_rows)
-
-    def write_training_results_into_csv(self, train_res: BaseTrainingResults, exploration: bool = False):
+    def get_specular_monoblocks_training_times(self, monoblocks_train_info: 'list[BaseTrainingResults]'):
         '''
-        Append info about a single CNN training to the results csv file.
+        Extract the training time required to train the specular cells composed of single block.
+        These times are required to compute the dynamic reindex map.
+        Args:
+            monoblocks_train_info:
+
+        Returns:
+            a dictionary, with the operator used in the specular mono block as key, and the training time as value.
         '''
-        with open(log_service.build_path('csv', 'training_results.csv'), mode='a+', newline='') as f:
-            writer = csv.writer(f)
+        def is_a_specular_monoblock(in1, op1, in2, op2) -> bool:
+            ''' Same inputs, same operators, considers only the ones with input = -1. '''
+            return in1 == in2 and op1 == op2 and in1 == -1
 
-            # append mode, so if file handler is in position 0 it means is empty. In this case write the headers too
-            if f.tell() == 0:
-                writer.writerow(train_res.get_csv_headers() + ['exploration'])
-
-            # trim cell structure from csv list and replace it with a valid string representation of it
-            cell_structure_str = cell_spec_to_str(train_res.cell_spec)
-            data = train_res.to_csv_list()[:-1] + [cell_structure_str, exploration]
-
-            writer.writerow(data)
-
-    def write_smb_times(self, monoblocks_train_info: 'list[BaseTrainingResults]'):
-        # dictionary to store specular monoblock (-1 input) times for dynamic reindex
-        op_times = {}
-
-        for t_res in monoblocks_train_info:
-            # unpack the block (only tuple present in the list) into its components
-            in1, op1, in2, op2 = t_res.cell_spec[0]
-
-            # get required data for dynamic reindex
-            # op_times will contain training times for blocks with both same operation and input -1, for each operation, in order
-            same_inputs = in1 == in2
-            same_op = op1 == op2
-            if same_inputs and same_op and in1 == -1:
-                with open(log_service.build_path('csv', 'reindex_op_times.csv'), mode='a+', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow([t_res.training_time, op1])
-                    op_times[op1] = t_res.training_time
-
-        return op_times
+        return {op1: train_res.training_time for train_res in monoblocks_train_info
+                for in1, op1, in2, op2 in train_res.cell_spec if is_a_specular_monoblock(in1, op1, in2, op2)}
 
     def log_run_final_results(self):
         self._logger.info('Finished!')
@@ -286,7 +235,7 @@ class Popnas:
             train_infos.append(train_res)
             self._logger.info("Finished %d out of %d %s!", model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
 
-            self.write_training_results_into_csv(train_res, exploration=exploration)
+            fw.write_training_results_into_csv(train_res, exploration=exploration)
 
             # if current_blocks > 1 we have already the dynamic reindex function, so it's possible to write the feature data immediately
             if current_blocks > 1:
@@ -327,7 +276,8 @@ class Popnas:
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
-                op_times = self.write_smb_times(training_results)
+                op_times = self.get_specular_monoblocks_training_times(training_results)
+                fw.write_specular_monoblock_times(op_times, save_path=log_service.build_path('csv', 'reindex_op_times.csv'))
                 reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
                 plotter.plot_smb_info()
@@ -335,7 +285,7 @@ class Popnas:
                 for train_res in training_results:
                     self.write_predictors_training_data(current_blocks, train_res)
 
-            self.write_overall_cnn_training_results(current_blocks, training_results)
+            fw.write_overall_cnn_training_results(self.score_metric, current_blocks, training_results)
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:
