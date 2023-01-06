@@ -130,10 +130,10 @@ class SegmentationModelGenerator(BaseModelGenerator):
             for _ in range(N):
                 cell_inputs = self._build_cell_util(filters, cell_inputs)
 
-            level_outputs.append(cell_inputs[-1])
-
             # add 1 time a reduction cell, except for the last motif
+            # also save the encoder level output, so that it can be used in skip connections on the same level of the decoder
             if motif_index + 1 < M:
+                level_outputs.append(cell_inputs[-1])
                 filters = filters * 2
                 cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
