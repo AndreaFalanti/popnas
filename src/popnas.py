@@ -200,7 +200,7 @@ class Popnas:
 
     def generate_final_plots(self):
         ''' Generate plots after the run has been terminated, analyzing the whole results. '''
-        plotter.plot_training_info_per_block()
+        plotter.plot_summary_training_info_per_block()
         plotter.plot_cnn_train_boxplots_per_block(self.blocks)
         plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, self.pareto_objectives)
         plotter.plot_correlations_with_training_time()
@@ -272,7 +272,7 @@ class Popnas:
                 fw.write_specular_monoblock_times(op_times, save_path=log_service.build_path('csv', 'reindex_op_times.csv'))
                 reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
-                plotter.plot_smb_info()
+                plotter.plot_specular_monoblock_info()
 
                 for train_res in training_results:
                     self.write_predictors_training_data(current_blocks, train_res)
@@ -293,7 +293,8 @@ class Popnas:
                     plotter.plot_pareto_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, limit=self.children_max_size)
                     plotter.plot_exploration_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs)
 
-                # state_space.children are updated in controller.update_step, CNN to train in next step. Add also exploration networks.
+                # state_space.children are updated in controller.update_step, which are the Pareto optimal networks to train in next step.
+                # Consider also exploration networks in the cumulative plots.
                 trained_cells = self.search_space.children + self.search_space.exploration_front
                 plotter.plot_children_inputs_and_operators_usage(expansion_step_blocks, self.operators, valid_inputs, trained_cells)
 

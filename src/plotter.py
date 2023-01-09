@@ -34,7 +34,7 @@ def initialize_logger():
     __logger = log_service.get_logger(__name__)
 
 
-def plot_smb_info():
+def plot_specular_monoblock_info():
     __logger.info("Analyzing training_results.csv...")
     csv_path = log_service.build_path('csv', 'training_results.csv')
     df = pd.read_csv(csv_path)
@@ -62,7 +62,7 @@ def plot_smb_info():
     __logger.info("SMB plots written successfully")
 
 
-def plot_training_info_per_block():
+def plot_summary_training_info_per_block():
     __logger.info("Analyzing training overview data...")
     csv_path = log_service.build_path('csv', 'training_overview.csv')
     df = pd.read_csv(csv_path)
