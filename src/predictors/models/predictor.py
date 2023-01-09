@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import r2_score
 
-from plotter import plot_squared_scatter_chart
 from utils.func_utils import compute_mape, compute_spearman_rank_correlation_coefficient, create_empty_folder
+from utils.plotter_utils import plot_squared_scatter_chart
 
 
 class Predictor(ABC):

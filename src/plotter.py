@@ -1,19 +1,18 @@
 import logging
 import os.path
 import statistics
-from typing import NamedTuple, Optional, Collection, Sequence
 
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pandas.io.parsers import TextFileReader
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 
 import log_service
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape, intersection
+from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_boxplot, plot_pie_chart, plot_scatter, \
+    plot_squared_scatter_chart, plot_pareto_front, plot_predictions_pareto_scatter_chart, generate_avg_max_min_bars
 
 # Provides utility functions for plotting relevant data gained during the algorithm run,
 # so that it can be further analyzed in a more straightforward way
@@ -33,273 +32,6 @@ predictor_objectives = ['time', 'accuracy', 'f1_score']
 def initialize_logger():
     global __logger
     __logger = log_service.get_logger(__name__)
-
-
-def __save_and_close_plot(fig: plt.Figure, save_name):
-    # save as png
-    save_path = log_service.build_path('plots', save_name + '.png')
-    plt.savefig(save_path, bbox_inches='tight', dpi=120)
-
-    plt.close(fig)
-
-
-def __save_latex_plots(save_name):
-    # TODO: Deprecated since it should be possible to convert PDF to EPS if necessary. EPS is inferior since it doesn't support transparency.
-    # save as eps (good format for Latex)
-    # save_path = log_service.build_path('plots', 'eps', save_name + '.eps')
-    # plt.savefig(save_path, bbox_inches='tight', format='eps')
-
-    # save as pdf
-    save_path = log_service.build_path('plots', 'pdf', save_name + '.pdf')
-    plt.savefig(save_path, bbox_inches='tight', dpi=120)
-
-
-def save_and_finalize_plot(fig: plt.Figure, title: str, save_name: str):
-    __save_latex_plots(save_name)
-    plt.title(title)
-    __save_and_close_plot(fig, save_name)
-
-
-def __plot_histogram(x, y, x_label, y_label, title, save_name, incline_labels=False):
-    fig = plt.figure()
-    plt.bar(x, y)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-
-    # add y grid lines
-    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
-
-    # use inclined x-labels
-    if incline_labels:
-        plt.gcf().autofmt_xdate()
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_multibar_histogram(x, y_array: 'list[BarInfo]', col_width, x_label, y_label, title, save_name):
-    fig, ax = plt.subplots()
-
-    x_label_dist = np.arange(len(x))  # the label locations
-    x_offset = - ((len(y_array) - 1) / 2.0) * col_width
-
-    # Make the plot
-    for bar_info in y_array:
-        ax.bar(x_label_dist + x_offset, bar_info.y, color=bar_info.color, width=col_width, label=bar_info.label)
-        x_offset += col_width
-
-    ax.set_xticks(x_label_dist)
-    ax.set_xticklabels(x)
-
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-
-    # add y grid lines
-    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='silver')
-
-    ax.legend()
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_boxplot(values, labels, x_label, y_label, title, save_name, incline_labels=False):
-    fig = plt.figure()
-    plt.boxplot(values, labels=labels)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-
-    # add y grid lines
-    plt.grid(b=True, which='both', axis='y', alpha=0.5, color='k')
-
-    # use inclined x-labels
-    if incline_labels:
-        plt.gcf().autofmt_xdate()
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_pie_chart(labels, values, title, save_name):
-    total = sum(values)
-
-    fig, ax = plt.subplots()
-
-    pie_cm = plt.get_cmap('tab20')
-    colors = pie_cm(np.linspace(0, 1.0 / 20 * len(labels) - 0.01, len(labels)))
-
-    explode = np.empty(len(labels))  # type: np.ndarray
-    explode.fill(0.03)
-
-    # label, percentage, value are written only in legend, to avoid overlapping texts in chart
-    legend_labels = [f'{label} - {(val / total) * 100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
-
-    patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None, colors=colors)
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-    plt.legend(patches, legend_labels, loc='lower left', bbox_to_anchor=(1.03, 0.04))
-    plt.subplots_adjust(right=0.7)
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_scatter(x, y, x_label, y_label, title, save_name, legend_labels: Optional['list[str]'] = None):
-    fig, ax = plt.subplots()
-
-    # list of lists with same dimensions are required, or also flat lists with same dimensions
-    assert len(x) == len(y)
-
-    # list of lists case
-    if any(isinstance(el, list) for el in x):
-        assert len(x) == len(legend_labels)
-
-        colors = cm.rainbow(np.linspace(0, 1, len(x)))
-        for xs, ys, color, lab in zip(x, y, colors, legend_labels):
-            plt.scatter(xs, ys, marker='.', color=color, label=lab)
-    else:
-        plt.scatter(x, y, marker='.', label=legend_labels[0])
-
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-
-    plt.legend(fontsize='x-small')
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def plot_squared_scatter_chart(x, y, x_label, y_label, title, save_name: str = None,
-                               plot_reference: bool = True, legend_labels: Optional['list[str]'] = None, value_range: Optional[tuple] = None):
-    fig, ax = plt.subplots()
-
-    # list of lists with same dimensions are required, or also flat lists with same dimensions
-    assert len(x) == len(y)
-
-    # list of lists case
-    if any(isinstance(el, list) for el in x):
-        assert len(x) == len(legend_labels)
-
-        colors = cm.rainbow(np.linspace(0, 1, len(x)))
-        for xs, ys, color, lab in zip(x, y, colors, legend_labels):
-            plt.scatter(xs, ys, marker='.', color=color, label=lab)
-    else:
-        plt.scatter(x, y, marker='.', label=legend_labels[0])
-
-    if value_range is not None:
-        plt.xlim(*value_range)
-        plt.ylim(*value_range)
-
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-    plt.gca().set_aspect('equal', adjustable='box')
-
-    plt.legend(fontsize='x-small')
-
-    # add reference line (bisector line x = y)
-    if plot_reference:
-        ax_lims = [
-            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-        ]
-
-        ax.plot(ax_lims, ax_lims, '--k', alpha=0.75)
-
-    if save_name is not None:
-        save_and_finalize_plot(fig, title, save_name)
-    else:
-        return fig
-
-
-def __plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[list], labels: 'list[str]', title: str, save_name: str):
-    ''' Plot Pareto front in 3D plot. If only 2 objectives are used in the Pareto optimization, rank is added as x-axis. '''
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')   # type: plt.Axes
-
-    if len(real_coords) != len(pred_coords):
-        raise ValueError(f'Inconsistent coordinates, real are {len(real_coords)}D while pred are {len(pred_coords)}D')
-    if len(real_coords) != len(labels):
-        raise ValueError('Labels count missmatch with coordinates dimensions')
-
-    # already in 3D case, simply plot it
-    if len(real_coords) == 3:
-        ax.plot(*real_coords, '.b', alpha=0.6)
-        ax.plot(*pred_coords, '.g', alpha=0.6)
-        # ax.plot_wireframe(*real_coords, color='b', alpha=0.6)
-        # ax.plot_wireframe(*pred_coords, color='g', alpha=0.6)
-
-        ax.set_xlabel(labels[0])
-        ax.set_ylabel(labels[1])
-        ax.set_zlabel(labels[2])
-    # For 2 metrics only, adding another axis for displaying the rank, resulting in a 3D plot.
-    elif len(real_coords) == 2:
-        x_real, y_real = real_coords
-        x_pred, y_pred = pred_coords
-
-        x_real.reverse()
-        y_real.reverse()
-        x_pred.reverse()
-        y_pred.reverse()
-
-        ax.plot(list(range(len(x_real))), y_real, x_real, '--.b', alpha=0.6)
-        ax.plot(list(range(len(x_pred))), y_pred, x_pred, '--.g', alpha=0.6)
-
-        ax.set_xlabel('rank')
-        ax.set_ylabel(labels[1])
-        ax.set_zlabel(labels[0])
-    else:
-        raise ValueError('Unsupported coordinate dimension')
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __plot_predictions_pareto_scatter_chart(predictions: Sequence[list], pareto_points: Sequence[list],
-                                            labels: 'list[str]', title: str, save_name: str):
-    ''' Plot all predictions made, with the Pareto selected as highlight. '''
-    # fig, ax = plt.subplots()
-    fig = plt.figure()
-    # rectilinear is for 2d
-    proj = '3d' if len(predictions) >= 3 else 'rectilinear'
-
-    ax = fig.add_subplot(projection=proj)  # type: plt.Axes
-
-    point_dim = (72.*1.5/fig.dpi)**2
-    num_pred_points = len(predictions[0])
-    # in case of huge amount of predictions (standard case in NAS), if >= 0.5% of the points overlaps in a point saturate the alpha,
-    # otherwise it is partially transparent. Clamped to 0.0125 since minimum is 1 / 255 = 0.004, but it's very hard to spot on plot.
-    alpha = 0.25 if num_pred_points < 1000 else max(0.0125, 1 / (num_pred_points * 0.005))
-
-    # zorder is used for plotting series over others (highest has priority)
-    if proj == '3d':
-        ax.scatter(*predictions, marker='o', alpha=alpha, zorder=1, s=point_dim, rasterized=True)
-        ax.scatter(*pareto_points, marker='*', alpha=1.0, zorder=2)
-
-        ax.set_xlabel(labels[0])
-        ax.set_ylabel(labels[1])
-        ax.set_zlabel(labels[2])
-    else:
-        # accuracy is put first, but it's better to have it on y-axis for readability
-        ax.scatter(*reversed(predictions), marker='o', alpha=alpha, zorder=1, s=point_dim, rasterized=True)
-        ax.plot(*reversed(pareto_points), '*--', color='tab:orange', alpha=1.0, zorder=2)
-
-        ax.set_xlabel(labels[1])
-        ax.set_ylabel(labels[0])
-
-    save_and_finalize_plot(fig, title, save_name)
-
-
-def __generate_avg_max_min_bars(avg_vals, max_vals, min_vals):
-    '''
-    Build avg, max and min bars for multi-bar plots.
-
-    Args:
-        avg_vals ([type]): values to assign to avg bar
-        max_vals ([type]): values to assign to max bar
-        min_vals ([type]): values to assign to min bar
-
-    Returns:
-        (list[BarInfo, BarInfo, BarInfo]): BarInfos usable in multi-bar plots
-    '''
-    bar_avg = BarInfo(avg_vals, 'b', 'avg')
-    bar_max = BarInfo(max_vals, 'g', 'max')
-    bar_min = BarInfo(min_vals, 'r', 'min')
-
-    return [bar_avg, bar_max, bar_min]
 
 
 def plot_smb_info():
@@ -322,11 +54,11 @@ def plot_smb_info():
     x = smb_df['op1']
 
     __logger.info("Writing plots...")
-    __plot_histogram(x, smb_df['training time(seconds)'], 'Operator', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
-    __plot_histogram(x, smb_df['best val accuracy'], 'Operator', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
-    __plot_histogram(x, smb_df['val F1 score'], 'Operator', 'F1 score', 'SMB (-1 input) validation F1 score', 'SMB_F1', incline_labels=True)
-    __plot_histogram(x, smb_df['total params'], 'Operator', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
-    __plot_histogram(x, smb_df['flops'], 'Operator', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
+    plot_histogram(x, smb_df['training time(seconds)'], 'Operator', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
+    plot_histogram(x, smb_df['best val accuracy'], 'Operator', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
+    plot_histogram(x, smb_df['val F1 score'], 'Operator', 'F1 score', 'SMB (-1 input) validation F1 score', 'SMB_F1', incline_labels=True)
+    plot_histogram(x, smb_df['total params'], 'Operator', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
+    plot_histogram(x, smb_df['flops'], 'Operator', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
     __logger.info("SMB plots written successfully")
 
 
@@ -337,11 +69,11 @@ def plot_training_info_per_block():
 
     x = df['# blocks']
 
-    time_bars = __generate_avg_max_min_bars(df['avg training time(s)'], df['max time'], df['min time'])
-    score_bars = __generate_avg_max_min_bars(df['avg val score'], df['max score'], df['min score'])
+    time_bars = generate_avg_max_min_bars(df['avg training time(s)'], df['max time'], df['min time'])
+    score_bars = generate_avg_max_min_bars(df['avg val score'], df['max score'], df['min score'])
 
-    __plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview')
-    __plot_multibar_histogram(x, score_bars, 0.15, 'Blocks', 'Score', 'Validation score overview', 'train_score_overview')
+    plot_multibar_histogram(x, time_bars, 0.15, 'Blocks', 'Time(s)', 'Training time overview', 'train_time_overview')
+    plot_multibar_histogram(x, score_bars, 0.15, 'Blocks', 'Score', 'Validation score overview', 'train_score_overview')
 
     __logger.info("Training aggregated overview plots written successfully")
 
@@ -360,9 +92,9 @@ def plot_cnn_train_boxplots_per_block(B: int):
         times_per_block.append(b_df[metrics_fields_dict['time'].real_column])
         f1_scores_per_block.append(b_df[metrics_fields_dict['f1_score'].real_column])
 
-    __plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
-    __plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
-    __plot_boxplot(f1_scores_per_block, x, 'Blocks', 'Val F1 score', 'Val F1 score overview', 'val_f1_score_boxplot')
+    plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
+    plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
+    plot_boxplot(f1_scores_per_block, x, 'Blocks', 'Val F1 score', 'Val F1 score overview', 'val_f1_score_boxplot')
 
 
 def __initialize_dict_usage_data(keys: list):
@@ -419,9 +151,9 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
     op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
     input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
 
-    __plot_pie_chart(operators, op_values, f'Operators usage in b={b} pareto front', f'pareto_op_usage_B{b}')
+    plot_pie_chart(op_values, operators, f'Operators usage in b={b} pareto front', f'pareto_op_usage_B{b}')
     __logger.info("Pareto operators usage plot for b=%d written successfully", b)
-    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} pareto front', f'pareto_inputs_usage_B{b}')
+    plot_pie_chart(input_values, inputs, f'Inputs usage in b={b} pareto front', f'pareto_inputs_usage_B{b}')
     __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
 
@@ -449,9 +181,9 @@ def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', 
     op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
     input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
 
-    __plot_pie_chart(operators, op_values, f'Operators usage in b={b} exploration pareto front', f'exploration_op_usage_B{b}')
+    plot_pie_chart(op_values, operators, f'Operators usage in b={b} exploration pareto front', f'exploration_op_usage_B{b}')
     __logger.info("Pareto operators usage plot for b=%d written successfully", b)
-    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} exploration pareto front', f'exploration_inputs_usage_B{b}')
+    plot_pie_chart(input_values, inputs, f'Inputs usage in b={b} exploration pareto front', f'exploration_inputs_usage_B{b}')
     __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
 
@@ -464,9 +196,9 @@ def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inp
     op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
     input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
 
-    __plot_pie_chart(operators, op_values, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
+    plot_pie_chart(op_values, operators, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
     __logger.info("Children operators usage plot for b=%d written successfully", b)
-    __plot_pie_chart(inputs, input_values, f'Inputs usage in b={b} CNN children', f'children_inputs_usage_B{b}')
+    plot_pie_chart(input_values, inputs, f'Inputs usage in b={b} CNN children', f'children_inputs_usage_B{b}')
     __logger.info("Children inputs usage plot for b=%d written successfully", b)
 
 
@@ -539,13 +271,13 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: '
             legend_labels.append(f'B{b} (MAPE: {mapes[b - 2]:.3f}%, ρ: {spearman_coeffs[b - 2]:.3f})')
 
         x = np.arange(2, B + 1)
-        bars = __generate_avg_max_min_bars(avg_errors, max_errors, min_errors)
+        bars = generate_avg_max_min_bars(avg_errors, max_errors, min_errors)
         capitalized_metric = metric_name.capitalize()
         units_str = f'({m.units})' if m.units is not None else ''
 
-        __plot_multibar_histogram(x, bars, 0.15, 'Blocks', f'{capitalized_metric}{units_str}',
+        plot_multibar_histogram(x, bars, 0.15, 'Blocks', f'{capitalized_metric}{units_str}',
                                   f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_overview')
-        __plot_boxplot(errors, x, 'Blocks', f'{capitalized_metric} error{units_str}',
+        plot_boxplot(errors, x, 'Blocks', f'{capitalized_metric} error{units_str}',
                        f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_boxplot')
         plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
                                      f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
@@ -577,8 +309,8 @@ def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
             real_coords.append(training_df_b[m.real_column].to_list())
             pred_coords.append(pareto_df[m.pred_column].to_list())
 
-        __plot_pareto_front(real_coords, pred_coords, pareto_objectives,
-                            title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
+        plot_pareto_front(real_coords, pred_coords, pareto_objectives,
+                          title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
 
     __logger.info("Pareto front curve plots written successfully")
 
@@ -595,7 +327,7 @@ def plot_predictions_with_pareto_analysis(B: int, pareto_objectives: 'list[str]'
             pred_coords.append(predictions_df[m.pred_column].to_list())
             pareto_coords.append(pareto_df[m.pred_column].to_list())
 
-        __plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objectives,
+        plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objectives,
                                                 f'Predictions with Pareto points B{b}', f'predictions_with_pareto_B{b}')
 
     __logger.info("Predictions-Pareto analysis plots written successfully")
@@ -627,8 +359,8 @@ def plot_multi_output_boxplot():
         lb1_x_labels = [str(label).split('_')[0] for label in lb1_x_labels]
         lb2_x_labels = lb1_x_labels[::-2][::-1]
 
-        __plot_boxplot(lb1_series_list, lb1_x_labels, 'Cell outputs', metric_name, f'Best {metric_name} per output', f'multi_output_{metric_name}_lb1')
-        __plot_boxplot(lb2_series_list, lb2_x_labels, 'Cell outputs', metric_name,
+        plot_boxplot(lb1_series_list, lb1_x_labels, 'Cell outputs', metric_name, f'Best {metric_name} per output', f'multi_output_{metric_name}_lb1')
+        plot_boxplot(lb2_series_list, lb2_x_labels, 'Cell outputs', metric_name,
                        f'Best {metric_name} per output (-2 lookback)', f'multi_output_{metric_name}_lb2')
 
     plot_multi_output_metric_boxplots(accuracy_df, 'accuracy')
@@ -653,7 +385,7 @@ def plot_correlations_with_training_time():
         spearman, _ = spearmanr(metric_list, train_times)    # types are correct, they are wrongly declared in scipy
         labels = [f'Pearson: {pearson:.3f}, Spearman: {spearman:.3f}']
 
-        __plot_scatter(metric_list, train_times, metric_name, 'time(s)',
+        plot_scatter(metric_list, train_times, metric_name, 'time(s)',
                        f'({metric_name.capitalize()}, Training time) correlation', f'{metric_name.replace(" ", "_")}_time_corr', legend_labels=labels)
 
     _compute_correlations_and_plot(params, training_times, metric_name='params')
@@ -661,9 +393,3 @@ def plot_correlations_with_training_time():
     _compute_correlations_and_plot(inference_times, training_times, metric_name='inference time')
 
     __logger.info('Time correlation plots written successfully')
-
-
-class BarInfo(NamedTuple):
-    y: TextFileReader  # pandas df column type
-    color: str
-    label: str
