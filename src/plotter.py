@@ -9,6 +9,7 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 
 import log_service
+from utils.cell_counter import CellCounter
 from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape, intersection
 from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_boxplot, plot_pie_chart, plot_scatter, \
@@ -97,46 +98,15 @@ def plot_cnn_train_boxplots_per_block(B: int):
     plot_boxplot(f1_scores_per_block, x, 'Blocks', 'Val F1 score', 'Val F1 score overview', 'val_f1_score_boxplot')
 
 
-def __initialize_dict_usage_data(keys: list):
-    '''
-    Create dictionary with indexes and initialize counters.
-    '''
-    counters_dict = {}
+def _get_cell_elems_usages_as_ordered_lists(cells: 'list[list]', input_keys: 'list[int]', op_keys: 'list[str]'):
+    cell_counter = CellCounter(input_keys, op_keys)
+    for cell_spec in cells:
+        cell_counter.update_from_cell_spec(cell_spec)
 
-    for key in keys:
-        counters_dict[key] = 0
-
-    return counters_dict
-
-
-def __update_counters(cells, op_counters: dict, input_counters: dict):
-    '''
-    Iterate cell structures and increment operators and inputs counters when the values are encountered.
-    '''
-    # iterate all cells (models selected for training)
-    for cell in cells:
-        # iterate on blocks tuple
-        for in1, op1, in2, op2 in cell:
-            op_counters[op1] += 1
-            op_counters[op2] += 1
-            input_counters[int(in1)] += 1
-            input_counters[int(in2)] += 1
-
-    return op_counters, input_counters
-
-
-def __generate_value_list_from_op_counters_dict(op_counters: 'dict[str, int]', operations: 'list[str]'):
-    return [op_counters[op] for op in operations]
-
-
-def __generate_value_list_from_inputs_counters_dict(input_counters: 'dict[int, int]', inputs: 'list[int]'):
-    return [input_counters[inp] for inp in inputs]
+    return cell_counter.to_lists()
 
 
 def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', limit: int = None):
-    op_counters = __initialize_dict_usage_data(operators)
-    input_counters = __initialize_dict_usage_data(inputs)
-
     __logger.info("Analyzing operators and inputs usage of pareto front for b=%d", b)
     csv_path = log_service.build_path('csv', f'pareto_front_B{b}.csv')
     df = pd.read_csv(csv_path)
@@ -146,10 +116,7 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
         df = df.head(limit)
 
     cells = parse_cell_structures(df['cell structure'])
-
-    op_counters, input_counters = __update_counters(cells, op_counters, input_counters)
-    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
-    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
+    input_values, op_values = _get_cell_elems_usages_as_ordered_lists(cells, inputs, operators)
 
     plot_pie_chart(op_values, operators, f'Operators usage in b={b} pareto front', f'pareto_op_usage_B{b}')
     __logger.info("Pareto operators usage plot for b=%d written successfully", b)
@@ -157,11 +124,7 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
     __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
 
 
-# TODO: remove duplication with function above
 def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]'):
-    op_counters = __initialize_dict_usage_data(operators)
-    input_counters = __initialize_dict_usage_data(inputs)
-
     __logger.info("Analyzing operators and inputs usage of exploration pareto front for b=%d", b)
     csv_path = log_service.build_path('csv', f'exploration_pareto_front_B{b}.csv')
 
@@ -176,25 +139,17 @@ def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', 
         return
 
     cells = parse_cell_structures(df['cell structure'])
-
-    op_counters, input_counters = __update_counters(cells, op_counters, input_counters)
-    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
-    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
+    input_values, op_values = _get_cell_elems_usages_as_ordered_lists(cells, inputs, operators)
 
     plot_pie_chart(op_values, operators, f'Operators usage in b={b} exploration pareto front', f'exploration_op_usage_B{b}')
-    __logger.info("Pareto operators usage plot for b=%d written successfully", b)
+    __logger.info("Exploration Pareto operators usage plot for b=%d written successfully", b)
     plot_pie_chart(input_values, inputs, f'Inputs usage in b={b} exploration pareto front', f'exploration_inputs_usage_B{b}')
-    __logger.info("Pareto inputs usage plot for b=%d written successfully", b)
+    __logger.info("Exploration Pareto inputs usage plot for b=%d written successfully", b)
 
 
-def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[str]'):
-    op_counters = __initialize_dict_usage_data(operators)
-    input_counters = __initialize_dict_usage_data(inputs)
-
+def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[list]'):
     __logger.info("Analyzing operators and inputs usage of CNN children to train for b=%d", b)
-    op_counters, input_counters = __update_counters(children_cnn, op_counters, input_counters)
-    op_values = __generate_value_list_from_op_counters_dict(op_counters, operators)
-    input_values = __generate_value_list_from_inputs_counters_dict(input_counters, inputs)
+    input_values, op_values = _get_cell_elems_usages_as_ordered_lists(children_cnn, inputs, operators)
 
     plot_pie_chart(op_values, operators, f'Operations usage in b={b} CNN children', f'children_op_usage_B{b}')
     __logger.info("Children operators usage plot for b=%d written successfully", b)

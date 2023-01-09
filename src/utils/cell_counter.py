@@ -76,3 +76,7 @@ class CellCounter:
 
     def ops_keys_len(self):
         return len(self.op_counter.keys())
+
+    def to_lists(self):
+        ''' Return an ordered list (based on the order of the keys provided in __init__) of input and operators' counters. '''
+        return [self.input_counter[inp] for inp in self.input_keys], [self.op_counter[op] for op in self.op_keys]

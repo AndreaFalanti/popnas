@@ -114,8 +114,6 @@ def plot_boxplot(values: Sequence, labels: Sequence[str], x_label: str, y_label:
 
 
 def plot_pie_chart(values: Sequence, labels: Sequence[str], title: str, save_name: str):
-    total = sum(values)
-
     fig, ax = plt.subplots()
 
     pie_cm = plt.get_cmap('tab20')
@@ -125,6 +123,7 @@ def plot_pie_chart(values: Sequence, labels: Sequence[str], title: str, save_nam
     explode.fill(0.03)
 
     # label, percentage, value are written only in legend, to avoid overlapping texts in chart
+    total = sum(values)
     legend_labels = [f'{label} - {(val / total) * 100:.3f}% ({val:.0f})' for label, val in zip(labels, values)]
 
     patches, texts = ax.pie(values, labels=labels, explode=explode, startangle=90, labeldistance=None, colors=colors)
