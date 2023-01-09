@@ -22,12 +22,11 @@ class ClassificationTrainingResults(BaseTrainingResults):
         return ClassificationTrainingResults(row[7], *row[2:6], *row[0:2])
 
     @staticmethod
-    def metrics_considered() -> 'list[MetricTarget]':
-        return [MetricTarget('accuracy', max), MetricTarget('f1_score', max)]
-
-    @staticmethod
-    def get_csv_headers() -> 'list[str]':
-        return ['best val accuracy', 'val F1 score'] + BaseTrainingResults.get_csv_headers()
+    def keras_metrics_considered() -> 'list[MetricTarget]':
+        return [
+            MetricTarget('accuracy', max, results_csv_column='best val accuracy', prediction_csv_column='val score'),
+            MetricTarget('f1_score', max, results_csv_column='val F1 score', prediction_csv_column='val score')
+        ]
 
     def to_csv_list(self) -> list:
         return [self.accuracy, self.f1_score] + super().to_csv_list()

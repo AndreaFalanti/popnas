@@ -2,7 +2,7 @@ import csv
 import re
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import Iterable, Callable, NamedTuple
+from typing import Iterable, Callable, NamedTuple, Optional
 
 import log_service
 from utils.func_utils import cell_spec_to_str
@@ -15,6 +15,9 @@ class MetricTarget(NamedTuple):
     '''
     name: str
     optimal: Callable[[Iterable], float]
+    results_csv_column: str
+    units: Optional[str] = None
+    prediction_csv_column: str = ''
 
 
 def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, optimal: Callable[[Iterable], float], multi_output: bool):
@@ -111,19 +114,39 @@ class BaseTrainingResults(ABC):
         raise NotImplementedError()
 
     @staticmethod
-    @abstractmethod
-    def metrics_considered() -> 'list[MetricTarget]':
-        raise NotImplementedError()
+    def custom_metrics_considered() -> 'list[MetricTarget]':
+        ''' Return all MetricTarget objects related to metrics not included in Keras and computed with custom functions. '''
+        return [
+            MetricTarget('time', min, results_csv_column='training time(seconds)', units='seconds', prediction_csv_column='time'),
+            MetricTarget('inference_time', min, results_csv_column='inference time(seconds)', units='seconds'),
+            MetricTarget('params', min, results_csv_column='total params'),
+            MetricTarget('flops', min, results_csv_column='flops')
+        ]
 
     @staticmethod
-    @abstractmethod
-    def get_csv_headers() -> 'list[str]':
-        return ['training time(seconds)', 'inference time(seconds)', 'total params', 'flops', '# blocks', 'cell structure']
+    def keras_metrics_considered() -> 'list[MetricTarget]':
+        ''' Return all MetricTarget objects related to Keras metrics, extractable from training history. '''
+        return []
+
+    @classmethod
+    def all_metrics_considered(cls) -> 'list[MetricTarget]':
+        ''' Return all MetricTarget objects considered by the class implementation. '''
+        return cls.keras_metrics_considered() + cls.custom_metrics_considered()
+
+    @classmethod
+    def predictable_metrics_considered(cls) -> 'list[MetricTarget]':
+        ''' Return the MetricTarget objects which can be targeted by predictors
+         (metrics not directly computable and potential Pareto optimation targets). '''
+        return [m for m in cls.all_metrics_considered() if m.prediction_csv_column]
+
+    @classmethod
+    def get_csv_headers(cls) -> 'list[str]':
+        return [m.results_csv_column for m in cls.all_metrics_considered()] + ['# blocks', 'cell structure']
 
     @abstractmethod
     def to_csv_list(self) -> list:
         ''' Return a list with fields ordered for csv insertion. '''
-        return [self.training_time, self.inference_time, self.params, self.flops, self.blocks, self.cell_spec]
+        return [self.training_time, self.inference_time, self.params, self.flops, self.blocks, cell_spec_to_str(self.cell_spec)]
 
     @abstractmethod
     def log_results(self):

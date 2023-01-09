@@ -70,7 +70,7 @@ class NetworkManager:
         self.TrainingResults = self.model_gen.get_results_processor_class()
 
         self.multi_output_model = arc_config['multi_output']
-        self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.metrics_considered()
+        self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.keras_metrics_considered()
                                          for i in range(self.model_gen.total_cells)] + ['cell_spec']
 
         self.save_onnx = save_as_onnx
@@ -192,7 +192,7 @@ class NetworkManager:
         if is_multi_output:
             multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')
             write_multi_output_results_to_csv(multi_output_csv_path, cell_spec, histories,
-                                              self.TrainingResults.metrics_considered(), self.multi_output_csv_headers)
+                                              self.TrainingResults.keras_metrics_considered(), self.multi_output_csv_headers)
 
         # if the algorithm is training the last batch of models (B = value provided in command line),
         # save the best model in a folder, so that can be trained from scratch later on.

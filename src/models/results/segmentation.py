@@ -22,12 +22,11 @@ class SegmentationTrainingResults(BaseTrainingResults):
         return SegmentationTrainingResults(row[7], *row[2:6], *row[0:2])
 
     @staticmethod
-    def metrics_considered() -> 'list[MetricTarget]':
-        return [MetricTarget('accuracy', max), MetricTarget('mean_io_u', max)]
-
-    @staticmethod
-    def get_csv_headers() -> 'list[str]':
-        return ['best val accuracy', 'val mean IoU'] + BaseTrainingResults.get_csv_headers()
+    def keras_metrics_considered() -> 'list[MetricTarget]':
+        return [
+            MetricTarget('accuracy', max, results_csv_column='best val accuracy', prediction_csv_column='val score'),
+            MetricTarget('mean_io_u', max, results_csv_column='val mean IoU', prediction_csv_column='val score')
+        ]
 
     def to_csv_list(self) -> list:
         return [self.accuracy, self.mean_io_u] + super().to_csv_list()
