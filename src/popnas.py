@@ -9,11 +9,11 @@ import file_writer as fw
 import log_service
 import plotter
 from controller import ControllerManager
-from encoder import SearchSpace
 from manager import NetworkManager
 from manager_bench_proxy import NetworkBenchManager
 from models.results import BaseTrainingResults
 from predictors.initializer import PredictorsHandler
+from search_space import SearchSpace
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
 from utils.nn_utils import remove_annoying_tensorflow_messages

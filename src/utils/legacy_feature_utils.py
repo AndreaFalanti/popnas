@@ -1,4 +1,4 @@
-from encoder import SearchSpace
+from search_space import SearchSpace
 
 
 def generate_legacy_dynamic_reindex_function(operators: 'list[str]', op_timers: 'dict[str, float]'):

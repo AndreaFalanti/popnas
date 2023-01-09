@@ -16,7 +16,7 @@ from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.utils import plot_model
 
-from encoder import SearchSpace
+from search_space import SearchSpace
 from utils.func_utils import create_empty_folder, to_one_hot, list_flatten, chunks
 from utils.rstr import rstr
 from .keras_predictor import KerasPredictor

@@ -5,7 +5,7 @@ from typing import NamedTuple, Optional, Callable
 
 import igraph
 
-from encoder import SearchSpace
+from search_space import SearchSpace
 from utils.func_utils import list_flatten, to_list_of_tuples
 
 

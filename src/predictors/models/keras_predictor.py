@@ -13,7 +13,7 @@ from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
-from encoder import SearchSpace
+from search_space import SearchSpace
 from utils.func_utils import parse_cell_structures, create_empty_folder, alternative_dict_to_string
 from utils.nn_utils import get_optimized_steps_per_execution
 from utils.rstr import rstr

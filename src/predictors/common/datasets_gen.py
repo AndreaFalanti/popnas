@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from encoder import SearchSpace
+from search_space import SearchSpace
 from utils.func_utils import to_list_of_tuples
 
 

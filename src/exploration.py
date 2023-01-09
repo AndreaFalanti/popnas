@@ -1,6 +1,6 @@
 from typing import Counter
 
-from encoder import SearchSpace
+from search_space import SearchSpace
 from utils.cell_counter import CellCounter
 from utils.model_estimate import ModelEstimate
 

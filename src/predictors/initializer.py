@@ -1,9 +1,9 @@
 import tensorflow as tf
 
 import log_service
-from encoder import SearchSpace
 from models.generators import BaseModelGenerator
 from predictors.models import *
+from search_space import SearchSpace
 from utils.feature_utils import metrics_fields_dict, generate_acc_features, generate_time_features
 
 

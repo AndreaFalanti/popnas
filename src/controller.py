@@ -7,9 +7,9 @@ from tqdm import tqdm
 import exploration
 import file_writer as fw
 import log_service
-from encoder import SearchSpace
 from predictors.initializer import PredictorsHandler
 from predictors.models import Predictor
+from search_space import SearchSpace
 from utils import cell_pruning
 from utils.cell_counter import CellCounter
 from utils.cell_pruning import CellEncoding

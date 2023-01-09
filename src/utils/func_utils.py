@@ -129,7 +129,7 @@ def instantiate_search_space_from_logs(log_folder_path: str):
         (SearchSpace): the search space instance
     '''
     # import must be done here, to avoid circular dependency
-    from encoder import SearchSpace
+    from search_space import SearchSpace
 
     run_config_path = os.path.join(log_folder_path, 'restore', 'run.json')
     with open(run_config_path, 'r') as f:

@@ -5,8 +5,8 @@ from typing import Type
 import pandas as pd
 
 import log_service
-from encoder import SearchSpace
 from models.results import BaseTrainingResults
+from search_space import SearchSpace
 from utils.func_utils import parse_cell_structures
 
 
