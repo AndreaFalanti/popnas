@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Iterable, Sequence, Optional
+from typing import Iterable, Optional, Collection
 
 from utils.func_utils import list_flatten
 
@@ -22,7 +22,7 @@ def _initialize_counter_values(counter: Counter, key_list: Iterable):
 
 
 class CellCounter:
-    def __init__(self, input_keys: Optional[Sequence] = None, op_keys: Optional[Sequence] = None) -> None:
+    def __init__(self, input_keys: Optional[Collection] = None, op_keys: Optional[Collection] = None) -> None:
         '''
         Wrapper for python Counters, designed specifically for operating on cell specifications.
         input_keys and op_keys allow to count only some specific values, making the total and key_count functions return
