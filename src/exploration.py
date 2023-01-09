@@ -2,12 +2,11 @@ from typing import Counter
 
 from encoder import SearchSpace
 from utils.cell_counter import CellCounter
-from utils.func_utils import get_valid_inputs_for_block_size
 from utils.model_estimate import ModelEstimate
 
 
-def compute_exploration_value_sets(pareto_front_models: 'list[ModelEstimate]', search_space: SearchSpace, current_b: int, B: int):
-    valid_inputs = get_valid_inputs_for_block_size(search_space.input_values, current_b, B)
+def compute_exploration_value_sets(pareto_front_models: 'list[ModelEstimate]', search_space: SearchSpace, current_b: int):
+    valid_inputs = search_space.get_allowed_inputs(current_b)
     valid_ops = search_space.operator_values
     cell_counter = CellCounter(valid_inputs, valid_ops)
 

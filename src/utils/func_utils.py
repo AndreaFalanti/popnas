@@ -113,12 +113,6 @@ def chunks(lst: list, chunks_size: int):
         yield lst[i:i + chunks_size]
 
 
-def get_valid_inputs_for_block_size(input_values: list, current_blocks: int, max_blocks: int):
-    ''' Remove inputs that can't be assigned in current blocks step (example: 1,2,3 for current_blocks=2) '''
-    inputs_to_prune_count = current_blocks - max_blocks
-    return input_values if inputs_to_prune_count >= 0 else input_values[:inputs_to_prune_count]
-
-
 def alternative_dict_to_string(d: dict):
     ''' Avoids characters that are invalid in some OS filesystem '''
     return f'({",".join([f"{key}={value}" for key, value in d.items()])})'

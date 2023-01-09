@@ -16,7 +16,6 @@ from models.results import BaseTrainingResults
 from predictors.initializer import PredictorsHandler
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
-from utils.func_utils import get_valid_inputs_for_block_size
 from utils.nn_utils import remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
@@ -285,10 +284,9 @@ class Popnas:
                 self.controller.train_step()
                 self.controller.update_step()
 
-                # controller new cells have 1 more block
+                # controller new cells have 1 more block than actual cells
                 expansion_step_blocks = current_blocks + 1
-                valid_inputs = get_valid_inputs_for_block_size(self.search_space.input_values, current_blocks=expansion_step_blocks,
-                                                               max_blocks=self.blocks)
+                valid_inputs = self.search_space.get_allowed_inputs(expansion_step_blocks)
 
                 # PNAS mode doesn't build pareto front
                 if not self.pnas_mode:

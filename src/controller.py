@@ -243,7 +243,7 @@ class ControllerManager:
 
             # exploration step, avoid it if expanding cells with last block
             # or if there is no need for exploration at all (no input or op underused)
-            op_exp, input_exp = exploration.compute_exploration_value_sets(pareto_front, self.search_space, self.current_b, self.B)
+            op_exp, input_exp = exploration.compute_exploration_value_sets(pareto_front, self.search_space, self.current_b)
 
             if self.ex > 0 and self.current_b < self.B and (len(op_exp) > 0 or len(input_exp) > 0):
                 exploration_pareto_front, existing_model_reprs = self.__build_exploration_pareto_front(model_estimations, existing_model_reprs,

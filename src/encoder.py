@@ -1,5 +1,5 @@
 import itertools
-from typing import Any, Callable
+from typing import Any, Callable, Generator, Sequence
 
 import log_service
 from utils.func_utils import list_flatten
@@ -42,17 +42,17 @@ class SearchSpace:
         self.operator_encoders = {}  # type: dict[str, Encoder]
 
         self.B = ss_config['blocks']
-        self.input_lookback_depth = -ss_config['lookback_depth']    # it is negative in the class, but positive in config
+        self.input_lookback_depth = ss_config['lookback_depth']    # positive value
         self.operator_values = ss_config['operators']
 
-        if self.input_lookback_depth >= 0:
+        if self.input_lookback_depth < 0:
             raise ValueError('Invalid lookback_depth value')
         if self.operator_values is None or len(self.operator_values) == 0:
             raise ValueError('No operators have been provided in search space')
 
         # original values for both inputs and operators
         # since internal block inputs are 0-indexed, B-1 is the last block and therefore not a valid input (excluded)
-        self.input_values = list(range(self.input_lookback_depth, self.B - 1))
+        self.input_values = list(range(-self.input_lookback_depth, self.B - 1))
 
         # for embedding (see LSTM controller), use categorical values
         # all values must be strictly < than these (that's the reason for + 1)
@@ -68,6 +68,12 @@ class SearchSpace:
 
         self.prepare_initial_children()
 
+    def get_lookback_inputs(self):
+        return self.input_values[:self.input_lookback_depth]
+
+    def get_allowed_inputs(self, current_b: int):
+        return self.input_values[:self.input_lookback_depth + current_b - 1]
+
     def add_input_encoder(self, name: str, fn: Callable[[int], Any]):
         assert fn is not None
         self.input_encoders[name] = Encoder(name, values=self.input_values, fn=fn)
@@ -76,17 +82,17 @@ class SearchSpace:
         assert fn is not None
         self.operator_encoders[name] = Encoder(name, values=self.operator_values, fn=fn)
 
-    def decode_cell_spec(self, encoded_cell, input_enc_name='cat', op_enc_name='cat'):
+    def decode_cell_spec(self, encoded_cell: 'list[tuple]', input_enc_name='cat', op_enc_name='cat') -> 'list[tuple]':
         '''
         Decodes an encoded cell specification.
 
         Args:
-            encoded_cell (list): encoded cell specification
+            encoded_cell: encoded cell specification
             input_enc_name: name of input encoder
             op_enc_name: name of operator encoder
 
         Returns:
-            (list): decoded cell
+            decoded cell
         '''
         assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
         decode_i = self.input_encoders[input_enc_name].decode
@@ -94,18 +100,18 @@ class SearchSpace:
 
         return [(decode_i(in1), decode_o(op1), decode_i(in2), decode_o(op2)) for in1, op1, in2, op2 in encoded_cell]
 
-    def encode_cell_spec(self, cell_spec, input_enc_name='cat', op_enc_name='cat', flatten=True):
+    def encode_cell_spec(self, cell_spec: 'list[tuple]', input_enc_name='cat', op_enc_name='cat', flatten: bool = True) -> list:
         '''
         Perform encoding for all blocks in a cell
 
         Args:
-            cell_spec (list): plain cell specification
+            cell_spec: plain cell specification
             input_enc_name: name of input encoder
             op_enc_name: name of operator encoder
-            flatten (bool): if True, a flat list is returned instead of a list of tuples
+            flatten: if True, a flat list is returned instead of a list of tuples
 
         Returns:
-            (list): encoded cell
+            encoded cell
         '''
         assert input_enc_name in self.input_encoders.keys() and op_enc_name in self.operator_encoders.keys()
         encode_i = self.input_encoders[input_enc_name].encode
@@ -131,21 +137,20 @@ class SearchSpace:
 
     def prepare_initial_children(self):
         '''
-        Prepare the initial set of child models which must
-        all be trained to obtain the initial set of scores
+        Prepare the initial set of cells. All these cells must be trained to obtain the initial set of scores to boostrap the predictors.
+        Next cells will be built upon these cell specifications.
         '''
         # Take only first elements that refers to lookback values, which are the only allowed values initially.
-        inputs = self.input_values[:abs(self.input_lookback_depth)]
+        lb_inputs = self.get_lookback_inputs()
 
         # if input_lookback_depth == 0, then we need to adjust to have at least one input (generally -1, previous cell)
-        if len(inputs) == 0:
-            inputs = [-1]
+        if len(lb_inputs) == 0:
+            lb_inputs = [-1]
 
         self._logger.info("Obtaining search space for b = 1")
-        self._logger.info("Search space size : %d", self.__compute_non_specular_expansions_count(inputs))
+        self._logger.info("Search space size : %d", self.__compute_non_specular_expansions_count(lb_inputs))
 
-        search_space = (inputs, self.operator_values)
-        self.children = list(self.__construct_permutations(search_space))
+        self.children = list(self.__construct_new_blocks_permutations(lb_inputs))
 
     def perform_children_expansion(self, curr_b: int, use_exploration_front: bool = True):
         '''
@@ -163,47 +168,43 @@ class SearchSpace:
             self.children = self.children + self.exploration_front
 
         # last block index can't be used by any block, so -1 to exclude it
-        allowed_input_values = list(range(self.input_lookback_depth, curr_b - 1))
+        allowed_input_values = self.get_allowed_inputs(curr_b)
         non_specular_expansions = self.__compute_non_specular_expansions_count(allowed_input_values)
 
         self._logger.info("Obtaining search space for b = %d", curr_b)
         self._logger.info("Search space size: %d", non_specular_expansions)
-
         self._logger.info("Total possible models (considering also equivalent cells): %d", len(self.children) * non_specular_expansions)
 
-        search_space = (allowed_input_values, self.operator_values)
-        new_search_space = list(self.__construct_permutations(search_space))
+        new_blocks = list(self.__construct_new_blocks_permutations(allowed_input_values))
 
         # NAS-bench-201 supports two blocks, but second block can't have both inputs as 0 (first block output), since it is not
         # supported by NAS-Bench-201 network structure.
         if self.benchmarking:
-            new_search_space = [block for block in new_search_space for in1, _, in2, _ in block if not (in1 == 0 and in2 == 0)]
+            new_blocks = [block for block in new_blocks for in1, _, in2, _ in block if not (in1 == 0 and in2 == 0)]
 
         def generate_models():
             '''
-            The generator produce also models with equivalent cells.
+            The generator produces also models with equivalent cells.
             '''
             for child in self.children:
-                for permutation in new_search_space:
+                for permutation in new_blocks:
                     yield child + permutation  # list concat
 
         return generate_models
 
-    def __construct_permutations(self, search_space):
+    def __construct_new_blocks_permutations(self, allowed_inputs: Sequence) -> 'Generator[list[tuple]]':
         '''
-        State space is a 2-tuple (inputs set, operators set).
+        Build a generator which returns all blocks which can be built from provided inputs and operators.
         Equivalent blocks (example: [-2, A, -1, A] and [-1, A, -2, A]) are excluded from the search space.
         '''
-        inputs, ops = search_space
-
         # Use int categorical encodings for operators to allow easier specular blocks check.
         # They are reconverted in actual values (strings) when returned.
         op_enc = self.operator_encoders['cat']
         ops = op_enc.encodings
 
-        for in1 in inputs:
+        for in1 in allowed_inputs:
             for op1 in ops:
-                for in2 in inputs:
+                for in2 in allowed_inputs:
                     if in2 >= in1:  # added to avoid repeated permutations (equivalent blocks)
                         for op2 in ops:
                             if in2 != in1 or op2 >= op1:  # added to avoid repeated permutations (equivalent blocks)
