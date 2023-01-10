@@ -19,6 +19,13 @@ class TargetMetric(NamedTuple):
     units: Optional[str] = None
     prediction_csv_column: str = ''
 
+    def plot_label(self):
+        return self.name + ('' if self.units is None else f' ({self.units})')
+
+
+def get_pareto_targeted_metrics(all_metrics: 'list[TargetMetric]', pareto_objectives: 'list[str]'):
+    return [m for m in all_metrics if m.name in pareto_objectives]
+
 
 def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, optimal: Callable[[Iterable], float], multi_output: bool):
     if multi_output:
