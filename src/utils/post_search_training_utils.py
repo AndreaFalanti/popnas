@@ -19,16 +19,30 @@ from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_s
 from utils.rstr import rstr
 
 
-def define_callbacks(score_metric: str, multi_output: bool, last_cell_index: int) -> 'list[callbacks.Callback]':
-    '''
-    Define callbacks used in model training.
+class MacroConfig(NamedTuple):
+    m: int
+    n: int
+    f: int
 
-    Returns:
-        (tf.keras.Callback[]): Keras callbacks
-    '''
-    # Save best weights
-    target_metric = f'val_Softmax_c{last_cell_index}_{score_metric}' if multi_output else f'val_{score_metric}'
+    def __str__(self) -> str:
+        return f'm{self.m}-n{self.n}-f{self.f}'
+
+    def modify(self, m_mod: int, n_mod: int, f_mod: float):
+        return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
+
+    @staticmethod
+    def from_config(config: 'dict[str, Any]'):
+        return MacroConfig(config['architecture_parameters']['motifs'],
+                           config['architecture_parameters']['normal_cells_per_motif'],
+                           config['cnn_hp']['filters'])
+
+
+def define_callbacks(score_metric: str, multi_output: bool, output_names: 'list[str]') -> 'list[callbacks.Callback]':
+    ''' Define callbacks used during model training in post search procedures. '''
+    # Save best weights, considering the score metric of last output
+    target_metric = f'val_{output_names[-1]}_{score_metric}' if multi_output else f'val_{score_metric}'
     ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_v' + score_metric[:2] + '{' + target_metric + ':.4f}.ckpt'
+    # TODO: best score metric could be the min, should use the .optimal value from the TargetMetric. Refactor this later...
     ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
                                               save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
     # By default, it shows losses and metrics for both training and validation
@@ -164,7 +178,7 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
     return model, loss_weights
 
 
-def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_cell_index: int, save_chunk: int = 100, use_val: bool = False):
+def override_checkpoint_callback(train_callbacks: list, score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False):
     class ModelCheckpointCustom(callbacks.ModelCheckpoint):
         def on_epoch_end(self, epoch, logs=None):
             # at most 1 checkpoint every "save_chunk" epochs, the best one in the interval is stored since it override the others
@@ -173,29 +187,11 @@ def override_checkpoint_callback(train_callbacks: list, score_metric: str, last_
 
     # Save best weights, here we have no validation set, so we check the best on training
     prefix = 'val_' if use_val else ''
-    target_metric = f'{prefix}Softmax_c{last_cell_index}_{score_metric}'
+    target_metric = f'{prefix}{output_names[-1]}_{score_metric}'
 
     ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
     train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
                                                save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
-
-
-class MacroConfig(NamedTuple):
-    m: int
-    n: int
-    f: int
-
-    def __str__(self) -> str:
-        return f'm{self.m}-n{self.n}-f{self.f}'
-
-    def modify(self, m_mod: int, n_mod: int, f_mod: float):
-        return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
-
-    @staticmethod
-    def from_config(config: 'dict[str, Any]'):
-        return MacroConfig(config['architecture_parameters']['motifs'],
-                           config['architecture_parameters']['normal_cells_per_motif'],
-                           config['cnn_hp']['filters'])
 
 
 def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy):

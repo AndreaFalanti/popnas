@@ -190,7 +190,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             # alter macro parameters of model generator, before building the model
             model_gen.alter_macro_structure(*macro)
 
-            mo_model, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
+            mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
             model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
         model_logger.info('Model generated successfully')
@@ -204,8 +204,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         train_dataset, validation_dataset = dataset_folds[0]
 
         # Define callbacks
-        train_callbacks = define_callbacks(score_metric, multi_output, last_cell_index)
-        override_checkpoint_callback(train_callbacks, score_metric, last_cell_index, use_val=True)
+        train_callbacks = define_callbacks(score_metric, multi_output, output_names)
+        override_checkpoint_callback(train_callbacks, score_metric, output_names, use_val=True)
         time_cb = TimingCallback()
         train_callbacks.insert(0, time_cb)
 

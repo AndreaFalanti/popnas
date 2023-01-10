@@ -94,8 +94,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
-
-        mo_model, last_cell_index = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
+        mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
         model = compile_post_search_model(mo_model, model_gen, train_strategy)
 
     logger.info('Model generated successfully')
@@ -106,8 +105,8 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'untrained.onnx'))
 
     # Define callbacks
-    train_callbacks = define_callbacks(score_metric, multi_output, last_cell_index)
-    override_checkpoint_callback(train_callbacks, score_metric, last_cell_index, use_val=False)
+    train_callbacks = define_callbacks(score_metric, multi_output, output_names)
+    override_checkpoint_callback(train_callbacks, score_metric, output_names, use_val=False)
     time_cb = TimingCallback()
     train_callbacks.insert(0, time_cb)
 

@@ -240,7 +240,7 @@ class BaseModelGenerator(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         '''
         Build a Keras model from the given cell specification.
         The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
@@ -250,7 +250,7 @@ class BaseModelGenerator(ABC):
             add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
 
         Returns:
-            Keras model, and the final cell index.
+            Keras model, and the name of the output layers.
         '''
         raise NotImplementedError()
 

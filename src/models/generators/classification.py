@@ -72,7 +72,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)
         self.output_layers = {}
 
@@ -103,8 +103,8 @@ class ClassificationModelGenerator(BaseModelGenerator):
         last_output = cell_inputs[-1]
 
         model = self._finalize_model(model_input, last_output)
-        last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
-        return model, last_cell_index
+        output_names = list(self.output_layers.keys())
+        return model, output_names
 
     def _get_loss_function(self) -> losses.Loss:
         return losses.CategoricalCrossentropy()

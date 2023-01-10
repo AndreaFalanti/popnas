@@ -104,7 +104,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Pointwise_Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, int]':
+    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         # stores the final cell's output of each U-net structure "level", the ones used in the skip connections.
         level_outputs = []
 
@@ -151,8 +151,8 @@ class SegmentationModelGenerator(BaseModelGenerator):
         last_output = cell_inputs[-1]
 
         model = self._finalize_model(model_input, last_output)
-        last_cell_index = max(self.network_build_info.used_cell_indexes, default=0)
-        return model, last_cell_index
+        output_names = list(self.output_layers.keys())
+        return model, output_names
 
     def _build_upsample_unit(self, cell_inputs: 'list[tf.Tensor]', level_outputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
         '''
