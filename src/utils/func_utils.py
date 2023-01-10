@@ -38,14 +38,14 @@ def compute_spearman_rank_correlation_coefficient(y_true: 'list[float]', y_pred:
     return df['true'].corr(df['est'], method='spearman')
 
 
-def compute_spearman_rank_correlation_coefficient_from_df(df: pd.DataFrame, x_col: str, y_col: str):
+def compute_spearman_rank_correlation_coefficient_from_df(x_col: pd.Series, y_col: pd.Series):
     '''
     Spearman rank correlation coefficient, computed on given Pandas dataframe.
     '''
-    return df[x_col].corr(df[y_col], method='spearman')
+    return x_col.corr(y_col, method='spearman')
 
 
-def compute_mape(y_true: 'list[float]', y_pred: 'list[float]'):
+def compute_mape(y_true: Iterable[float], y_pred: Iterable[float]):
     '''
     Spearman rank correlation coefficient, computed on given Pandas dataframe.
     '''

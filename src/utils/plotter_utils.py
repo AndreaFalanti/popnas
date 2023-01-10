@@ -223,16 +223,14 @@ def plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[lis
         ax.set_zlabel(labels[2])
     # For 2 metrics only, adding another axis for displaying the rank, resulting in a 3D plot.
     elif len(real_coords) == 2:
-        x_real, y_real = real_coords
-        x_pred, y_pred = pred_coords
+        # reverse them for nicer plots (rank 0 is the worst score, so it creates an incremental plot)
+        # since they are reversed, metric1 is extracted before metric0
+        metric1_real, metric0_real = real_coords[::-1]
+        metric1_pred, metric0_pred = pred_coords[::-1]
 
-        x_real.reverse()
-        y_real.reverse()
-        x_pred.reverse()
-        y_pred.reverse()
-
-        ax.plot(list(range(len(x_real))), y_real, x_real, '--.b', alpha=0.6)
-        ax.plot(list(range(len(x_pred))), y_pred, x_pred, '--.g', alpha=0.6)
+        ranks = np.arange(len(metric1_real))
+        ax.plot(ranks, metric1_real, metric0_real, '--.b', alpha=0.6)
+        ax.plot(ranks, metric1_pred, metric0_pred, '--.g', alpha=0.6)
 
         ax.set_xlabel('rank')
         ax.set_ylabel(labels[1])
@@ -246,7 +244,6 @@ def plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[lis
 def plot_predictions_pareto_scatter_chart(predictions: Sequence[list], pareto_points: Sequence[list],
                                           labels: 'list[str]', title: str, save_name: str):
     ''' Plot all predictions made, with the Pareto selected as highlight. '''
-    # fig, ax = plt.subplots()
     fig = plt.figure()
     # rectilinear is for 2d
     proj = '3d' if len(predictions) >= 3 else 'rectilinear'
