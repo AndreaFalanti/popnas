@@ -107,7 +107,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # Define callbacks
     train_callbacks = define_callbacks(score_metric, multi_output, output_names)
     override_checkpoint_callback(train_callbacks, score_metric, output_names, use_val=False)
-    time_cb = TimingCallback()
+    time_cb = TrainingTimeCallback()
     train_callbacks.insert(0, time_cb)
 
     plot_model(model, to_file=os.path.join(save_path, 'model.pdf'), show_shapes=True, show_layer_names=True)
@@ -118,7 +118,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                      class_weight=balanced_class_weights,
                      callbacks=train_callbacks)  # type: callbacks.History
 
-    training_time = sum(time_cb.logs)
+    training_time = time_cb.get_total_time()
     log_final_training_results(logger, hist, score_metric, training_time, arc_config['multi_output'], using_val=False)
 
     logger.info('Saving TF model')

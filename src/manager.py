@@ -12,10 +12,10 @@ import file_writer as fw
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
+from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.results.base import write_multi_output_results_to_csv
 from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
-from utils.timing_callback import TimingCallback, InferenceTimingCallback
 
 AUTOTUNE = tf.data.AUTOTUNE
 
@@ -232,7 +232,7 @@ class NetworkManager:
             # add callback to register as accurate as possible the training time.
             # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the
             # time due to the training operations (some keras callbacks could be executed before this).
-            time_cb = TimingCallback()
+            time_cb = TrainingTimeCallback()
             callbacks.insert(0, time_cb)
 
             hist = model.fit(x=train_ds,
@@ -243,7 +243,7 @@ class NetworkManager:
                              callbacks=callbacks,
                              class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)  # type: History
 
-            times[i] = sum(time_cb.logs)
+            times[i] = time_cb.get_total_time()
             histories.append(hist.history)
 
         return model, histories, times
