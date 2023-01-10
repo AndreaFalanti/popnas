@@ -9,9 +9,9 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score
 
 import log_service
+from models.results.base import TargetMetric
 from utils.cell_counter import CellCounter
-from utils.feature_utils import metrics_fields_dict
-from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape, intersection
+from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape
 from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_boxplot, plot_pie_chart, plot_scatter, \
     plot_squared_scatter_chart, plot_pareto_front, plot_predictions_pareto_scatter_chart, generate_avg_max_min_bars
 
@@ -25,9 +25,6 @@ __logger = None  # type: logging.Logger
 plt.set_loglevel('WARNING')
 # warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
-# Pareto objectives which require a predictor for estimation
-predictor_objectives = ['time', 'accuracy', 'f1_score']
-
 
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?
 def initialize_logger():
@@ -35,7 +32,7 @@ def initialize_logger():
     __logger = log_service.get_logger(__name__)
 
 
-def plot_specular_monoblock_info():
+def plot_specular_monoblock_info(target_metrics: 'list[TargetMetric]'):
     __logger.info("Analyzing training_results.csv...")
     csv_path = log_service.build_path('csv', 'training_results.csv')
     df = pd.read_csv(csv_path)
@@ -52,14 +49,16 @@ def plot_specular_monoblock_info():
     # filter only SMB
     smb_df = df[(df['in1'] == df['in2']) & (df['op1'] == df['op2']) & (df['in1'] == -1)]
 
+    # use as labels the first operator (that is actually the same of the second one)
     x = smb_df['op1']
+    x_axis_label = 'Operator'
 
     __logger.info("Writing plots...")
-    plot_histogram(x, smb_df['training time(seconds)'], 'Operator', 'Time(s)', 'SMB (-1 input) training time', 'SMB_time', incline_labels=True)
-    plot_histogram(x, smb_df['best val accuracy'], 'Operator', 'Val Accuracy', 'SMB (-1 input) validation accuracy', 'SMB_acc', incline_labels=True)
-    plot_histogram(x, smb_df['val F1 score'], 'Operator', 'F1 score', 'SMB (-1 input) validation F1 score', 'SMB_F1', incline_labels=True)
-    plot_histogram(x, smb_df['total params'], 'Operator', 'Params', 'SMB (-1 input) total parameters', 'SMB_params', incline_labels=True)
-    plot_histogram(x, smb_df['flops'], 'Operator', 'FLOPS', 'SMB (-1 input) FLOPS', 'SMB_flops', incline_labels=True)
+    for m in target_metrics:
+        y = smb_df[m.results_csv_column]
+        title = f'SMB (-1 input) {m.name}'
+        plot_histogram(x, y, x_axis_label, m.plot_label(), title, save_name=f'SMB_{m.name}', incline_labels=True)
+
     __logger.info("SMB plots written successfully")
 
 
@@ -79,23 +78,19 @@ def plot_summary_training_info_per_block():
     __logger.info("Training aggregated overview plots written successfully")
 
 
-def plot_cnn_train_boxplots_per_block(B: int):
+def plot_metrics_boxplot_per_block(B: int, target_metrics: 'list[TargetMetric]'):
     __logger.info("Analyzing training results data...")
     csv_path = log_service.build_path('csv', 'training_results.csv')
     df = pd.read_csv(csv_path)
 
-    times_per_block, acc_per_block, f1_scores_per_block = [], [], []
+    # use block numbers as x labels, and get dataframes partitions for each block step.
     x = list(range(1, B + 1))
-    for b in x:
-        b_df = df[df['# blocks'] == b]
+    x_axis_label = 'Blocks'
+    block_dfs = [df[df['# blocks'] == b] for b in x]
 
-        acc_per_block.append(b_df[metrics_fields_dict['accuracy'].real_column])
-        times_per_block.append(b_df[metrics_fields_dict['time'].real_column])
-        f1_scores_per_block.append(b_df[metrics_fields_dict['f1_score'].real_column])
-
-    plot_boxplot(acc_per_block, x, 'Blocks', 'Val accuracy', 'Val accuracy overview', 'val_acc_boxplot')
-    plot_boxplot(times_per_block, x, 'Blocks', 'Training time', 'Training time overview', 'train_time_boxplot')
-    plot_boxplot(f1_scores_per_block, x, 'Blocks', 'Val F1 score', 'Val F1 score overview', 'val_f1_score_boxplot')
+    for m in target_metrics:
+        data = [b_df[m.results_csv_column] for b_df in block_dfs]
+        plot_boxplot(data, x, x_axis_label, m.name, title=f'{m.name} overview', save_name=f'{m.name}_boxplot')
 
 
 def _get_cell_elems_usages_as_ordered_lists(cells: 'list[list]', input_keys: 'list[int]', op_keys: 'list[str]'):
@@ -183,16 +178,17 @@ def __build_prediction_dataframe(b: int, k: int, pnas_mode: bool):
     return pd.merge(training_df, pred_df, on=['cell structure'], how='inner')
 
 
-def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: 'list[str]'):
+def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_predictable_metrics: 'list[TargetMetric]'):
+    x = np.arange(2, B + 1)
     # build dataframes
-    merge_dfs = [__build_prediction_dataframe(b, K, pnas_mode) for b in range(2, B + 1)]
+    merged_dfs = [__build_prediction_dataframe(b, K, pnas_mode) for b in x]
     
-    def plot_prediction_errors_for_metric(metric_name: str):
+    def plot_prediction_errors_for_metric(metric: TargetMetric):
         '''
         Plot predictors related graphs, comparing the results with real values obtained after training.
          
         Args:
-            metric_name: Pareto metric which has an associated predictor
+            metric: TargetMetric of a Pareto objective
         '''
         errors, avg_errors, max_errors, min_errors = [], np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
         mapes, spearman_coeffs, r2_coeffs = np.zeros(B - 1), np.zeros(B - 1), np.zeros(B - 1)
@@ -200,51 +196,45 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_objectives: '
         pred_values, real_values = [], []
         legend_labels = []
 
-        m = metrics_fields_dict[metric_name]
+        for i, df in enumerate(merged_dfs):
+            __logger.info("Comparing predicted values of %s with actual values retrieved after CNN training (b=%d)", metric.name, i + 2)
 
-        for b in range(2, B + 1):
-            __logger.info("Comparing predicted values of %s with actual values retrieved after CNN training (b=%d)", metric_name, b)
-            df = merge_dfs[b - 2]
-
-            pred_b = df[m.pred_column]
-            real_b = df[m.real_column]
+            pred_b = df[metric.prediction_csv_column]
+            real_b = df[metric.results_csv_column]
+            errors_b = real_b - pred_b
 
             pred_values.append(pred_b.to_list())
             real_values.append(real_b.to_list())
-
-            errors_b = real_b - pred_b
             errors.append(errors_b)
 
-            avg_errors[b - 2] = statistics.mean(errors_b)
-            max_errors[b - 2] = max(errors_b)
-            min_errors[b - 2] = min(errors_b)
+            avg_errors[i] = statistics.mean(errors_b)
+            max_errors[i] = max(errors_b)
+            min_errors[i] = min(errors_b)
 
-            mapes[b - 2] = compute_mape(real_b.to_list(), pred_b.to_list())
-            spearman_coeffs[b - 2] = compute_spearman_rank_correlation_coefficient_from_df(df, m.real_column, m.pred_column)
-            r2_coeffs[b - 2] = r2_score(real_b.to_list(), pred_b.to_list())
+            mapes[i] = compute_mape(real_b, pred_b)
+            spearman_coeffs[i] = compute_spearman_rank_correlation_coefficient_from_df(real_b, pred_b)
+            r2_coeffs[i] = r2_score(real_b, pred_b)
 
-            legend_labels.append(f'B{b} (MAPE: {mapes[b - 2]:.3f}%, ρ: {spearman_coeffs[b - 2]:.3f})')
+            legend_labels.append(f'B{i + 2} (MAPE: {mapes[i]:.3f}%, ρ: {spearman_coeffs[i]:.3f})')
 
-        x = np.arange(2, B + 1)
         bars = generate_avg_max_min_bars(avg_errors, max_errors, min_errors)
-        capitalized_metric = metric_name.capitalize()
-        units_str = f'({m.units})' if m.units is not None else ''
+        y_axis_label = metric.plot_label()
 
-        plot_multibar_histogram(x, bars, 0.15, 'Blocks', f'{capitalized_metric}{units_str}',
-                                  f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_overview')
-        plot_boxplot(errors, x, 'Blocks', f'{capitalized_metric} error{units_str}',
-                       f'{capitalized_metric} prediction errors overview (real - predicted)', f'pred_{metric_name}_errors_boxplot')
-        plot_squared_scatter_chart(real_values, pred_values, f'Real {metric_name}{units_str}', f'Predicted {metric_name}{units_str}',
-                                     f'{capitalized_metric} predictions overview', f'{metric_name}_pred_overview', legend_labels=legend_labels)
+        plot_multibar_histogram(x, bars, 0.15, 'Blocks', y_axis_label,
+                                  f'{metric.name} prediction errors overview (real - predicted)', f'pred_{metric.name}_errors_overview')
+        plot_boxplot(errors, x, 'Blocks', f'{y_axis_label} error',
+                       f'{metric.name} prediction errors overview (real - predicted)', f'pred_{metric.name}_errors_boxplot')
+        plot_squared_scatter_chart(real_values, pred_values, f'Real {y_axis_label}', f'Predicted {y_axis_label}',
+                                     f'{metric.name} predictions overview', f'{metric.name}_pred_overview', legend_labels=legend_labels)
 
     # write plots about each Pareto metric associated to a predictor
-    for p_obj in intersection(pareto_objectives, predictor_objectives):
-        plot_prediction_errors_for_metric(p_obj)
+    for m in pareto_predictable_metrics:
+        plot_prediction_errors_for_metric(m)
 
     __logger.info("Prediction error overview plots written successfully")
 
 
-def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
+def plot_pareto_front_curves(B: int, pareto_metrics: 'list[TargetMetric]'):
     training_csv_path = log_service.build_path('csv', 'training_results.csv')
     training_df = pd.read_csv(training_csv_path)
     training_df = training_df[training_df['exploration'] == False]
@@ -259,30 +249,30 @@ def plot_pareto_front_curves(B: int, pareto_objectives: 'list[str]'):
 
         real_coords, pred_coords = [], []
 
-        for objective in pareto_objectives:
-            m = metrics_fields_dict[objective]
-            real_coords.append(training_df_b[m.real_column].to_list())
-            pred_coords.append(pareto_df[m.pred_column].to_list())
+        for m in pareto_metrics:
+            real_coords.append(training_df_b[m.results_csv_column])
+            pred_coords.append(pareto_df[m.prediction_csv_column])
 
-        plot_pareto_front(real_coords, pred_coords, pareto_objectives,
+        pareto_objective_names = [m.name for m in pareto_metrics]
+        plot_pareto_front(real_coords, pred_coords, pareto_objective_names,
                           title=f'3D Pareto front B{b}', save_name=f'pareto_plot_B{b}_3D')
 
     __logger.info("Pareto front curve plots written successfully")
 
 
-def plot_predictions_with_pareto_analysis(B: int, pareto_objectives: 'list[str]'):
+def plot_predictions_with_pareto_analysis(B: int, pareto_metrics: 'list[TargetMetric]'):
     for b in range(2, B + 1):
         predictions_df = pd.read_csv(log_service.build_path('csv', f'predictions_B{b}.csv'))
         pareto_df = pd.read_csv(log_service.build_path('csv', f'pareto_front_B{b}.csv'))
 
         pred_coords, pareto_coords = [], []
 
-        for objective in pareto_objectives:
-            m = metrics_fields_dict[objective]
-            pred_coords.append(predictions_df[m.pred_column].to_list())
-            pareto_coords.append(pareto_df[m.pred_column].to_list())
+        for m in pareto_metrics:
+            pred_coords.append(predictions_df[m.prediction_csv_column].to_list())
+            pareto_coords.append(pareto_df[m.prediction_csv_column].to_list())
 
-        plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objectives,
+        pareto_objective_names = [m.name for m in pareto_metrics]
+        plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objective_names,
                                                 f'Predictions with Pareto points B{b}', f'predictions_with_pareto_B{b}')
 
     __logger.info("Predictions-Pareto analysis plots written successfully")

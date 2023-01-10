@@ -12,6 +12,7 @@ from controller import ControllerManager
 from manager import NetworkManager
 from manager_bench_proxy import NetworkBenchManager
 from models.results import BaseTrainingResults
+from models.results.base import get_pareto_targeted_metrics
 from predictors.initializer import PredictorsHandler
 from search_space import SearchSpace
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
@@ -99,6 +100,15 @@ class Popnas:
         # set controller step to the correct one (in case of restore is not b=1)
         controller_b = self.starting_b if self.starting_b > 1 else 1
         self.controller = ControllerManager(self.search_space, sstr_config, others_config, self.predictors_handler, current_b=controller_b)
+
+        # extract targeted network metrics for plot purposes
+        results_processor = self.nn_manager.model_gen.get_results_processor_class()
+        self.targeted_metrics = results_processor.all_metrics_considered()
+        predictable_metrics = results_processor.predictable_metrics_considered()
+        # metrics output of some predictor during this run
+        self.predicted_metrics = get_pareto_targeted_metrics(predictable_metrics, self.pareto_objectives)
+        # all Pareto objective metrics, included the ones directly computed (no predictors)
+        self.pareto_metrics = get_pareto_targeted_metrics(self.targeted_metrics, self.pareto_objectives)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
@@ -201,13 +211,13 @@ class Popnas:
     def generate_final_plots(self):
         ''' Generate plots after the run has been terminated, analyzing the whole results. '''
         plotter.plot_summary_training_info_per_block()
-        plotter.plot_cnn_train_boxplots_per_block(self.blocks)
-        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, self.pareto_objectives)
+        plotter.plot_metrics_boxplot_per_block(self.blocks, self.targeted_metrics)
+        plotter.plot_predictions_error(self.blocks, self.children_max_size, self.pnas_mode, self.predicted_metrics)
         plotter.plot_correlations_with_training_time()
 
         if not self.pnas_mode:
-            plotter.plot_pareto_front_curves(self.blocks, self.pareto_objectives)
-            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_objectives)
+            plotter.plot_pareto_front_curves(self.blocks, self.pareto_metrics)
+            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_metrics)
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 
@@ -240,7 +250,7 @@ class Popnas:
 
     def start(self):
         '''
-        Start a neural architecture search run, using POPNASv2 algorithm customized with provided configuration.
+        Start a neural architecture search run, using POPNASv3 algorithm customized with provided configuration.
         '''
         time_headers, time_feature_types = build_time_feature_names()
         score_headers, score_feature_types = build_score_feature_names(self.blocks, self.input_lookback_depth)
@@ -272,7 +282,7 @@ class Popnas:
                 fw.write_specular_monoblock_times(op_times, save_path=log_service.build_path('csv', 'reindex_op_times.csv'))
                 reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
-                plotter.plot_specular_monoblock_info()
+                plotter.plot_specular_monoblock_info(self.targeted_metrics)
 
                 for train_res in training_results:
                     self.write_predictors_training_data(current_blocks, train_res)
