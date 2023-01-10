@@ -8,7 +8,7 @@ import log_service
 from utils.func_utils import cell_spec_to_str
 
 
-class MetricTarget(NamedTuple):
+class TargetMetric(NamedTuple):
     '''
     Utility class for specifying metrics and how their optimal value among epochs is computed.
     The name must be the one used in the Keras metric, since it is used to extract info from the training history.
@@ -57,7 +57,7 @@ def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal:
 
 
 def write_multi_output_results_to_csv(file_path: str, cell_spec: list, histories: 'list[dict[str, list]]',
-                                      metrics: 'list[MetricTarget]', csv_headers: 'list[str]'):
+                                      metrics: 'list[TargetMetric]', csv_headers: 'list[str]'):
     outputs_dict = {}
     for m in metrics:
         metric_values = []
@@ -114,28 +114,28 @@ class BaseTrainingResults(ABC):
         raise NotImplementedError()
 
     @staticmethod
-    def custom_metrics_considered() -> 'list[MetricTarget]':
-        ''' Return all MetricTarget objects related to metrics not included in Keras and computed with custom functions. '''
+    def custom_metrics_considered() -> 'list[TargetMetric]':
+        ''' Return all TargetMetric objects related to metrics not included in Keras and computed with custom functions. '''
         return [
-            MetricTarget('time', min, results_csv_column='training time(seconds)', units='seconds', prediction_csv_column='time'),
-            MetricTarget('inference_time', min, results_csv_column='inference time(seconds)', units='seconds'),
-            MetricTarget('params', min, results_csv_column='total params'),
-            MetricTarget('flops', min, results_csv_column='flops')
+            TargetMetric('time', min, results_csv_column='training time(seconds)', units='seconds', prediction_csv_column='time'),
+            TargetMetric('inference_time', min, results_csv_column='inference time(seconds)', units='seconds'),
+            TargetMetric('params', min, results_csv_column='total params'),
+            TargetMetric('flops', min, results_csv_column='flops')
         ]
 
     @staticmethod
-    def keras_metrics_considered() -> 'list[MetricTarget]':
-        ''' Return all MetricTarget objects related to Keras metrics, extractable from training history. '''
+    def keras_metrics_considered() -> 'list[TargetMetric]':
+        ''' Return all TargetMetric objects related to Keras metrics, extractable from training history. '''
         return []
 
     @classmethod
-    def all_metrics_considered(cls) -> 'list[MetricTarget]':
-        ''' Return all MetricTarget objects considered by the class implementation. '''
+    def all_metrics_considered(cls) -> 'list[TargetMetric]':
+        ''' Return all TargetMetric objects considered by the class implementation. '''
         return cls.keras_metrics_considered() + cls.custom_metrics_considered()
 
     @classmethod
-    def predictable_metrics_considered(cls) -> 'list[MetricTarget]':
-        ''' Return the MetricTarget objects which can be targeted by predictors
+    def predictable_metrics_considered(cls) -> 'list[TargetMetric]':
+        ''' Return the TargetMetric objects which can be targeted by predictors
          (metrics not directly computable and potential Pareto optimation targets). '''
         return [m for m in cls.all_metrics_considered() if m.prediction_csv_column]
 

@@ -1,4 +1,4 @@
-from .base import BaseTrainingResults, MetricTarget, extract_metric_from_train_histories
+from .base import BaseTrainingResults, TargetMetric, extract_metric_from_train_histories
 
 
 class SegmentationTrainingResults(BaseTrainingResults):
@@ -22,10 +22,10 @@ class SegmentationTrainingResults(BaseTrainingResults):
         return SegmentationTrainingResults(row[7], *row[2:6], *row[0:2])
 
     @staticmethod
-    def keras_metrics_considered() -> 'list[MetricTarget]':
+    def keras_metrics_considered() -> 'list[TargetMetric]':
         return [
-            MetricTarget('accuracy', max, results_csv_column='best val accuracy', prediction_csv_column='val score'),
-            MetricTarget('mean_io_u', max, results_csv_column='val mean IoU', prediction_csv_column='val score')
+            TargetMetric('accuracy', max, results_csv_column='best val accuracy', prediction_csv_column='val score'),
+            TargetMetric('mean_io_u', max, results_csv_column='val mean IoU', prediction_csv_column='val score')
         ]
 
     def to_csv_list(self) -> list:
