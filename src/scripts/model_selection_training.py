@@ -166,7 +166,9 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         model_logger = log_service.get_logger(f'model_{i}_{macro}')
 
         log_cell_structure(model_logger, cell_spec, i)
-        logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
+        # if the macro-structure is modified, the best score is not present since that network has not been trained during the search
+        if best_score is not None:
+            logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
 
         logger.info('Executing model %d-%s training', i, macro)
         # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
