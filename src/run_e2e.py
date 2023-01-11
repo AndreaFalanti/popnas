@@ -42,7 +42,7 @@ def main():
     scripts.execute_model_selection_training(run_folder_path, b=post_batch_size, params=args.params, j=args.jms, k=args.k)
 
     # get model selection best result
-    model_selection_results_csv_path = os.path.join(run_folder_path, 'best_model_training_top5', 'training_results.csv')
+    model_selection_results_csv_path = os.path.join(run_folder_path, f'best_model_training_top{args.k}', 'training_results.csv')
     ms_df = pd.read_csv(model_selection_results_csv_path)
     best_ms = ms_df[ms_df['val_score'] == ms_df['val_score'].max()].to_dict('records')[0]
     print(f'Best model found during model selection: {best_ms}')
