@@ -239,6 +239,13 @@ class BaseModelGenerator(ABC):
         '''
         raise NotImplementedError()
 
+    def _get_output_names(self) -> 'list[str]':
+        '''
+        Return the name of the output layers in multi-output models.
+        If there is a single output, return an empty string (easier to process Keras history in this way).
+        '''
+        return list(self.output_layers.keys()) if len(self.output_layers.keys()) > 1 else ['']
+
     @abstractmethod
     def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         '''

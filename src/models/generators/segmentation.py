@@ -151,8 +151,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         last_output = cell_inputs[-1]
 
         model = self._finalize_model(model_input, last_output)
-        output_names = list(self.output_layers.keys())
-        return model, output_names
+        return model, self._get_output_names()
 
     def _build_upsample_unit(self, cell_inputs: 'list[tf.Tensor]', level_outputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
         '''
