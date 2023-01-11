@@ -7,14 +7,17 @@ import json
 import logging
 import operator
 import os
-from typing import Optional, NamedTuple, Any
+from typing import NamedTuple, Any
 
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import callbacks, Model, metrics, losses
 
 import log_service
+from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
-from utils.func_utils import create_empty_folder
+from models.results.base import TargetMetric
+from utils.func_utils import create_empty_folder, parse_cell_structures
 from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
 
@@ -179,19 +182,14 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
 
 
 def override_checkpoint_callback(train_callbacks: list, score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False):
-    class ModelCheckpointCustom(callbacks.ModelCheckpoint):
-        def on_epoch_end(self, epoch, logs=None):
-            # at most 1 checkpoint every "save_chunk" epochs, the best one in the interval is stored since it override the others
-            # (e.g. if save_chunk=10 and epoch 124 is best among [120, 129] -> e124 weights saved in cp_ec12_10.ckpt)
-            super().on_epoch_end(epoch // save_chunk, logs)
-
     # Save best weights, here we have no validation set, so we check the best on training
     prefix = 'val_' if use_val else ''
     target_metric = f'{prefix}{output_names[-1]}_{score_metric}'
 
     ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
     train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
-                                               save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
+                                               save_weights_only=True, save_best_only=True,
+                                               monitor=target_metric, mode='max', save_chunk=save_chunk)
 
 
 def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy):
