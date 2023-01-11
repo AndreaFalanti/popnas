@@ -8,7 +8,7 @@ from typing import Iterable
 import pandas as pd
 
 from utils.feature_utils import metrics_fields_dict
-from utils.func_utils import parse_cell_structures, cell_spec_to_str
+from utils.func_utils import parse_cell_structures, cell_spec_to_str, from_seconds_to_hms
 
 
 class SearchInfo:
@@ -67,11 +67,7 @@ class FinalTrainingInfo:
 
 
 def from_seconds_to_time_str(total_seconds: float):
-    total_seconds = int(total_seconds)
-    hours = total_seconds // 3600
-    minutes = (total_seconds // 60) % 60
-    seconds = total_seconds % 60
-
+    hours, minutes, seconds = from_seconds_to_hms(total_seconds)
     return f'{hours}h {minutes}m' if hours > 0 else f'{minutes}m {seconds}s'
 
 

@@ -156,3 +156,12 @@ def to_one_hot(cat_value: int, one_hot_dim: int):
     one_hot = [0] * one_hot_dim
     one_hot[cat_value] = 1
     return one_hot
+
+
+def from_seconds_to_hms(time: float):
+    total_seconds = int(time)
+    hours = total_seconds // 3600
+    minutes = (total_seconds // 60) % 60
+    seconds = total_seconds % 60
+
+    return hours, minutes, seconds

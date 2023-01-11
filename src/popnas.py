@@ -17,6 +17,7 @@ from predictors.initializer import PredictorsHandler
 from search_space import SearchSpace
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
+from utils.func_utils import from_seconds_to_hms
 from utils.nn_utils import remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
     restore_search_space_children
@@ -204,8 +205,7 @@ class Popnas:
 
         self._logger.info('%s', '*' * 40 + ' RUN RESULTS ' + '*' * 40)
         self._logger.info('Trained networks: %d', trained_cnn_count)
-        self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time,
-                          total_time // 3600, (total_time // 60) % 60, total_time % 60)
+        self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time, *from_seconds_to_hms(total_time))
         self._logger.info('*' * 94)
 
     def generate_final_plots(self):
