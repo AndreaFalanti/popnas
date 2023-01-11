@@ -2,10 +2,18 @@ import csv
 import re
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import Iterable, Callable, NamedTuple, Optional
+from typing import Iterable, Callable, NamedTuple, Optional, TypeVar
+
+from typing_extensions import Protocol
 
 import log_service
 from utils.func_utils import cell_spec_to_str
+
+T = TypeVar("T")
+
+
+class MaxMinCallable(Protocol):
+    def __call__(self, iterable: Iterable[T], key: Callable = None) -> T: ...
 
 
 class TargetMetric(NamedTuple):
@@ -14,7 +22,7 @@ class TargetMetric(NamedTuple):
     The name must be the one used in the Keras metric, since it is used to extract info from the training history.
     '''
     name: str
-    optimal: Callable[[Iterable], float]
+    optimal: MaxMinCallable
     results_csv_column: str
     units: Optional[str] = None
     prediction_csv_column: str = ''
@@ -22,12 +30,16 @@ class TargetMetric(NamedTuple):
     def plot_label(self):
         return self.name + ('' if self.units is None else f' ({self.units})')
 
+    def to_keras_history_key(self, validation: bool, output_name: str = ''):
+        key_prefix = 'val_' if validation else ''
+        return f'{key_prefix}{output_name}_{self.name}'
+
 
 def get_pareto_targeted_metrics(all_metrics: 'list[TargetMetric]', pareto_objectives: 'list[str]'):
     return [m for m in all_metrics if m.name in pareto_objectives]
 
 
-def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, optimal: Callable[[Iterable], float], multi_output: bool):
+def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, optimal: MaxMinCallable, multi_output: bool):
     if multi_output:
         multi_output_metric_vals = get_best_metric_per_output(history, metric_name, optimal=optimal)
         return optimal(multi_output_metric_vals.values())
@@ -35,12 +47,12 @@ def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, opt
         return optimal(history[f'val_{metric_name}'])
 
 
-def extract_metric_from_train_histories(histories: 'list[dict[str, list]]', metric_name: str, optimal: Callable[[Iterable], float],
+def extract_metric_from_train_histories(histories: 'list[dict[str, list]]', metric_name: str, optimal: MaxMinCallable,
                                         multi_output: bool):
     return mean(get_best_metric_in_history(hist, metric_name, optimal, multi_output) for hist in histories)
 
 
-def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal: Callable[[Iterable], float]):
+def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal: MaxMinCallable):
     '''
     Produce a dictionary with a key for each model output.
     The value associated is the best one found for that output during the whole train procedure.
