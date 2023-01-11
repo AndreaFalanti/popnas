@@ -2,7 +2,6 @@ import gc
 import logging
 import operator
 import os
-import re
 import sys
 import warnings
 from functools import reduce
@@ -16,45 +15,7 @@ import tf2onnx
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
 from tensorflow.keras import Model
-from tensorflow.keras.callbacks import History
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
-
-
-def get_multi_output_best_epoch_stats(hist: History, score_metric: str, using_val: bool = True):
-    '''
-    Produce a dictionary with a key for each model output, that contains the metrics of the best epoch for that output.
-    Args:
-        hist: train history
-        score_metric:
-
-    Returns:
-        (int, float, dict[int, dict[str, float]]): best epoch index, best validation score and dictionary with epoch metrics for each output.
-    '''
-    metric_prefix = 'val_Softmax_c' if using_val else 'Softmax_c'
-    r = re.compile(rf'{metric_prefix}(\d+)_{score_metric}')
-    output_indexes = [int(match.group(1)) for match in map(r.match, hist.history.keys()) if match]
-
-    # get the best validation score metric for each cell
-    best_scores = [max(enumerate(hist.history[f'{metric_prefix}{output_index}_{score_metric}']), key=operator.itemgetter(1))
-                   for output_index in output_indexes]
-    # find epoch where max validation score is achieved
-    best_epoch, best_val_acc = max(best_scores, key=operator.itemgetter(1))
-
-    epoch_metrics_per_output = {}
-    for output_index in output_indexes:
-        epoch_metrics_per_output[output_index] = {}
-        if using_val:
-            epoch_metrics_per_output[output_index]['val_loss'] = hist.history[f'val_Softmax_c{output_index}_loss'][best_epoch]
-            epoch_metrics_per_output[output_index]['val_acc'] = hist.history[f'val_Softmax_c{output_index}_accuracy'][best_epoch]
-            epoch_metrics_per_output[output_index]['val_top_k'] = hist.history[f'val_Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
-            epoch_metrics_per_output[output_index]['val_f1'] = hist.history[f'val_Softmax_c{output_index}_f1_score'][best_epoch]
-
-        epoch_metrics_per_output[output_index]['loss'] = hist.history[f'Softmax_c{output_index}_loss'][best_epoch]
-        epoch_metrics_per_output[output_index]['acc'] = hist.history[f'Softmax_c{output_index}_accuracy'][best_epoch]
-        epoch_metrics_per_output[output_index]['top_k'] = hist.history[f'Softmax_c{output_index}_top_k_categorical_accuracy'][best_epoch]
-        epoch_metrics_per_output[output_index]['f1'] = hist.history[f'Softmax_c{output_index}_f1_score'][best_epoch]
-
-    return best_epoch, best_val_acc, epoch_metrics_per_output
 
 
 # See: https://github.com/tensorflow/tensorflow/issues/32809#issuecomment-768977280

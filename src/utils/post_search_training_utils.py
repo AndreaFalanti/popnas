@@ -5,7 +5,6 @@ All the functions stored inside this file are not used in the search algorithm.
 import copy
 import json
 import logging
-import operator
 import os
 from typing import NamedTuple, Any
 
@@ -16,9 +15,9 @@ from tensorflow.keras import callbacks, Model, metrics, losses
 import log_service
 from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
-from models.results.base import TargetMetric
-from utils.func_utils import create_empty_folder, parse_cell_structures
-from utils.nn_utils import get_multi_output_best_epoch_stats, initialize_train_strategy, get_optimized_steps_per_execution
+from models.results.base import TargetMetric, get_best_metric_and_epoch_index
+from utils.func_utils import create_empty_folder, parse_cell_structures, from_seconds_to_hms
+from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
 
 
@@ -54,13 +53,11 @@ def define_callbacks(score_metric: str, multi_output: bool, output_names: 'list[
     return [ckpt_callback, tb_callback]
 
 
-def log_best_cell_results_during_search(logger: logging.Logger, cell_spec: list, best_score: Optional[float], metric: str, index: int = 0):
+def log_cell_structure(logger: logging.Logger, cell_spec: list, index: int = 0):
     logger.info('%s', f' CELL INFO ({index}) ')
     logger.info('Cell specification:')
     for i, block in enumerate(cell_spec):
         logger.info("\tBlock %d: %s", i + 1, rstr(block))
-    if best_score is not None:
-        logger.info('Best score (%s) reached during training: %0.4f', metric, best_score)
 
 
 def create_model_log_folder(log_path: str):
@@ -83,52 +80,50 @@ def save_trimmed_json_config(config: dict, save_path: str):
         json.dump(config, f, indent=4)
 
 
-def log_final_training_results(logger: logging.Logger, hist: callbacks.History, score_metric: str, training_time: float, using_multi_output: bool,
-                               using_val: bool = True):
-    # hist.history is a dictionary of lists (each metric is a key)
-    if using_multi_output:
-        epoch_index, best_val_score, epoch_metrics_per_output = get_multi_output_best_epoch_stats(hist, score_metric, using_val)
-    else:
-        hist_metric = f'val_{score_metric}' if using_val else score_metric
-        epoch_index, best_val_score = max(enumerate(hist.history[hist_metric]), key=operator.itemgetter(1))
-        epoch_metrics_per_output = {'best': {}}
-        if using_val:
-            epoch_metrics_per_output['best']['val_loss'] = hist.history[f'val_loss'][epoch_index]
-            epoch_metrics_per_output['best']['val_acc'] = hist.history[f'val_accuracy'][epoch_index]
-            epoch_metrics_per_output['best']['val_top_k'] = hist.history[f'val_top_k_categorical_accuracy'][epoch_index]
-            epoch_metrics_per_output['best']['val_f1'] = hist.history[f'val_f1_score'][epoch_index]
+def extract_final_training_results(hist: callbacks.History, score_metric_name: str, keras_metrics: 'list[TargetMetric]',
+                                   output_names: 'list[str]', using_val: bool = True):
+    history = hist.history
+    score_metric = next(m for m in keras_metrics if m.name == score_metric_name)
 
-        epoch_metrics_per_output['best']['loss'] = hist.history[f'loss'][epoch_index]
-        epoch_metrics_per_output['best']['acc'] = hist.history[f'accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['top_k'] = hist.history[f'top_k_categorical_accuracy'][epoch_index]
-        epoch_metrics_per_output['best']['f1'] = hist.history[f'f1_score'][epoch_index]
+    epoch_index, best_score = get_best_metric_and_epoch_index(history, score_metric, output_names, using_val)
 
+    best_epoch_results = {output_name: {m.name: history[m.to_keras_history_key(False, output_name)][epoch_index] for m in keras_metrics}
+                              for output_name in output_names}
+    if using_val:
+        best_epoch_results.update(
+            {output_name: {f'val_{m.name}': history[m.to_keras_history_key(True, output_name)][epoch_index] for m in keras_metrics}
+             for output_name in output_names}
+        )
+
+    return best_epoch_results, epoch_index, best_score
+
+
+def extend_keras_metrics(keras_metrics: 'list[TargetMetric]'):
+    return [
+        TargetMetric('loss', min, ''),
+        TargetMetric('top_k_categorical_accuracy', max, '')
+    ] + keras_metrics
+
+
+def log_training_results_summary(logger: logging.Logger, best_epoch_index: int, total_epochs: int,
+                                 training_time: float, best_score: float, score_metric_name: str):
     logger.info('*' * 31 + ' TRAINING SUMMARY ' + '*' * 31)
-    logger.info('Best epoch index: %d', epoch_index + 1)
-    logger.info('Total epochs: %d', len(hist.epoch))  # should work also for early stopping
-    logger.info('Best validation %s: %0.4f', score_metric, best_val_score)
-    logger.info('Total training time (without callbacks): %0.4f seconds (%d hours %d minutes %d seconds)',
-                training_time, training_time // 3600, (training_time // 60) % 60, training_time % 60)
+    logger.info('Best epoch index: %d', best_epoch_index + 1)
+    logger.info('Total epochs: %d', total_epochs)
+    logger.info('Best validation %s: %0.4f', score_metric_name, best_score)
+    logger.info('Total training time (without callbacks): %0.3f seconds (%d hours %d minutes %d seconds)',
+                training_time, *from_seconds_to_hms(training_time))
 
-    for key in epoch_metrics_per_output:
-        log_title = ' BEST EPOCH ' if key == 'best' else f' Cell {key} '
-        logger.info('*' * 36 + log_title + '*' * 36)
 
-        if using_val:
-            logger.info('Validation')
-            logger.info('\tValidation accuracy: %0.4f', epoch_metrics_per_output[key]['val_acc'])
-            logger.info('\tValidation loss: %0.4f', epoch_metrics_per_output[key]['val_loss'])
-            logger.info('\tValidation top_k accuracy: %0.4f', epoch_metrics_per_output[key]['val_top_k'])
-            logger.info('\tValidation average f1 score: %0.4f', epoch_metrics_per_output[key]['val_f1'])
+def log_training_results_dict(logger: logging.Logger, results_dict: 'dict[str, dict[str, float]]'):
+    logger.info('*' * 30 + ' RESULTS PER OUTPUT ' + '*' * 30)
 
-        logger.info('Training')
-        logger.info('\tAccuracy: %0.4f', epoch_metrics_per_output[key]['acc'])
-        logger.info('\tLoss: %0.4f', epoch_metrics_per_output[key]['loss'])
-        logger.info('\tTop_k accuracy: %0.4f', epoch_metrics_per_output[key]['top_k'])
-        logger.info('\tAverage f1 score: %0.4f', epoch_metrics_per_output[key]['f1'])
+    for output_name, metrics_dict in results_dict.items():
+        logger.info('Output: %s', output_name)
+        for metric_name, value in metrics_dict.items():
+            logger.info('\t%s: %0.4f', metric_name, value)
 
     logger.info('*' * 80)
-    return best_val_score, epoch_index
 
 
 def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str):
@@ -168,7 +163,15 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
 
 
 def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'):
-    ''' Build a new model using only a secondary output at 2/3 of cells (drop other output from multi-output model) '''
+    '''
+    Build a new model using only a secondary output at 2/3 of cells (drop other outputs from multi-output model).
+    Args:
+        mo_model: a multi-output model
+        mo_loss_weights: loss weights associated with each output
+
+    Returns:
+        the new model, the new loss weights and the new output names
+    '''
     last_output_index = len(mo_model.outputs) - 1
     secondary_output_index = round(last_output_index * 0.66)
     # avoid using same output in very small models
@@ -182,7 +185,7 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
         output_names[1]: 0.75
     }
 
-    return model, loss_weights
+    return model, loss_weights, output_names
 
 
 def override_checkpoint_callback(train_callbacks: list, score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False):
@@ -207,11 +210,11 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
 
     # remove unnecessary exits and recalibrate loss weights
-    model, loss_weights = prune_excessive_outputs(mo_model, mo_loss_weights)
+    model, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_loss_weights)
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
     model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
-    return model
+    return model, output_names
 
 
 def build_macro_customized_config(config: dict, macro: MacroConfig):
@@ -227,3 +230,15 @@ def save_evaluation_results(model: Model, ds: tf.data.Dataset, model_path: str):
     results = model.evaluate(x=ds, return_dict=True)
     with open(os.path.join(model_path, 'eval.txt'), 'w') as f:
         f.write(f'Results: {results}')
+
+
+def get_best_cell_specs(log_folder_path: str, n: int, metric: TargetMetric) -> 'tuple[list[list], list[float]]':
+    training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
+    df = pd.read_csv(training_results_csv_path)
+    # exclude empty cell, which gives exceptions in macro-structure tuning.
+    # Could happen to choose the empty cell in debug runs with about 10 networks, in real cases it never happens.
+    df = df[df['cell structure'] != '[]']
+    best_acc_rows = df.nlargest(n, columns=[metric.results_csv_column])
+
+    cell_specs = parse_cell_structures(best_acc_rows['cell structure'])
+    return cell_specs, best_acc_rows[metric.results_csv_column].to_list()

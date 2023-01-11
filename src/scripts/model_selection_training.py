@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import Optional, Iterator
 
-import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import callbacks
 from tensorflow.python.keras.utils.vis_utils import plot_model
@@ -13,35 +12,23 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
+from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
-from utils.feature_utils import metrics_fields_dict
+from models.results.base import TargetMetric
 from utils.func_utils import parse_cell_structures, cell_spec_to_str, create_empty_folder
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
-from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config
-from utils.timing_callback import TimingCallback
+from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, define_callbacks, \
+    build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config, \
+    get_best_cell_specs, log_cell_structure, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
+    log_training_results_dict
 
 # disable Tensorflow info and warning messages
 remove_annoying_tensorflow_messages()
 
-AUTOTUNE = tf.data.AUTOTUNE
 
-
-def get_best_cell_specs(log_folder_path: str, n: int, metric: str = 'best val accuracy'):
-    training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
-    df = pd.read_csv(training_results_csv_path)
-    # avoid empty cell, which gives exceptions in macro-structure tuning. Could happen to choose empty cell in debug runs with about 10 networks,
-    # in real cases it never happens
-    df = df[df['cell structure'] != '[]']
-    best_acc_rows = df.nlargest(n, columns=[metric])
-
-    cell_specs = parse_cell_structures(best_acc_rows['cell structure'])
-    return cell_specs, best_acc_rows[metric]
-
-
-def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: str, macro: MacroConfig,
+def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: TargetMetric, macro: MacroConfig,
                             logger: logging.Logger) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
     '''
     Return an iterator of all cells to train during model selection process.
@@ -50,7 +37,7 @@ def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metr
         run_path: path to run folder
         spec: cell specification, if provided
         top_cells: number of top cells to consider in post-search training
-        score_metric: target score metric for selecting top-k architectures
+        score_metric: TargetMetric for selecting top-k architectures
         macro: macro parameters used during search
         logger:
 
@@ -59,9 +46,8 @@ def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metr
     '''
     if spec is None:
         logger.info('Getting best cell specifications found during POPNAS run...')
-        metric = metrics_fields_dict[score_metric].real_column
 
-        cell_specs, best_scores = get_best_cell_specs(run_path, top_cells, metric)
+        cell_specs, best_scores = get_best_cell_specs(run_path, top_cells, score_metric)
         return enumerate(zip(cell_specs, best_scores, [macro] * len(cell_specs))).__iter__()
     # single cell specification given by the user
     else:
@@ -128,7 +114,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
-    score_metric = config['search_strategy']['score_metric']
+    score_metric_name = config['search_strategy']['score_metric']
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
     save_trimmed_json_config(config, save_path)
@@ -154,14 +140,18 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
 
+    keras_metrics = model_gen.get_results_processor_class().keras_metrics_considered()
+    extended_keras_metrics = extend_keras_metrics(keras_metrics)
+    target_metric = next(m for m in keras_metrics if m.name == score_metric_name)
+
     m = arc_config['motifs']
     n = arc_config['normal_cells_per_motif']
     f = cnn_config['filters']
     macro_config = MacroConfig(m, n, f)
 
-    cell_score_iter = get_cells_to_train_iter(p, spec, k, score_metric, macro_config, logger)
+    cell_score_iter = get_cells_to_train_iter(p, spec, k, target_metric, macro_config, logger)
 
-    # generate alternative macro architectures of the selected cell specifications
+    # generate alternative macro architectures of the selected cell specifications.
     # the returned iterator as the same structure and returns also the original elements
     if params is not None:
         # get params ranges. float conversion is used to support exponential notation (e.g. 2e6 for 2 millions).
@@ -175,10 +165,11 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         create_model_log_folder(model_folder)
         model_logger = log_service.get_logger(f'model_{i}_{macro}')
 
-        log_best_cell_results_during_search(model_logger, cell_spec, best_score, score_metric, i)
+        log_cell_structure(model_logger, cell_spec, i)
+        logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
 
         logger.info('Executing model %d-%s training', i, macro)
-        # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
+        # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
         with open(os.path.join(model_folder, 'cell_spec.txt'), 'w') as f:
             f.write(cell_spec_to_str(cell_spec))
 
@@ -187,14 +178,13 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
         model_logger.info('Generating Keras model from cell specification...')
         with train_strategy.scope():
-            # alter macro parameters of model generator, before building the model
+            # alter macro parameters of the model generator, before building the model
             model_gen.alter_macro_structure(*macro)
 
             mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
-            model = compile_post_search_model(mo_model, model_gen, train_strategy)
+            model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy)
 
         model_logger.info('Model generated successfully')
-
         model.summary(line_length=140, print_fn=model_logger.info)
 
         model_logger.info('Converting untrained model to ONNX')
@@ -204,8 +194,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         train_dataset, validation_dataset = dataset_folds[0]
 
         # Define callbacks
-        train_callbacks = define_callbacks(score_metric, multi_output, output_names)
-        override_checkpoint_callback(train_callbacks, score_metric, output_names, use_val=True)
+        train_callbacks = define_callbacks(score_metric_name, multi_output, output_names)
+        override_checkpoint_callback(train_callbacks, score_metric_name, output_names, use_val=True)
         time_cb = TrainingTimeCallback()
         train_callbacks.insert(0, time_cb)
 
@@ -220,7 +210,10 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
                          callbacks=train_callbacks)  # type: callbacks.History
 
         training_time = time_cb.get_total_time()
-        training_score, best_epoch = log_final_training_results(model_logger, hist, score_metric, training_time, arc_config['multi_output'])
+        results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
+                                                                                       output_names, using_val=False)
+        log_training_results_summary(logger, best_epoch, cnn_config['epochs'], training_time, best_training_score, score_metric_name)
+        log_training_results_dict(logger, results_dict)
 
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))
@@ -239,7 +232,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             if f.tell() == 0:
                 writer.writerow(['cell_spec', 'm', 'n', 'f', 'best_epoch', 'val_score', 'training_time'])
 
-            writer.writerow([cell_spec_to_str(cell_spec), *macro, best_epoch, training_score, training_time])
+            writer.writerow([cell_spec_to_str(cell_spec), *macro, best_epoch, best_training_score, training_time])
 
 
 if __name__ == '__main__':

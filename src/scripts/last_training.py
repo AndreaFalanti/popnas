@@ -2,7 +2,6 @@ import argparse
 import os
 from pathlib import Path
 
-import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import callbacks
 from tensorflow.python.keras.utils.vis_utils import plot_model
@@ -10,30 +9,19 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
+from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
-from utils.feature_utils import metrics_fields_dict
 from utils.func_utils import parse_cell_structures, cell_spec_to_str
 from utils.network_graph import save_cell_dag_image
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
-from utils.post_search_training_utils import create_model_log_folder, log_best_cell_results_during_search, define_callbacks, \
-    log_final_training_results, override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
-    save_evaluation_results
-from utils.timing_callback import TimingCallback
+from utils.post_search_training_utils import create_model_log_folder, define_callbacks, \
+    override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
+    save_evaluation_results, get_best_cell_specs, log_cell_structure, extract_final_training_results, log_training_results_summary, \
+    log_training_results_dict, extend_keras_metrics
 
 # disable Tensorflow info and warning messages
 remove_annoying_tensorflow_messages()
-
-AUTOTUNE = tf.data.AUTOTUNE
-
-
-def get_best_cell_spec(log_folder_path: str, metric: str = 'best val accuracy'):
-    training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
-    df = pd.read_csv(training_results_csv_path)
-    best_acc_row = df.loc[df[metric].idxmax()]
-
-    cell_spec = parse_cell_structures([best_acc_row['cell structure']])[0]
-    return cell_spec, best_acc_row[metric]
 
 
 def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = None, ts: str = None,
@@ -54,8 +42,9 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     multi_output = arc_config['multi_output']
     augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
-    score_metric = config['search_strategy']['score_metric']
+    score_metric_name = config['search_strategy']['score_metric']
 
+    # override config with command line parameters
     arc_config['motifs'] = m
     arc_config['normal_cells_per_motif'] = n
     cnn_config['filters'] = f
@@ -64,7 +53,6 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Preparing datasets...')
     dataset_generator = dataset_generator_factory(config['dataset'], isinstance(train_strategy, tf.distribute.TPUStrategy))
     train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
-
     # produce weights for balanced loss if option is enabled in database config
     balance_class_losses = config['dataset'].get('balance_class_losses', False)
     balanced_class_weights = generate_balanced_weights_for_classes(train_ds) if balance_class_losses else None
@@ -73,40 +61,50 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # DEBUG ONLY
     # test_data_augmentation(train_ds)
 
+    with train_strategy.scope():
+        model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, train_batches,
+                                            output_classes_count=classes_count, input_shape=input_shape,
+                                            data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
+                                            preprocessing_model=preprocessing_model)
+
+    keras_metrics = model_gen.get_results_processor_class().keras_metrics_considered()
+    extended_keras_metrics = extend_keras_metrics(keras_metrics)
+
     if spec is None:
         logger.info('Getting best cell specification found during POPNAS run...')
-        # find best model found during search and log some relevant info
-        metric = metrics_fields_dict[score_metric].real_column
-        cell_spec, best_score = get_best_cell_spec(p, metric)
-        log_best_cell_results_during_search(logger, cell_spec, best_score, metric)
+        # extract the TargetMetric related to the score metric considered during the search
+        target_metric = next(m for m in keras_metrics if m.name == score_metric_name)
+
+        # get the best model found during search and log some relevant info.
+        # using n=1, the script obtains the best element, extracted immediately (to avoid using arrays)
+        cell_spec, best_score = get_best_cell_specs(p, n=1, metric=target_metric)
+        cell_spec, best_score = cell_spec[0], best_score[0]
+
+        log_cell_structure(logger, cell_spec)
+        logger.info('Best score (%s) reached during training: %0.4f', target_metric.name, best_score)
     else:
         cell_spec = parse_cell_structures([spec])[0]
 
     logger.info('Generating Keras model from cell specification...')
-    # reconvert cell to str so that can be stored together with results (usable by other script and easier to remember what cell has been trained)
+    # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
     with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
         f.write(cell_spec_to_str(cell_spec))
 
     save_trimmed_json_config(config, save_path)
 
     with train_strategy.scope():
-        model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, train_batches,
-                                            output_classes_count=classes_count, input_shape=input_shape,
-                                            data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
-                                            preprocessing_model=preprocessing_model)
         mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
-        model = compile_post_search_model(mo_model, model_gen, train_strategy)
+        model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy)
 
     logger.info('Model generated successfully')
-
     model.summary(line_length=140, print_fn=logger.info)
 
     logger.info('Converting untrained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'untrained.onnx'))
 
     # Define callbacks
-    train_callbacks = define_callbacks(score_metric, multi_output, output_names)
-    override_checkpoint_callback(train_callbacks, score_metric, output_names, use_val=False)
+    train_callbacks = define_callbacks(score_metric_name, multi_output, output_names)
+    override_checkpoint_callback(train_callbacks, score_metric_name, output_names, use_val=False)
     time_cb = TrainingTimeCallback()
     train_callbacks.insert(0, time_cb)
 
@@ -119,7 +117,10 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                      callbacks=train_callbacks)  # type: callbacks.History
 
     training_time = time_cb.get_total_time()
-    log_final_training_results(logger, hist, score_metric, training_time, arc_config['multi_output'], using_val=False)
+    results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
+                                                                                   output_names, using_val=False)
+    log_training_results_summary(logger, best_epoch, cnn_config['epochs'], training_time, best_training_score, score_metric_name)
+    log_training_results_dict(logger, results_dict)
 
     logger.info('Saving TF model')
     model.save(os.path.join(save_path, 'tf_model'))

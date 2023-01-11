@@ -1,8 +1,9 @@
 import csv
+import operator
 import re
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import Iterable, Callable, NamedTuple, Optional, TypeVar
+from typing import Iterable, Callable, NamedTuple, Optional, TypeVar, Any
 
 from typing_extensions import Protocol
 
@@ -50,6 +51,15 @@ def get_best_metric_in_history(history: 'dict[str, list]', metric_name: str, opt
 def extract_metric_from_train_histories(histories: 'list[dict[str, list]]', metric_name: str, optimal: MaxMinCallable,
                                         multi_output: bool):
     return mean(get_best_metric_in_history(hist, metric_name, optimal, multi_output) for hist in histories)
+
+
+def get_best_metric_and_epoch_index(history: 'dict[str, Any]', metric: TargetMetric,
+                                    output_names: 'list[str]', using_val: bool) -> 'tuple[int, float]':
+    # get the best metric for each cell, plus the epoch index where they occur
+    best_scores = [metric.optimal(enumerate(history[metric.to_keras_history_key(using_val, output_name=output_name)]), key=operator.itemgetter(1))
+                   for output_name in output_names]
+
+    return metric.optimal(best_scores, key=operator.itemgetter(1))
 
 
 def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal: MaxMinCallable):
