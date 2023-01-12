@@ -556,6 +556,7 @@ class BaseModelGenerator(ABC):
 
         return loss, loss_weights, optimizer, model_metrics
 
+    @staticmethod
     @abstractmethod
-    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+    def get_results_processor_class() -> Type[BaseTrainingResults]:
         raise NotImplementedError()

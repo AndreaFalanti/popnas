@@ -192,5 +192,6 @@ class SegmentationModelGenerator(BaseModelGenerator):
     def _get_metrics(self) -> 'list[metrics.Metric]':
         return ['accuracy', metrics.MeanIoU(self.output_classes_count)]
 
-    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+    @staticmethod
+    def get_results_processor_class() -> Type[BaseTrainingResults]:
         return SegmentationTrainingResults

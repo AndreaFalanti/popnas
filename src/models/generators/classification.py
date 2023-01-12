@@ -111,5 +111,6 @@ class ClassificationModelGenerator(BaseModelGenerator):
     def _get_metrics(self) -> 'list[metrics.Metric]':
         return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro')]
 
-    def get_results_processor_class(self) -> Type[BaseTrainingResults]:
+    @staticmethod
+    def get_results_processor_class() -> Type[BaseTrainingResults]:
         return ClassificationTrainingResults
