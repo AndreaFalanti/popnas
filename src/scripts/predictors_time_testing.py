@@ -4,8 +4,9 @@ import os
 
 import log_service
 from predictors.models import *
+from search_space import SearchSpace
+from utils.config_utils import retrieve_search_config
 from utils.feature_analysis import generate_dataset_correlation_heatmap
-from utils.func_utils import instantiate_search_space_from_logs
 from utils.nn_utils import remove_annoying_tensorflow_messages
 
 remove_annoying_tensorflow_messages()
@@ -33,10 +34,14 @@ def create_logger(name, log_path):
     return log_service.get_logger(name)
 
 
+# TODO: a bit messy and also "hardcodes" the predictors to test, but since it is just a utility external to the main workflow,
+#  it would be a poor time investment to define a sort of grammar and configuration to refine this procedure.
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     args = parser.parse_args()
+
+    run_config = retrieve_search_config(args.p)
 
     log_path = setup_folders(args.p)
     logger = create_logger(__name__, log_path)
@@ -49,15 +54,11 @@ def main():
     nn_y_col = 'training time(seconds)'
     nn_y_domain = (0, math.inf)
 
-    # use them when training on datasets produced from "make_new_time_dataset" script
-    # training_time_csv_path = os.path.join(csv_path, 'new_training_time.csv')
-    # catboost_col_desc_file_path = os.path.join(csv_path, 'new_column_desc_time.csv')
-
     # compute dataset correlation
     generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
-    search_space = instantiate_search_space_from_logs(args.p)
+    search_space = SearchSpace(run_config['search_space'])
 
     predictors_to_test = [
         AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),

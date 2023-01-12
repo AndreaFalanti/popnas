@@ -40,8 +40,8 @@ class Popnas:
         # search strategy parameters
         sstr_config = run_config['search_strategy']
         self.children_max_size = sstr_config['max_children']
-        self.score_metric = sstr_config['score_metric']
-        self.pareto_objectives = [self.score_metric] + sstr_config['additional_pareto_objectives']
+        self.score_metric_name = sstr_config['score_metric']
+        self.pareto_objectives = [self.score_metric_name] + sstr_config['additional_pareto_objectives']
 
         # dataset parameters
         ds_config = run_config['dataset']
@@ -90,17 +90,8 @@ class Popnas:
 
         # create the Network Manager
         self.nn_manager = NetworkBenchManager(ds_config) if benchmarking else \
-            NetworkManager(ds_config, cnn_config, arc_config, self.score_metric, train_strategy,
+            NetworkManager(ds_config, cnn_config, arc_config, self.score_metric_name, train_strategy,
                            others_config['save_children_weights'], others_config['save_children_as_onnx'])
-
-        # create the predictors
-        score_domain = (0, 1)   # TODO: for now it is always [0, 1] interval for each supported metric, should be put in JSON config in the future
-        self.predictors_handler = PredictorsHandler(self.search_space, self.score_metric, score_domain,
-                                                    self.nn_manager.model_gen, train_strategy, self.pnas_mode)
-
-        # set controller step to the correct one (in case of restore is not b=1)
-        controller_b = self.starting_b if self.starting_b > 1 else 1
-        self.controller = ControllerManager(self.search_space, sstr_config, others_config, self.predictors_handler, current_b=controller_b)
 
         # extract targeted network metrics for plot purposes
         results_processor = self.nn_manager.model_gen.get_results_processor_class()
@@ -110,6 +101,17 @@ class Popnas:
         self.predicted_metrics = get_pareto_targeted_metrics(predictable_metrics, self.pareto_objectives)
         # all Pareto objective metrics, included the ones directly computed (no predictors)
         self.pareto_metrics = get_pareto_targeted_metrics(self.targeted_metrics, self.pareto_objectives)
+        # metric used for the score predictor
+        self.score_metric = next(m for m in self.targeted_metrics if m.name == self.score_metric_name)
+
+        # create the predictors
+        score_domain = (0, 1)   # TODO: for now it is always [0, 1] interval for each supported metric, should be put in JSON config in the future
+        self.predictors_handler = PredictorsHandler(self.search_space, self.score_metric, score_domain,
+                                                    self.nn_manager.model_gen, train_strategy, self.pnas_mode)
+
+        # set controller step to the correct one (in case of restore is not b=1)
+        controller_b = self.starting_b if self.starting_b > 1 else 1
+        self.controller = ControllerManager(self.search_space, sstr_config, others_config, self.predictors_handler, current_b=controller_b)
 
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
@@ -167,7 +169,7 @@ class Popnas:
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
         full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
-        score = getattr(train_res, self.score_metric)
+        score = getattr(train_res, self.score_metric_name)
 
         acc_rows = [[score] + self.predictors_handler.generate_cell_score_features(eqv_cell) + [exploration, eqv_cell != full_cell_spec]
                     for eqv_cell in eqv_cells]
@@ -287,7 +289,7 @@ class Popnas:
                 for train_res in training_results:
                     self.write_predictors_training_data(current_blocks, train_res)
 
-            fw.write_overall_cnn_training_results(self.score_metric, current_blocks, training_results)
+            fw.write_overall_cnn_training_results(self.score_metric_name, current_blocks, training_results)
 
             # perform controller training, pareto front estimation and plots building if not at final step
             if current_blocks != self.blocks:

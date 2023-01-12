@@ -7,7 +7,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from utils.feature_utils import metrics_fields_dict
+from models.generators import ClassificationModelGenerator
 from utils.func_utils import parse_cell_structures, cell_spec_to_str, from_seconds_to_hms
 
 
@@ -101,7 +101,9 @@ def get_dataset_name(log_path: str):
 def get_top_accuracies(log_path: str):
     results_df = pd.read_csv(os.path.join(log_path, 'csv', 'training_results.csv'))
 
-    acc_col = metrics_fields_dict['accuracy'].real_column
+    # since it is intended for classification tasks, we can solve it like this
+    accuracy_metric = next(m for m in ClassificationModelGenerator.get_results_processor_class().keras_metrics_considered() if m.name == 'accuracy')
+    acc_col = accuracy_metric.results_csv_column
     best_record = results_df[results_df[acc_col] == results_df[acc_col].max()].to_dict('records')[0]
     top_accuracy = best_record[acc_col]
 

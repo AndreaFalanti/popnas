@@ -2,10 +2,11 @@ import argparse
 import os
 
 import log_service
+from models.generators.factory import get_model_generator_class_for_task
 from predictors.models import *
+from search_space import SearchSpace
+from utils.config_utils import retrieve_search_config
 from utils.feature_analysis import generate_dataset_correlation_heatmap
-from utils.feature_utils import metrics_fields_dict
-from utils.func_utils import instantiate_search_space_from_logs
 from utils.nn_utils import initialize_train_strategy, remove_annoying_tensorflow_messages
 
 remove_annoying_tensorflow_messages()
@@ -33,31 +34,38 @@ def create_logger(name, log_path):
     return log_service.get_logger(name)
 
 
+# TODO: a bit messy and also "hardcodes" the predictors to test, but since it is just a utility external to the main workflow,
+#  it would be a poor time investment to define a sort of grammar and configuration to refine this procedure.
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     args = parser.parse_args()
 
     t_strategy = initialize_train_strategy('GPU')
+    run_config = retrieve_search_config(args.p)
 
     log_path = setup_folders(args.p)
     logger = create_logger(__name__, log_path)
 
-    metric = 'f1_score'
+    search_space = SearchSpace(run_config['search_space'])
+
+    metric = run_config['search_strategy']['score_metric']
+    logger.info('The score metric targeted is: %s', metric)
+    model_gen_class = get_model_generator_class_for_task(run_config['dataset']['type'])
+    keras_metrics = model_gen_class.get_results_processor_class().keras_metrics_considered()
+    score_metric = next(m for m in keras_metrics if m.name == metric)
 
     csv_path = os.path.join(args.p, 'csv')
     amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'regressors_hyperopt.ini')
     training_acc_csv_path = os.path.join(csv_path, 'training_score.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_acc.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')
-    nn_y_col = metrics_fields_dict[metric].real_column
+    nn_y_col = score_metric.results_csv_column
     nn_y_domain = (0, 1)
 
     # compute dataset correlation
     generate_dataset_correlation_heatmap(training_acc_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
-
-    search_space = instantiate_search_space_from_logs(args.p)
 
     predictors_to_test = [
         # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),

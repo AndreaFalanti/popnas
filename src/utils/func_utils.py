@@ -1,5 +1,4 @@
 import functools
-import json
 import operator
 import os
 import re
@@ -116,27 +115,6 @@ def chunks(lst: list, chunks_size: int):
 def alternative_dict_to_string(d: dict):
     ''' Avoids characters that are invalid in some OS filesystem '''
     return f'({",".join([f"{key}={value}" for key, value in d.items()])})'
-
-
-def instantiate_search_space_from_logs(log_folder_path: str):
-    '''
-    Instantiate a SearchSpace instance, using the settings specified in the run configuration saved in a log folder.
-
-    Args:
-        log_folder_path: path to log folder
-
-    Returns:
-        (SearchSpace): the search space instance
-    '''
-    # import must be done here, to avoid circular dependency
-    from search_space import SearchSpace
-
-    run_config_path = os.path.join(log_folder_path, 'restore', 'run.json')
-    with open(run_config_path, 'r') as f:
-        run_config = json.load(f)
-
-    ss_config = run_config['search_space']
-    return SearchSpace(ss_config)
 
 
 def cell_spec_to_str(cell_spec: list):

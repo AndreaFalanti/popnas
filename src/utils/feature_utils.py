@@ -1,34 +1,12 @@
 # Module that contains helper functions for producing some regressor features
 import csv
 import os.path
-from typing import NamedTuple, Optional, Callable
+from typing import Callable
 
 import igraph
 
 from search_space import SearchSpace
 from utils.func_utils import list_flatten, to_list_of_tuples
-
-
-class MetricDfFields(NamedTuple):
-    '''
-    Utility namedtuple for mapping a metric to the respective columns in the csv files produced during POPNAS run,
-    so that is possible to easily access them without typos during plots construction.
-
-    The pred_column is the header used in predictions csv, real_column is the header of the value retrieved after training in training_results.csv,
-    units is just the measurement unit for plot legends and labels.
-     '''
-    pred_column: str
-    real_column: str
-    units: Optional[str] = None
-
-
-metrics_fields_dict = {
-    'time': MetricDfFields('time', 'training time(seconds)', 'seconds'),
-    'accuracy': MetricDfFields('val score', 'best val accuracy'),
-    'params': MetricDfFields('params', 'total params'),
-    'f1_score': MetricDfFields('val score', 'val F1 score'),
-    'm_io_u': MetricDfFields('val score', 'val mean IoU')
-}
 
 
 # region FEATURE_NAMES_AND_FILES_INITIALIZATION
