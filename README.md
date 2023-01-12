@@ -1,5 +1,5 @@
 # POPNASv3
-Third version of Pareto-optimal Progressive Neural Architecture Search (POPNAS) algorithm, a neural architecture search method based on 
+Third version of the Pareto-Optimal Progressive Neural Architecture Search (POPNAS) algorithm, a neural architecture search method based on 
 [PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf), and direct extension
 and improvement of the second version.
 
@@ -7,7 +7,7 @@ POPNASv2 has been developed by Andrea Falanti for his master's thesis at Politec
 published at the IEEE IJCNN 2022.
 The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/document/9892073.
 The second version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
-an average 4x speed-up compared to PNAS on same experiment configurations.
+an average 4x speed-up compared to PNAS on the same experiment configurations.
 The top-accuracy neural network architectures found are competitive with PNAS and other state-of-the-art methods,
 solving the main drawback of the first POPNAS version.
 
@@ -19,13 +19,13 @@ Furthermore, the training procedure now supports multiple hardware environments,
 strategy and even TPU devices.
 Another major contribution is the addition of post-search procedures, namely the _model selection_ and _final training_ steps.
 The model selection trains more extensively the top networks found during the search, tuning also their macro-architecture.
-The final training finalize the process by training to convergence the best configuration found during the model selection,
+The final training finalizes the process by training to convergence the best configuration found during the model selection,
 producing a deployment-ready neural network saved in ONNX format.
 You can read more about the latest version and its experiment results on the preprint available at: https://doi.org/10.48550/arXiv.2212.06735.
 
 ## Installation
-This section provides information for installing all needed software and packages for properly run POPNASv2 on your system. If you prefer, you can
-use the provided Docker container and skip these steps (see Docker section below).
+This section provides information for installing all needed software and packages for properly run POPNASv3 on your system. If you prefer, you can
+use the provided Docker container and skip these steps (see the Docker section below).
 
 ### Required additional software and tools
 Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
@@ -44,7 +44,7 @@ After installing poetry, optionally run on your terminal:
 ```
 poetry config virtualenvs.in-project true
 ```
-to change the virtual environment generation position directly in the project folder, if you prefer so.
+to change the virtual environment generation position directly in the project folder if you prefer so.
 
 To generate the environment, open your terminal inside the repository folder and make sure that the python in use is a compatible version.
 If not, you can install it and activate it through pyenv with these commands:
@@ -70,7 +70,7 @@ _aMLLibrary_ dependencies are handled by Poetry, but the library must be downloa
 git submodule update --init --recursive
 ```
 
-After that you should be able to run POPNASv2 with this command:
+After that you should be able to run POPNASv3 with this command:
 ```
 python run.py
 ```
@@ -81,15 +81,15 @@ Follow https://www.tensorflow.org/install/gpu instructions to set up your device
 to install the exact versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
 
 ## Build Docker container
-In _docker_ folder it's provided a dockerfile to extend an official Tensorflow container with project required pip packages
-and mount POPNAS source code.
+In the _docker_ folder, it is provided a dockerfile to extend an official Tensorflow container with pip packages required by the project
+and finally mounting POPNAS source code.
 
 To build the image, open the terminal into the root folder and execute this command:
 ```
 docker build -f docker/Dockerfile -t andreafalanti/popnas:tf2.7.3 .
 ```
 
-POPNASv2 can then be launched with command (set arguments as you like):
+POPNASv3 can then be launched with command (set arguments as you like):
 ```
 docker run -it --name popnas andreafalanti/popnas:tf2.7.3 python run.py -j configs/run_debug.json
 ```
@@ -107,15 +107,15 @@ The run behaviour can be customized through the usage of custom json files. By d
 inside the _configs_ folder will be used. This file can be used as a template and customized to generate new configurations.
 A properly structured json config file can be used by the algorithm by specifying its path in -j command line arguments.
 
-Here it's presented a list of the configuration sections and fields, with a brief description.
+Here it is presented a list of the configuration sections and fields, with a brief description.
 
 **Search Space**:
-- **blocks**: defines the maximum amount of blocks a cell can contain.
+- **blocks**: defines the maximum number of blocks a cell can contain.
 - **lookback_depth**: maximum lookback depth to use (in absolute value). Lookback inputs are associated to previous cells,
   where _-1_ refers to last generated cell, _-2_ a skip connection to second-to-last cell, etc...
 - **operators**: list of operators that can be used inside each cell. Note that the string format is important,
   since they are recognized by regexes.
-  Actually supported operators, with customizable integer parameters(@) for kernel size and other parameters based on the operation type:
+  The currently supported operators, with customizable integer parameters(@) for kernel size and other parameters based on the operation type, are:
   - identity
   - @x@:@dr dconv (Depthwise-separable convolution)
   - @x@-@x@:@dr conv (Stacked convolutions)
@@ -133,9 +133,9 @@ Here it's presented a list of the configuration sections and fields, with a brie
   For time series (1D inputs), specify the kernel size as @ instead of @x@, since the kernel size is mono dimensional.
 
 **Search strategy**:
-- **max_children**: defines the maximum amount of cells the algorithm can train in each iteration
+- **max_children**: defines the maximum number of cells the algorithm can train in each iteration
   (except the first step, which trains all possible cells).
-- **max_exploration_children**: defines the maximum amount of cells the algorithm can train in the exploration step.
+- **max_exploration_children**: defines the maximum number of cells the algorithm can train in the exploration step.
 - **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
   Currently supported: [accuracy, f1_score].
 - **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
@@ -151,7 +151,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **drop_path_prob**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
   then _scheduled drop path_ is not used.
 - **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
-  - **enabled**: if _true_ use cosine decay restart schedule, _false_ instead for using a cosine decay schedule.
+  - **enabled**: if _true_ use cosine decay restart schedule, _false_ instead of using a cosine decay schedule.
   - **period_in_epochs**: first decay period in epochs, changes at each period based on _m_mul_ value.
   - **[t_mul, m_mul, alpha]**:
     see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts).
@@ -206,8 +206,8 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **classes_count**: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
 - **batch_size**: defines the batch size dimension of the dataset.
 - **inference_batch_size**: defines the batch size dimension for benchmarking the inference time of a network.
-- **validation_size**: fraction of the total samples to use for validation set, e.g. _0.1_ value means that 10% of the
-  training samples will be reserved for the validation dataset. Can be _null_ for TFDS dataset which have already
+- **validation_size**: fraction of the total samples to use for the validation set, e.g. _0.1_ value means that 10% of the
+  training samples will be reserved for the validation dataset. Can be _null_ for TFDS dataset which have
   a separated validation set, for using it instead of partitioning the training set.
 - **cache**: if _true_, the dataset will be cached in memory, increasing the training performance.
   Strongly advised for small datasets.
@@ -238,7 +238,7 @@ Here it's presented a list of the configuration sections and fields, with a brie
 
 **Others**:
 - **accuracy_predictor_ensemble_units**: defines the number of models used in the accuracy predictor (ensemble).
-- **predictions_batch_size**: defines the batch size used when performing both time and accuracy predictions in controller
+- **predictions_batch_size**: defines the batch size used when performing both time and accuracy predictions in the controller
   update step (predictions about cell expansions for blocks b+1). Incrementing it should decrease the prediction time
   linearly, up to a certain point, defined by hardware resources used.
 - **save_children_weights**: if _true_, best weights of each child neural network are saved in log folder.
@@ -246,12 +246,12 @@ Here it's presented a list of the configuration sections and fields, with a brie
 - **pnas_mode**: if _true_, the algorithm will not use most of the improvements introduced by POPNAS, mainly the
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
 - **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
-  Currently supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
+  Currently, it supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
 
 
 ## Output folder structure
-Each run produce a single output folder, which contains all the files related to the run results.
-Some files are generated only if the related configuration flag is set to true, refer to JSON configuration file.
+Each run produces a single output folder, which contains all the files related to the run results.
+Some files are generated only if the related configuration flag is set to true, refer to the JSON configuration file.
 
 The files are organized in different subfolders:
 - **best_model**: contains the checkpoint of the best model found during the search process.
@@ -268,12 +268,12 @@ This script can be used to extensively train the best architectures found during
 It uses a configuration file (by default _model_selection_training.json_), which is a subset of the search algorithm JSON file and its properties
 override the ones used during search.
 
-If _params_ flag is set, the script performs also a pseudo-grid-search to tune the macro architectures of the selected cells, to generate additional
+If the _params_ flag is set, the script also performs a pseudo-grid-search to tune the macro architectures of the selected cells, to generate additional
 architectures to train which satisfy the provided parameters range (e.g. "2.5e6;3.5e6", must be semicolon separated).
 
-Models and training procedure is slightly altered compared to search time: each model uses a secondary exit on the cell placed at 2/3 of total
+Models and training procedure are slightly altered compared to search time: each model uses a secondary exit on the cell placed at 2/3 of total
 model length, plus label smoothing is forced in loss. If using the default config, scheduled drop path and cutout are also forced to improve
-the generalization during the extended amount of epochs.
+the generalization during the extended number of epochs.
 
 The script can be launched with the following command:
 ```
@@ -282,18 +282,18 @@ python scripts/model_selection_training.py -p {path_to_log_folder} -j {path_to_c
 
 ### Last training script
 This script is designed for training the best architecture found during the model selection, posterior to the NAS run.
-It use a configuration file (by default _last_training.json_), which is a subset of the search algorithm JSON file and its properties
+It uses a configuration file (by default _last_training.json_), which is a subset of the search algorithm JSON file and its properties
 override the ones used during search.
 
 The model and training procedure are tweaked as done during model selection, but in this case the model is training on both
-the training and validation data, without reserving a validation set. It is important to check that the model generalize well during 
-the model selection phase, to not incur in overfitting.
+the training and validation data, without reserving a validation set.
+It is important to check that the model generalizes well during the model selection phase, to not incur in overfitting.
 
 Here, multiple command line arguments must be provided, to build the exact model without altering the configuration file:
 - **-b**, the desired batch size
 - **-f**, the model starting filters
-- **-m**, the amount of motifs used in the model
-- **-n**, the amount of normal cells to stack per motif
+- **-m**, the number of motifs used in the model
+- **-n**, the number of normal cells to stack per motif
 - **-spec**, the cell specification, in format "[(block0);(block1);...]"
 
 The script can be launched with the following command (change parameters accordingly):
@@ -339,7 +339,7 @@ python ./scripts/plot_slideshow.py -p {path_to_log_folder}
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
-If **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
+If the **--save** flag is specified, it will instead save all slides into 'plot_slides' folder, inside the log folder provided as -p argument.
 
 If regressor_testing and/or controller_testing scripts have been run on data contained in selected log folder,
 their plots will be appended in additional slides.
@@ -351,7 +351,8 @@ neural networks sampled during the search process, run the command:
 ```
 tensorboard --logdir {path_to_log_folder}/tensorboard_cnn
 ```
-In each tensorboard folder it's also present the model summary as txt file, to have a quick and simple overview of its structure.
+In each tensorboard folder, there are also some additional files like the model summary and schema,
+to have a quick overview of its structure.
 
 
 ### NAS-Bench-201
