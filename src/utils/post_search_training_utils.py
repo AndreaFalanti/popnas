@@ -16,6 +16,7 @@ import log_service
 from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
 from models.results.base import TargetMetric, get_best_metric_and_epoch_index
+from utils.config_utils import retrieve_search_config
 from utils.func_utils import create_empty_folder, parse_cell_structures, from_seconds_to_hms
 from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution
 from utils.rstr import rstr
@@ -128,8 +129,7 @@ def log_training_results_dict(logger: logging.Logger, results_dict: 'dict[str, d
 
 def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str):
     # run configuration used during search. Dataset config is extracted from this.
-    with open(os.path.join(run_path, 'restore', 'run.json'), 'r') as f:
-        search_config = json.load(f)  # type: dict
+    search_config = retrieve_search_config(run_path)
     # read hyperparameters to use for model selection
     with open(custom_json_path, 'r') as f:
         config = json.load(f)  # type: dict

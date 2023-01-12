@@ -57,3 +57,9 @@ def initialize_search_config_and_logs(log_folder_name: str, json_config_path: st
             json.dump(run_config, f, indent=4)
 
     return run_config
+
+
+def retrieve_search_config(log_folder_path: str) -> 'dict[str, dict[str, Any]]':
+    run_config_path = os.path.join(log_folder_path, 'restore', 'run.json')
+    with open(run_config_path, 'r') as f:
+        return json.load(f)

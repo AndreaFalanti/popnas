@@ -1,5 +1,4 @@
 import argparse
-import json
 import math
 import os
 import shutil
@@ -9,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
+from utils.config_utils import retrieve_search_config
 from utils.func_utils import clamp, chunks
 
 
@@ -119,9 +119,7 @@ def execute(p: str, save: bool = False):
     gen_paths = path_closure(p)
     gen_save_path = generate_slide_save_path(p) if save else iter(())
 
-    with open(os.path.join(p, 'restore', 'run.json')) as f:
-        run_config = json.load(f)
-
+    run_config = retrieve_search_config(p)
     sstr_config = run_config['search_strategy']
     score_metric = sstr_config['score_metric']
 
