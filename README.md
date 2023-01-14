@@ -30,6 +30,7 @@ use the provided Docker container and skip these steps (see the Docker section b
 ### Required additional software and tools
 Virtual environment and dependencies are managed by _poetry_, check out its [repository](https://github.com/python-poetry/poetry)
 for installing it on your machine and learning more about it.
+Version >= 1.2.0 is required.
 
 You need either python version 3.7 or 3.8 installed in your system for building a valid environment (python versions > 3.8 could work,
 but they have not been officially tested).

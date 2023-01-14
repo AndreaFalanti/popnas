@@ -4,10 +4,11 @@ version = "3.1.0"
 description = "POPNAS algorithm"
 authors = ["AndreaFalanti <a.falanti@gmail.com>"]
 license = "Apache-2.0"
+keywords = ["autoML", "NAS", "neural architecture search", "machine learning", "deep learning", "tensorflow"]
 
 [tool.poetry.dependencies]
 # tested on 3.7.4 on windows, docker use 3.8.10
-python = ">=3.7.0, <3.9.0"
+python = ">=3.7.2, <3.9.0"
 tensorflow = "2.7.3"
 scikit-learn = "1.0.1"
 pandas = "1.1.5"
@@ -43,12 +44,12 @@ py4j = "0.10.9.5"
 future = "0.18.2"
 
 [tool.poetry.dev-dependencies]
-autopep8 = "*"
-pylint = "*"
-flake8 = "*"
+autopep8 = "2.0.0"
+pylint = "2.15.10"
+flake8 = "5.0.4"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.2.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.autopep8]
