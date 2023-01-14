@@ -1,3 +1,15 @@
+FROM python:3.8 as poetry-build
+
+ENV POETRY_VERSION=1.3.2
+
+WORKDIR /poetry
+COPY poetry.lock pyproject.toml /poetry/
+
+# install poetry and generate the requirements.txt from the lock file
+RUN pip install poetry==${POETRY_VERSION}
+RUN poetry export --without-hashes --no-interaction --no-ansi -o requirements.txt
+
+
 FROM tensorflow/tensorflow:2.7.3-gpu
 
 ENV PYTHONFAULTHANDLER=1 \
@@ -13,20 +25,17 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC
 # Install needed system dependencies
 RUN apt update && apt install graphviz nano -y
 
-# Install poetry (v1.0.0 produce a smaller docker image, without detectable drawbacks. Watch out for potential problems)
-RUN pip install --ignore-installed "poetry==1.0.0"
+# Upgrade pip
+RUN pip install --upgrade pip==22.3.1
 
 # Copy only requirements to cache them in docker layer
 WORKDIR /exp
-COPY poetry.lock pyproject.toml /exp/
+COPY --from=poetry-build /poetry/requirements.txt /exp/
 
-# Install the dependencies without creating a virtual environment
-RUN poetry config virtualenvs.create false \
-  && poetry install --no-dev
-#RUN poetry export --dev --without-hashes --no-interaction --no-ansi -f requirements.txt -o requirements.txt
-#RUN pip install --prefix=/runtime --force-reinstall -r requirements.txt
+# Install the dependencies without creating a virtual environment (use system python env)
+RUN pip install -r requirements.txt
 
-# Copying src folder into /exp (source code for executing POPNASv2)
+# Copying src folder into /exp (source code for executing POPNAS)
 COPY src/ .
 
 # solve import problems with scripts and add specific folder for tfds mounts
