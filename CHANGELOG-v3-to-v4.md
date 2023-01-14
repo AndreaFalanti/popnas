@@ -20,3 +20,7 @@ A huge refactor of the whole repository structure, to make the algorithm more fl
   have been added to this release since they are incomplete, but they were a nice way of testing if the new hierarchies are flexible enough :).
 - Move most file writing functions to the new file_writer module.
 - Set up aMLLibrary as an external dependency managed through git submodules, and update it to the latest public version.
+
+### v3.1.1
+
+Update the Poetry lock file to the latest version (Poetry >= 1.2.0 is required to read it), fix the dependencies and the docker image generation.
