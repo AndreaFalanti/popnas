@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
+from tensorflow.keras import Sequential
 from tensorflow.keras import layers
-from tensorflow.python.keras import Sequential
 
 SEED = 1234
 

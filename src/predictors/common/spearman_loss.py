@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from scipy.stats import spearmanr
 from tensorflow.keras.losses import Loss, MeanSquaredError
-from tensorflow.python.keras.utils import losses_utils
+from tensorflow.keras.losses import Reduction
 
 
 @tf.function
@@ -64,7 +64,7 @@ class MSEWithSpearman(Loss):
 
     ''' Mean squared error loss, rescaled with a factor based on the spearman correlation coefficient computed on the batch. '''
 
-    def __init__(self, spearman_weight: float = 1.0, reduction=losses_utils.ReductionV2.AUTO, name=None):
+    def __init__(self, spearman_weight: float = 1.0, reduction=Reduction.AUTO, name=None):
         super().__init__(reduction, name)
         self.spearman_weight = spearman_weight
 
