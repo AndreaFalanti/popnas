@@ -7,7 +7,7 @@ from typing import Optional, Iterator
 
 import tensorflow as tf
 from tensorflow.keras import callbacks
-from tensorflow.python.keras.utils.vis_utils import plot_model
+from tensorflow.keras.utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
