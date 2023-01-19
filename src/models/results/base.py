@@ -8,7 +8,7 @@ from typing import Iterable, Callable, NamedTuple, Optional, TypeVar, Any
 from typing_extensions import Protocol
 
 import log_service
-from utils.func_utils import cell_spec_to_str
+from search_space import CellSpecification
 
 T = TypeVar("T")
 
@@ -85,7 +85,7 @@ def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal:
     return multi_output_scores
 
 
-def write_multi_output_results_to_csv(file_path: str, cell_spec: list, histories: 'list[dict[str, list]]',
+def write_multi_output_results_to_csv(file_path: str, cell_spec: CellSpecification, histories: 'list[dict[str, list]]',
                                       metrics: 'list[TargetMetric]', csv_headers: 'list[str]'):
     outputs_dict = {}
     for m in metrics:
@@ -101,7 +101,7 @@ def write_multi_output_results_to_csv(file_path: str, cell_spec: list, histories
         outputs_dict = {**outputs_dict, **{k: v for k, v in zip(metric_names, metric_values_mean)}}
 
     # add cell spec to dictionary and write it into the csv
-    outputs_dict['cell_spec'] = cell_spec_to_str(cell_spec)
+    outputs_dict['cell_spec'] = str(cell_spec)
 
     with open(file_path, mode='a+', newline='') as f:
         # append mode, so if file handler is in position 0 it means is empty. In this case, write the headers too.
@@ -116,7 +116,7 @@ def write_multi_output_results_to_csv(file_path: str, cell_spec: list, histories
 class BaseTrainingResults(ABC):
     ''' Utility class for passing the training results of a networks, together with other interesting network characteristics. '''
 
-    def __init__(self, cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int) -> None:
+    def __init__(self, cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int) -> None:
         self.cell_spec = cell_spec
         self.training_time = training_time
         self.inference_time = inference_time
@@ -128,7 +128,7 @@ class BaseTrainingResults(ABC):
 
     @staticmethod
     @abstractmethod
-    def from_training_histories(cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int,
+    def from_training_histories(cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int,
                                 histories: 'list[dict[str, list]]', multi_output: bool) -> 'BaseTrainingResults':
         '''
         Instantiate the training results from the histories obtained after multiple training sessions
@@ -165,7 +165,7 @@ class BaseTrainingResults(ABC):
     @classmethod
     def predictable_metrics_considered(cls) -> 'list[TargetMetric]':
         ''' Return the TargetMetric objects which can be targeted by predictors
-         (metrics not directly computable and potential Pareto optimation targets). '''
+         (metrics not directly computable and potential Pareto optimization targets). '''
         return [m for m in cls.all_metrics_considered() if m.prediction_csv_column]
 
     @classmethod
@@ -175,7 +175,7 @@ class BaseTrainingResults(ABC):
     @abstractmethod
     def to_csv_list(self) -> list:
         ''' Return a list with fields ordered for csv insertion. '''
-        return [self.training_time, self.inference_time, self.params, self.flops, self.blocks, cell_spec_to_str(self.cell_spec)]
+        return [self.training_time, self.inference_time, self.params, self.flops, self.blocks, str(self.cell_spec)]
 
     @abstractmethod
     def log_results(self):

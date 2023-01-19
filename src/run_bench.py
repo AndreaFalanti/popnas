@@ -9,8 +9,9 @@ import pandas as pd
 import log_service
 from benchmarking import NATSbench
 from popnas import Popnas
+from search_space import CellSpecification
 from utils.config_utils import validate_config_json
-from utils.func_utils import create_empty_folder, parse_cell_structures
+from utils.func_utils import create_empty_folder
 from utils.nn_utils import initialize_train_strategy
 from utils.rstr import rstr
 
@@ -95,8 +96,8 @@ def get_best_cell_spec(log_folder_path: str, metric: str = 'best val accuracy'):
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
     best_acc_row = df.loc[df[metric].idxmax()]
+    cell_spec = CellSpecification.from_str(best_acc_row['cell structure'])
 
-    cell_spec = parse_cell_structures([best_acc_row['cell structure']])[0]
     return cell_spec, best_acc_row[metric]
 
 

@@ -6,7 +6,7 @@ from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
 from models.results import BaseTrainingResults, SegmentationTrainingResults
-from utils.func_utils import list_flatten
+from search_space import CellSpecification
 
 
 class SegmentationModelGenerator(BaseModelGenerator):
@@ -21,8 +21,8 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
         return encoder_cells + decoder_cells
 
-    def get_real_cell_depth(self, cell_spec: list):
-        used_lookbacks = set(filter(lambda el: el < 0, list_flatten(cell_spec)[::2]))
+    def get_real_cell_depth(self, cell_spec: CellSpecification):
+        used_lookbacks = set(filter(lambda el: el < 0, cell_spec.inputs()))
 
         if -1 in used_lookbacks:
             return self.get_maximum_cells()
@@ -35,14 +35,14 @@ class SegmentationModelGenerator(BaseModelGenerator):
             # additional info regarding the cell stack
             return len([index for index in architecture_indexes if index != -1])
 
-    def _generate_network_info(self, cell_spec: 'list[tuple]', use_stem: bool) -> NetworkBuildInfo:
+    def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         # it's a list of tuples, so already grouped by 4
         blocks = len(cell_spec)
 
-        flat_cell_spec = list_flatten(cell_spec)
+        cell_inputs = cell_spec.inputs()
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_block_outputs = set(filter(lambda el: el >= 0, flat_cell_spec[::2]))
-        used_lookbacks = set(filter(lambda el: el < 0, flat_cell_spec[::2]))
+        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
+        used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))
         unused_block_outputs = [x for x in range(0, blocks) if x not in used_block_outputs]
         use_skip = used_lookbacks.issuperset({-2})
 
@@ -104,7 +104,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Pointwise_Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
+    def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         # stores the final cell's output of each U-net structure "level", the ones used in the skip connections.
         level_outputs = []
 

@@ -2,7 +2,7 @@ import nats_bench
 
 import log_service
 from models.results import ClassificationTrainingResults
-from utils.func_utils import list_flatten
+from search_space import CellSpecification
 from utils.rstr import rstr
 
 
@@ -30,17 +30,16 @@ class NATSbench:
             '3x3 avgpool': 'avg_pool_3x3'
         }
 
-    def map_cell_spec_to_nas_bench_201(self, cell_spec: list):
+    def map_cell_spec_to_nas_bench_201(self, cell_spec: CellSpecification):
         # empty cell case, make it a sort of identity cell
         # it's not the same of POPNAS, since here it would be a network with stem and residuals as reduction cells,
         # still it encapsulates common architectural elements and should be valuable for predictors.
-        if cell_spec == []:
+        if cell_spec.is_empty_cell():
             return f'|skip_connect~0|+|none~0|none~1|+|none~0|skip_connect~1|none~2|'
 
         cell_blocks = len(cell_spec)
-        flat_cell_spec = list_flatten(cell_spec)
-        cell_inputs = flat_cell_spec[::2]
-        cell_ops = flat_cell_spec[1::2]
+        cell_inputs = cell_spec.inputs()
+        cell_ops = cell_spec.operators()
 
         nas_bench_ops = [self.op_conversion_map[op] for op in cell_ops]
 
@@ -63,7 +62,7 @@ class NATSbench:
 
         return f'|{op01}~0|+|{op02}~0|{op12}~1|+|{op03}~0|{op13}~1|{op23}~2|'
 
-    def simulate_training_on_nas_bench_201(self, cell_spec: list, dataset_name: str, hp: str = 12):
+    def simulate_training_on_nas_bench_201(self, cell_spec: CellSpecification, dataset_name: str, hp: str = 12):
         architecture_spec = self.map_cell_spec_to_nas_bench_201(cell_spec)
         arch_index = self.api.query_index_by_arch(architecture_spec)
         self._logger.info('The sampled architecture is: %s -> %s', rstr(cell_spec), architecture_spec)
@@ -80,7 +79,7 @@ class NATSbench:
 
         return ClassificationTrainingResults(cell_spec, time_cost, latency, cost_info['params'], cost_info['flops'], validation_accuracy, 0)
 
-    def simulate_testing_on_nas_bench_201(self, cell_spec: list, dataset_name: str):
+    def simulate_testing_on_nas_bench_201(self, cell_spec: CellSpecification, dataset_name: str):
         architecture_spec = self.map_cell_spec_to_nas_bench_201(cell_spec)
         arch_index = self.api.query_index_by_arch(architecture_spec)
         self._logger.info('The sampled architecture is: %s -> %s', rstr(cell_spec), architecture_spec)

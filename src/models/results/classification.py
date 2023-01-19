@@ -1,8 +1,9 @@
+from search_space import CellSpecification
 from .base import BaseTrainingResults, TargetMetric, extract_metric_from_train_histories
 
 
 class ClassificationTrainingResults(BaseTrainingResults):
-    def __init__(self, cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int,
+    def __init__(self, cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int,
                  accuracy: float, f1_score: float) -> None:
         super().__init__(cell_spec, training_time, inference_time, params, flops)
 
@@ -10,7 +11,7 @@ class ClassificationTrainingResults(BaseTrainingResults):
         self.f1_score = f1_score
 
     @staticmethod
-    def from_training_histories(cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int,
+    def from_training_histories(cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int,
                                 histories: 'list[dict[str, list]]', multi_output: bool) -> BaseTrainingResults:
         accuracy = extract_metric_from_train_histories(histories, 'accuracy', max, multi_output)
         f1_score = extract_metric_from_train_histories(histories, 'f1_score', max, multi_output)

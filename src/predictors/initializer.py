@@ -4,7 +4,7 @@ import log_service
 from models.generators import BaseModelGenerator
 from models.results.base import TargetMetric
 from predictors.models import *
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification
 from utils.feature_utils import generate_acc_features, generate_time_features
 
 
@@ -56,13 +56,13 @@ class PredictorsHandler:
     def get_time_predictor(self, b: int):
         return self._time_predictor
 
-    def generate_cell_score_features(self, cell_spec: 'list[tuple]'):
+    def generate_cell_score_features(self, cell_spec: CellSpecification):
         return generate_acc_features(cell_spec, self._search_space, self._model_gen.get_real_cell_depth)
 
-    def generate_cell_time_features(self, cell_spec: 'list[tuple]'):
+    def generate_cell_time_features(self, cell_spec: CellSpecification):
         return generate_time_features(cell_spec, self._search_space, self._model_gen.get_real_cell_depth)
 
     # since it has the reference to the model generator, it's nice to expose the graph generation for agents
     # that need to consider extra constraints, like the params.
-    def get_architecture_dag(self, cell_spec: 'list[tuple]'):
+    def get_architecture_dag(self, cell_spec: CellSpecification):
         return self._model_gen.graph_gen.generate_network_graph(cell_spec)

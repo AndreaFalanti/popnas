@@ -1,5 +1,6 @@
 import benchmarking
 import log_service
+from search_space import CellSpecification
 
 
 class GraphProxy:
@@ -18,7 +19,7 @@ class GraphGeneratorProxy:
         super().__init__()
         self.bench = bench
 
-    def generate_network_graph(self, cell_spec: list):
+    def generate_network_graph(self, cell_spec: CellSpecification):
         arch = self.bench.map_cell_spec_to_nas_bench_201(cell_spec)
         arch_index = self.bench.api.query_index_by_arch(arch)
         return GraphProxy(self.bench, arch_index)
@@ -54,7 +55,7 @@ class NetworkBenchManager:
         '''
         pass
 
-    def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
+    def perform_proxy_training(self, cell_spec: CellSpecification, save_best_model: bool = False):
         '''
         Queries the results of the specified network from the NAS bench, simulating the proxy training.
         '''

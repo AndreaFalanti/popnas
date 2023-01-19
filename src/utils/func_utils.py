@@ -1,7 +1,6 @@
 import functools
 import operator
 import os
-import re
 import shutil
 from configparser import ConfigParser
 from typing import Iterable
@@ -51,38 +50,6 @@ def compute_mape(y_true: Iterable[float], y_pred: Iterable[float]):
     return mean_absolute_percentage_error(y_true, y_pred) * 100
 
 
-def parse_cell_structures(cell_structures: Iterable):
-    '''
-    Function used to parse in an actual python structure the csv field storing the non-encoded cell structure, which is saved in form:
-    "[(in1,op1,in2,op2);(...);...]"
-    Args:
-        cell_structures:
-
-    Returns:
-        (list[list]): list of lists of tuples, a list of tuples for each cell parsed
-
-    '''
-    # remove set of chars { []()'" } for easier parsing
-    cell_structures = list(map(lambda cell_str: re.sub(r'[\[\]\'\"()]', '', cell_str), cell_structures))
-    # parse cell structure into multiple strings, each one representing a tuple
-    list_of_tuple_str_lists = list(map(lambda cs: cs.split(';'), cell_structures))
-
-    # parse tuple structure (trim round brackets and split by ,)
-    str_cell_specs = [list(tuple(map(lambda str_tuple: tuple(str_tuple.split(', ')), tuple_str_list)))
-                      for tuple_str_list in list_of_tuple_str_lists]
-
-    # fix cell structure having inputs as str type instead of int
-    adjusted_cells = []
-    for cell in str_cell_specs:
-        # initial thrust case, empty cell
-        if cell == [('',)]:
-            adjusted_cells.append([])
-        else:
-            adjusted_cells.append([(int(in1), op1, int(in2), op2) for in1, op1, in2, op2 in cell])
-
-    return adjusted_cells
-
-
 def strip_unused_amllibrary_config_sections(config: ConfigParser, techniques: list):
     for section in config.sections():
         if section in ['General', 'DataPreparation']:
@@ -115,10 +82,6 @@ def chunks(lst: list, chunks_size: int):
 def alternative_dict_to_string(d: dict):
     ''' Avoids characters that are invalid in some OS filesystem '''
     return f'({",".join([f"{key}={value}" for key, value in d.items()])})'
-
-
-def cell_spec_to_str(cell_spec: list):
-    return f"[{';'.join(map(str, cell_spec))}]"
 
 
 def prod(it: Iterable):

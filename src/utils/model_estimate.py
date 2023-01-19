@@ -1,17 +1,17 @@
-class ModelEstimate:
-    '''
-    Helper class, basically a struct with a function to convert into array for csv saving
-    '''
+from search_space import CellSpecification
 
-    def __init__(self, cell_spec: list, score: float, time: float = None, params: int = None):
+
+class ModelEstimate:
+    ''' Helper class, basically a struct with a function to convert into an array for csv saving. '''
+
+    def __init__(self, cell_spec: CellSpecification, score: float, time: float = None, params: int = None):
         self.cell_spec = cell_spec
         self.score = score
         self.time = time
         self.params = params
 
     def to_csv_array(self):
-        cell_structure = f"[{';'.join(map(lambda el: str(el), self.cell_spec))}]"
-        return [self.time, self.score, self.params, cell_structure]
+        return [self.time, self.score, self.params, str(self.cell_spec)]
 
     def is_dominated_by(self, other: 'ModelEstimate'):
         ''' Check if this point is dominated by another one provided as argument (regarding Pareto optimality). '''

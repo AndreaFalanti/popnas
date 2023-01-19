@@ -1,9 +1,91 @@
 import itertools
-from typing import Any, Callable, Generator, Sequence
+import logging
+import re
+from typing import Any, Callable, Generator, Sequence, NamedTuple, Iterable
 
 import log_service
 from utils.func_utils import list_flatten
 from utils.rstr import rstr
+
+
+class BlockSpecification(NamedTuple):
+    '''
+    Utility class for specifying blocks in a standard format.
+
+    In plain blocks (no encoding), inputs have *int* type, and operators have *str* type.
+    When encoded, they can assume any type.
+    '''
+    in1: Any
+    op1: Any
+    in2: Any
+    op2: Any
+
+    @staticmethod
+    def from_str(block_str: str):
+        in1, op1, in2, op2 = block_str.split(', ')
+        return BlockSpecification(int(in1), op1, int(in2), op2)
+
+    def __str__(self) -> str:
+        return f"({', '.join(map(str, self))})"
+
+
+class CellSpecification:
+    '''
+    Utility class for specifying cells in a standard format.
+    It basically wraps a list of BlockSpecification and exposes some python dunder methods to be used
+    like a Sequence[BlockSpecification], plus other utilities.
+    '''
+    def __init__(self, data: Iterable[BlockSpecification] = None) -> None:
+        self._data = [] if data is None else list(data)
+        self._flat_data = list_flatten(self._data)
+
+    def __getitem__(self, index: int) -> BlockSpecification:
+        return self._data.__getitem__(index)
+
+    def __len__(self) -> int:
+        # avoids potential fictitious blocks (None, None, None, None)
+        # TODO: i think fictitious blocks are associate to functions not important for the algorithm, maybe it's possible to get rid of them.
+        return len([block for block in self._data if block != (None, None, None, None)])
+
+    def __add__(self, x: 'list[BlockSpecification]') -> 'CellSpecification':
+        return CellSpecification(self._data + x)
+
+    def __str__(self) -> str:
+        return f"[{';'.join(map(str, self))}]"
+
+    def to_flat_list(self) -> list:
+        return self._flat_data
+
+    def pretty_logging(self, logger: logging.Logger):
+        ''' Print the cell specification space properly '''
+        logger.info('Cell specification:')
+        for i, block in enumerate(self._data):
+            logger.info("\tBlock %d: %s", i + 1, block)
+
+    def inputs(self) -> list:
+        return self._flat_data[::2]
+
+    def operators(self) -> list:
+        return self._flat_data[1::2]
+
+    @staticmethod
+    def from_str(cell_str: str) -> 'CellSpecification':
+        # empty cell case
+        if cell_str == '[]':
+            return CellSpecification()
+
+        cell_str = re.sub(r'[\[\]\'\"()]', '', cell_str)
+        return CellSpecification([BlockSpecification.from_str(tuple_str) for tuple_str in cell_str.split(';')])
+
+    def is_empty_cell(self):
+        return len(self._data) == 0
+
+    def is_specular_monoblock(self):
+        if len(self._data) != 1:
+            return False
+
+        block = self._data[0]
+        return block.in1 == block.in2 and block.op1 == block.op2 and block.in1 == -1
 
 
 class SearchSpace:
@@ -34,9 +116,8 @@ class SearchSpace:
         self._logger = log_service.get_logger(__name__)
         self.benchmarking = benchmarking
 
-        self.children = []
-        self.intermediate_children = []
-        self.exploration_front = []
+        self.children = []  # type: list[CellSpecification]
+        self.exploration_front = []  # type: list[CellSpecification]
 
         self.input_encoders = {}  # type: dict[str, Encoder]
         self.operator_encoders = {}  # type: dict[str, Encoder]
@@ -82,7 +163,7 @@ class SearchSpace:
         assert fn is not None
         self.operator_encoders[name] = Encoder(name, values=self.operator_values, fn=fn)
 
-    def decode_cell_spec(self, encoded_cell: 'list[tuple]', input_enc_name='cat', op_enc_name='cat') -> 'list[tuple]':
+    def decode_cell_spec(self, encoded_cell: CellSpecification, input_enc_name='cat', op_enc_name='cat') -> CellSpecification:
         '''
         Decodes an encoded cell specification.
 
@@ -98,11 +179,12 @@ class SearchSpace:
         decode_i = self.input_encoders[input_enc_name].decode
         decode_o = self.operator_encoders[op_enc_name].decode
 
-        return [(decode_i(in1), decode_o(op1), decode_i(in2), decode_o(op2)) for in1, op1, in2, op2 in encoded_cell]
+        return CellSpecification([BlockSpecification(decode_i(in1), decode_o(op1), decode_i(in2), decode_o(op2))
+                                  for in1, op1, in2, op2 in encoded_cell])
 
-    def encode_cell_spec(self, cell_spec: 'list[tuple]', input_enc_name='cat', op_enc_name='cat', flatten: bool = True) -> list:
+    def encode_cell_spec(self, cell_spec: CellSpecification, input_enc_name='cat', op_enc_name='cat') -> CellSpecification:
         '''
-        Perform encoding for all blocks in a cell
+        Perform encoding for all blocks in a cell.
 
         Args:
             cell_spec: plain cell specification
@@ -117,8 +199,8 @@ class SearchSpace:
         encode_i = self.input_encoders[input_enc_name].encode
         encode_o = self.operator_encoders[op_enc_name].encode
 
-        encoded_cell = [(encode_i(in1), encode_o(op1), encode_i(in2), encode_o(op2)) for in1, op1, in2, op2 in cell_spec]
-        return list_flatten(encoded_cell) if flatten else encoded_cell
+        return CellSpecification([BlockSpecification(encode_i(in1), encode_o(op1), encode_i(in2), encode_o(op2))
+                                  for in1, op1, in2, op2 in cell_spec])
 
     def __compute_non_specular_expansions_count(self, valid_inputs: list):
         '''
@@ -150,7 +232,7 @@ class SearchSpace:
         self._logger.info("Obtaining search space for b = 1")
         self._logger.info("Search space size : %d", self.__compute_non_specular_expansions_count(lb_inputs))
 
-        self.children = list(self.__construct_new_blocks_permutations(lb_inputs))
+        self.children = [CellSpecification([block]) for block in self.__construct_new_blocks_permutations(lb_inputs)]
 
     def perform_children_expansion(self, curr_b: int, use_exploration_front: bool = True):
         '''
@@ -182,17 +264,17 @@ class SearchSpace:
         if self.benchmarking:
             new_blocks = [block for block in new_blocks for in1, _, in2, _ in block if not (in1 == 0 and in2 == 0)]
 
-        def generate_models():
+        def generate_models() -> Generator[CellSpecification, None, None]:
             '''
             The generator produces also models with equivalent cells.
             '''
             for child in self.children:
-                for permutation in new_blocks:
-                    yield child + permutation  # list concat
+                for block in new_blocks:
+                    yield child + [block]  # list concat
 
         return generate_models
 
-    def __construct_new_blocks_permutations(self, allowed_inputs: Sequence) -> 'Generator[list[tuple]]':
+    def __construct_new_blocks_permutations(self, allowed_inputs: Sequence) -> Generator[BlockSpecification, None, None]:
         '''
         Build a generator which returns all blocks which can be built from provided inputs and operators.
         Equivalent blocks (example: [-2, A, -1, A] and [-1, A, -2, A]) are excluded from the search space.
@@ -208,12 +290,11 @@ class SearchSpace:
                     if in2 >= in1:  # added to avoid repeated permutations (equivalent blocks)
                         for op2 in ops:
                             if in2 != in1 or op2 >= op1:  # added to avoid repeated permutations (equivalent blocks)
-                                yield [(in1, op_enc.decode(op1), in2, op_enc.decode(op2))]
+                                yield BlockSpecification(in1, op_enc.decode(op1), in2, op_enc.decode(op2))
 
-    def generate_eqv_cells(self, cell_spec: list, size: int = None):
-        cell_inputs = list_flatten(cell_spec)[::2]
+    def generate_eqv_cells(self, cell_spec: CellSpecification, size: int = None):
         # that is basically the 'fixed blocks' index list
-        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
+        used_block_outputs = set(filter(lambda el: el >= 0, cell_spec.inputs()))
 
         # a block is swappable (can change position inside the cell) if its output is not used by other blocks
         swappable_blocks_mask = [(i not in used_block_outputs) for i in range(len(cell_spec))]
@@ -223,20 +304,20 @@ class SearchSpace:
         if size is not None:
             assert size - len(cell_spec) >= 0
             for _ in range(size - len(cell_spec)):
-                swappable_blocks.append((None, None, None, None))
+                swappable_blocks.append(BlockSpecification(None, None, None, None))
 
         # generate all possible permutations of the swappable blocks
         eqv_swap_only_set = set(itertools.permutations(swappable_blocks))
 
         eqv_cells = []
         for cell in eqv_swap_only_set:
-            # cell is a tuple containing the block tuples, it must be converted into a list of tuples
+            # cell is a tuple containing the block tuples; it must be converted into a list of tuples
             cell = [*cell]
 
             # add the non-swappable blocks in their correct positions
             for block_index in used_block_outputs:
                 cell.insert(block_index, cell_spec[block_index])
-            eqv_cells.append(cell)
+            eqv_cells.append(CellSpecification(cell))
 
         return eqv_cells, used_block_outputs
 
@@ -248,17 +329,9 @@ class SearchSpace:
         self._logger.info('Operators: %s', rstr(self.operator_values))
         self._logger.info('%s', '*' * 100)
 
-    def print_cell_spec(self, cell_spec):
-        ''' Print the cell specification space properly '''
-        self._logger.info('Cell specification:')
-
-        # each block is a tuple of 4 elements
-        for i, block in enumerate(cell_spec):
-            self._logger.info("Block %d: %s", i + 1, rstr(block))
-
 
 class Encoder:
-    def __init__(self, name, values: list, fn: Callable = None, none_val=0) -> None:
+    def __init__(self, name: str, values: list, fn: Callable = None, none_val=0) -> None:
         self.name = name
         self.values = values
         self.encodings = []
@@ -303,3 +376,11 @@ class Encoder:
         Decode categorical to original value
         '''
         return self.__index_map[index]
+
+
+def parse_cell_strings(cell_structures: Iterable[str]) -> 'list[CellSpecification]':
+    '''
+    Function used to parse in an actual python structure the csv field storing the non-encoded cell structure, which is saved in form:
+    "[(in1,op1,in2,op2);(...);...]"
+    '''
+    return [CellSpecification.from_str(cell_str) for cell_str in cell_structures]

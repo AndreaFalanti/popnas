@@ -16,7 +16,7 @@ from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.utils import plot_model
 
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification
 from utils.func_utils import create_empty_folder, to_one_hot, list_flatten, chunks
 from utils.rstr import rstr
 from .keras_predictor import KerasPredictor
@@ -30,17 +30,13 @@ def build_adjacency_matrix(edges: 'Iterable[tuple[int, int]]', num_nodes: int):
     return adj_matrix
 
 
-def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: list, y_label: Optional[float]):
+def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: CellSpecification, y_label: Optional[float]):
     # address empty cell case (0 blocks), doesn't work
     # if len(cell_spec) == 0:
     #     return Graph(x=[], a=[], y=y_label)
 
-    flat_cell = list_flatten(cell_spec)
-    cell_inputs = flat_cell[::2]
-    cell_ops = flat_cell[1::2]
-
+    cell_inputs = cell_spec.inputs()
     encoded_flat_cell = search_space.encode_cell_spec(cell_spec)
-    encoded_cell_inputs = encoded_flat_cell[::2]
     encoded_cell_ops = [x - 1 for x in encoded_flat_cell[1::2]]  # change it to 0-indexed
 
     used_lookbacks = set(inp for inp in cell_inputs if inp < 0)
@@ -171,7 +167,7 @@ class SpektralPredictor(KerasPredictor, ABC):
         '''
         return []
 
-    def _prepare_graph_for_predict(self, cell_spec: list):
+    def _prepare_graph_for_predict(self, cell_spec: CellSpecification):
         g = cell_spec_to_spektral_graph(self.search_space, cell_spec, None)
         for tx in self.data_transforms:
             g = tx(g)

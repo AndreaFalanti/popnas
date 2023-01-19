@@ -7,7 +7,7 @@ from tensorflow.keras import layers, Model, losses, metrics
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo
 from models.results import BaseTrainingResults, ClassificationTrainingResults
-from utils.func_utils import list_flatten
+from search_space import CellSpecification
 
 
 class ClassificationModelGenerator(BaseModelGenerator):
@@ -16,14 +16,14 @@ class ClassificationModelGenerator(BaseModelGenerator):
     The generated models have a similar structure to the one defined by PNAS and NASNet.
     '''
 
-    def _generate_network_info(self, cell_spec: 'list[tuple]', use_stem: bool) -> NetworkBuildInfo:
+    def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         # it's a list of tuples, so already grouped by 4
         blocks = len(cell_spec)
 
-        flat_cell_spec = list_flatten(cell_spec)
+        cell_inputs = cell_spec.inputs()
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_block_outputs = set(filter(lambda el: el >= 0, flat_cell_spec[::2]))
-        used_lookbacks = set(filter(lambda el: el < 0, flat_cell_spec[::2]))
+        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
+        used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))
         unused_block_outputs = [x for x in range(0, blocks) if x not in used_block_outputs]
         use_skip = used_lookbacks.issuperset({-2})
 
@@ -72,7 +72,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'Softmax{name_suffix}': output})
         return output
 
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
+    def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)
         self.output_layers = {}
 

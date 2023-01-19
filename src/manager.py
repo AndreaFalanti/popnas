@@ -15,6 +15,7 @@ from dataset.utils import generate_balanced_weights_for_classes, dataset_generat
 from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.results.base import write_multi_output_results_to_csv
+from search_space import CellSpecification
 from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
 
 AUTOTUNE = tf.data.AUTOTUNE
@@ -85,7 +86,7 @@ class NetworkManager:
         # DEBUG ONLY
         # test_data_augmentation(self.dataset_folds[0][0])
 
-    def __compile_model(self, cell_spec: 'list[tuple]', tb_logdir: str) -> 'tuple[Model, list[Callback]]':
+    def __compile_model(self, cell_spec: CellSpecification, tb_logdir: str) -> 'tuple[Model, list[Callback]]':
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
@@ -126,7 +127,7 @@ class NetworkManager:
         '''
         self._logger.info('Performing an epoch of training to lazy load and cache the dataset')
         fake_tb_logdir = log_service.build_path('tensorboard_cnn', f'Bx')
-        model, callbacks = self.__compile_model([], fake_tb_logdir)
+        model, callbacks = self.__compile_model(CellSpecification(), fake_tb_logdir)
 
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
             if self.dataset_folds_count > 1:
@@ -143,7 +144,7 @@ class NetworkManager:
         shutil.rmtree(fake_tb_logdir, ignore_errors=True)
         self._logger.info('Dummy training complete, training time should now be unaffected by dataset lazy initialization')
 
-    def perform_proxy_training(self, cell_spec: 'list[tuple]', save_best_model: bool = False):
+    def perform_proxy_training(self, cell_spec: CellSpecification, save_best_model: bool = False):
         '''
         Generate a neural network from the cell specification and trains it for a short amount of epochs to get an estimate
         of its quality. Other relevant metrics of the NN architecture, like the params and flops, are returned together with the training results.
@@ -206,7 +207,7 @@ class NetworkManager:
 
         return training_res
 
-    def train_model(self, cell_spec: 'list[tuple]', tb_logdir: str):
+    def train_model(self, cell_spec: CellSpecification, tb_logdir: str):
         '''
         Generate and train the model on all the dataset folds, returning the results of each training session.
 

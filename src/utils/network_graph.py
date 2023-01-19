@@ -11,7 +11,8 @@ from typing import Union, Any
 import graphviz
 from igraph import *
 
-from utils.func_utils import list_flatten, chunks, to_int_tuple, prod, parse_cell_structures
+from search_space import CellSpecification
+from utils.func_utils import list_flatten, chunks, to_int_tuple, prod
 
 # in case the operators are 1D, if w is set to 1 it still works correctly.
 # the only important thing for computing correctly the params is that c is always mapped to the number of filters.
@@ -180,11 +181,10 @@ def compute_target_shapes(input_shape: TensorShape, cells_count: int, filters: i
 
 
 # TODO: inspired by feature_utils.compute_features_from_dag, maybe it is better to avoid duplication of first part of code
-def create_cell_graph(cell_spec: list, cell_index: int, output_shape: TensorShape, residual_output: bool):
+def create_cell_graph(cell_spec: CellSpecification, cell_index: int, output_shape: TensorShape, residual_output: bool):
     blocks = len(cell_spec)
-    flat_cell_spec = list_flatten(cell_spec)
-    inputs = flat_cell_spec[::2]
-    operators = flat_cell_spec[1::2]
+    inputs = cell_spec.inputs()
+    operators = cell_spec.operators()
 
     # internal edges of each block, without connections with the lookbacks (done in merge_graphs)
     basic_edges = list_flatten([[(i * 3, i * 3 + 2), (i * 3 + 1, i * 3 + 2)] for i in range(blocks)])
@@ -333,7 +333,7 @@ class NetworkGraph:
     It is also useful to estimate quickly the amount of memory (parameters) required by the neural network.
     '''
 
-    def __init__(self, cell_spec: list, input_shape: 'tuple[int, ...]', filters: int, num_classes: int, arc_config: 'dict[str, Any]',
+    def __init__(self, cell_spec: CellSpecification, input_shape: 'tuple[int, ...]', filters: int, num_classes: int, arc_config: 'dict[str, Any]',
                  op_regex_dict: 'dict[str, re.Pattern]') -> None:
         super().__init__()
         self.op_regex_dict = op_regex_dict
@@ -342,7 +342,7 @@ class NetworkGraph:
         lookback_reshape = arc_config['lookback_reshape']  # type: bool
         residual_cell_output = arc_config['residual_cells']  # type: bool
 
-        flat_inputs = list_flatten(cell_spec)[::2]
+        flat_inputs = cell_spec.inputs()
         cells_count = motifs * (normals_per_motif + 1) - 1
 
         used_lookbacks = set(filter(lambda el: el < 0, flat_inputs))
@@ -432,16 +432,15 @@ class NetworkGraph:
         return 0
 
 
-def save_cell_dag_image(cell_spec: Union[str, list], save_path: str):
+def save_cell_dag_image(cell_spec: Union[str, CellSpecification], save_path: str):
     max_lookback = 2
     # parse cell if provided in str format
     if isinstance(cell_spec, str):
-        cell_spec = parse_cell_structures([cell_spec])[0]
+        cell_spec = CellSpecification.from_str(cell_spec)
 
-    flat_cell = list_flatten(cell_spec)
     block_count = len(cell_spec)
-    ops = flat_cell[1::2]
-    inputs = flat_cell[0::2]
+    ops = cell_spec.operators()
+    inputs = cell_spec.inputs()
     unused_blocks = [i for i in range(block_count) if i not in inputs]
     used_lookbacks = [i for i in range(-max_lookback, 0) if i in inputs]
 

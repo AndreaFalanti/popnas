@@ -8,7 +8,7 @@ from tensorflow.keras import models
 import log_service
 from dataset.utils import dataset_generator_factory
 from models.generators.factory import model_generator_factory
-from utils.func_utils import parse_cell_structures
+from search_space import CellSpecification
 from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import MacroConfig, compile_post_search_model, save_evaluation_results
@@ -23,7 +23,7 @@ def get_model_cell_spec(log_folder_path: str):
     with open(os.path.join(log_folder_path, 'cell_spec.txt'), 'r') as f:
         cell_spec = f.read()
 
-    return parse_cell_structures([cell_spec])[0]
+    return CellSpecification.from_str(cell_spec)
 
 
 # This script can be used to evaluate the final model trained on a test set.

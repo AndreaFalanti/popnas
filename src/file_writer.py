@@ -8,7 +8,7 @@ from tensorflow.keras import Model
 
 import log_service
 from models.results import BaseTrainingResults
-from utils.func_utils import cell_spec_to_str
+from search_space import CellSpecification
 from utils.model_estimate import ModelEstimate
 
 
@@ -21,11 +21,11 @@ def write_partitions_file(partition_dict: dict, save_path: str):
         f.writelines(line + '\n' for line in lines)
 
 
-def write_model_summary_file(cell_spec: list, flops: float, model: Model, save_path: str):
+def write_model_summary_file(cell_spec: CellSpecification, flops: float, model: Model, save_path: str):
     ''' Write Keras summary of the model structure, plus the total FLOPs of the model. '''
     with open(save_path, 'w') as f:
         # str casting is required since inputs are int
-        f.write('Cell specification: ' + ';'.join(map(str, cell_spec)) + '\n\n')
+        f.write(f'Cell specification: {cell_spec}\n\n')
         model.summary(line_length=150, print_fn=lambda x: f.write(x + '\n'))
         f.write(f'\nFLOPs: {flops:,}')
 
@@ -42,7 +42,7 @@ def write_training_results_into_csv(train_res: BaseTrainingResults, exploration:
             writer.writerow(train_res.get_csv_headers() + ['exploration'])
 
         # trim cell structure from csv list and replace it with a valid string representation of it
-        cell_structure_str = cell_spec_to_str(train_res.cell_spec)
+        cell_structure_str = str(train_res.cell_spec)
         data = train_res.to_csv_list()[:-1] + [cell_structure_str, exploration]
 
         writer.writerow(data)

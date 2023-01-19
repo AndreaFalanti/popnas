@@ -13,8 +13,8 @@ from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
 
-from search_space import SearchSpace
-from utils.func_utils import parse_cell_structures, create_empty_folder, alternative_dict_to_string
+from search_space import SearchSpace, parse_cell_strings
+from utils.func_utils import create_empty_folder, alternative_dict_to_string
 from utils.nn_utils import get_optimized_steps_per_execution
 from utils.rstr import rstr
 from .predictor import Predictor
@@ -141,14 +141,14 @@ class KerasPredictor(Predictor, ABC):
         b_df = training_data_df[training_data_df['# blocks'] <= b] if keep_previous\
             else training_data_df[training_data_df['# blocks'] == b]
 
-        cells = parse_cell_structures(b_df['cell structure'])
+        cells = parse_cell_strings(b_df['cell structure'])
 
         # just return two lists: one with the target, one with the cell structures
         return b_df[self.y_col].to_list(), cells
 
     def _get_training_data_from_file(self, file_path: str):
         results_df = pd.read_csv(file_path)
-        cells = parse_cell_structures(results_df['cell structure'])
+        cells = parse_cell_strings(results_df['cell structure'])
 
         return list(zip(cells, results_df[self.y_col].to_list()))
 

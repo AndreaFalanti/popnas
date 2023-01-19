@@ -1,6 +1,7 @@
 import re
 from typing import Any
 
+from search_space import CellSpecification
 from utils.network_graph import NetworkGraph
 
 
@@ -38,7 +39,7 @@ class GraphGenerator:
                 'cvt': re.compile(r'(\d+)k-(\d+)h-(\d+)b cvt'),
                 'scvt': re.compile(r'(\d+)k-(\d+)h scvt')}
 
-    def generate_network_graph(self, cell_spec: list):
+    def generate_network_graph(self, cell_spec: CellSpecification):
         return NetworkGraph(cell_spec, self.input_shape, self.filters, self.num_classes, self.arc_config, self.op_regex_dict)
 
     def alter_macro_structure(self, m: int, n: int, f: int):

@@ -15,13 +15,14 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.results.base import TargetMetric
-from utils.func_utils import parse_cell_structures, cell_spec_to_str, create_empty_folder
+from search_space import CellSpecification
+from utils.func_utils import create_empty_folder
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, define_callbacks, \
     build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config, \
-    get_best_cell_specs, log_cell_structure, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
+    get_best_cell_specs, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict
 
 # disable Tensorflow info and warning messages
@@ -29,7 +30,7 @@ remove_annoying_tensorflow_messages()
 
 
 def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: TargetMetric, macro: MacroConfig,
-                            logger: logging.Logger) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
+                            logger: logging.Logger) -> Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]']:
     '''
     Return an iterator of all cells to train during model selection process.
 
@@ -51,12 +52,12 @@ def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metr
         return enumerate(zip(cell_specs, best_scores, [macro] * len(cell_specs))).__iter__()
     # single cell specification given by the user
     else:
-        return enumerate(zip(parse_cell_structures([spec]), [None], [macro])).__iter__()
+        return enumerate(zip([CellSpecification.from_str(spec)], [None], [macro])).__iter__()
 
 
-def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]'],
+def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]'],
                                                  original_macro: MacroConfig, min_params: int, max_params: int,
-                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[list, Optional[float], MacroConfig]]']:
+                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]']:
     m_modifiers = [0, 1]
     n_modifiers = [0, 1, 2]
     f_modifiers = [0.85, 1, 1.5, 1.75, 2]
@@ -65,7 +66,7 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
         # always generate the original architecture
         yield i, (cell_spec, best_score, macro)
 
-        # return the max amount of filters for each (M,N) combination that fits parameters constraints
+        # return the max number of filters for each (M, N) combination that fits parameter constraints
         for m_mod in m_modifiers:
             for n_mod in n_modifiers:
                 max_f_macro = None
@@ -165,15 +166,15 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         create_model_log_folder(model_folder)
         model_logger = log_service.get_logger(f'model_{i}_{macro}')
 
-        log_cell_structure(model_logger, cell_spec, i)
+        model_logger.info('CELL INFO (%d)', i)
         # if the macro-structure is modified, the best score is not present since that network has not been trained during the search
         if best_score is not None:
-            logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
+            model_logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
 
         logger.info('Executing model %d-%s training', i, macro)
         # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
         with open(os.path.join(model_folder, 'cell_spec.txt'), 'w') as f:
-            f.write(cell_spec_to_str(cell_spec))
+            f.write(str(cell_spec))
 
         model_config = build_macro_customized_config(config, macro)
         save_trimmed_json_config(model_config, model_folder)
@@ -234,7 +235,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             if f.tell() == 0:
                 writer.writerow(['cell_spec', 'm', 'n', 'f', 'best_epoch', 'val_score', 'training_time'])
 
-            writer.writerow([cell_spec_to_str(cell_spec), *macro, best_epoch, best_training_score, training_time])
+            writer.writerow([str(cell_spec), *macro, best_epoch, best_training_score, training_time])
 
 
 if __name__ == '__main__':

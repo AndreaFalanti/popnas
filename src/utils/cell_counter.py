@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import Iterable, Optional, Collection
 
-from utils.func_utils import list_flatten
+from search_space import CellSpecification
 
 
 def _get_counter_total(counter: Counter):
@@ -48,16 +48,12 @@ class CellCounter:
         if op_keys is not None:
             _initialize_counter_values(self.op_counter, self.op_keys)
 
-    def update_from_cell_spec(self, cell_spec: 'list[tuple]'):
-        flat_cell = list_flatten(cell_spec)
-        cell_inputs = flat_cell[::2]    # even indexes
-        cell_ops = flat_cell[1::2]      # odd indexes
-
+    def update_from_cell_spec(self, cell_spec: CellSpecification):
         # avoid updating if not interested in counters for either inputs or operators (more efficient)
         if self.input_keys is None or len(self.input_keys) > 0:
-            self.input_counter.update(cell_inputs)
+            self.input_counter.update(cell_spec.inputs())
         if self.op_keys is None or len(self.op_keys) > 0:
-            self.op_counter.update(cell_ops)
+            self.op_counter.update(cell_spec.operators())
 
         # removing undesired keys guarantees that total and key_count are the values truly expected
         if self.input_keys is not None:

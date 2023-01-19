@@ -14,7 +14,7 @@ from manager_bench_proxy import NetworkBenchManager
 from models.results import BaseTrainingResults
 from models.results.base import get_pareto_targeted_metrics
 from predictors.initializer import PredictorsHandler
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification, BlockSpecification
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
 from utils.func_utils import from_seconds_to_hms
@@ -116,15 +116,9 @@ class Popnas:
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
 
-    def generate_and_train_model_from_spec(self, cell_spec: list):
-        """
-        Generate a model from the cell specification and train it to get an estimate of its quality and characteristics.
-
-        Args:
-            cell_spec (list): plain cell specification
-        """
-        # print the cell in a more comprehensive way
-        self.search_space.print_cell_spec(cell_spec)
+    def generate_and_train_model_from_spec(self, cell_spec: CellSpecification):
+        """ Generate a model from the cell specification and train it to get an estimate of its quality and characteristics. """
+        cell_spec.pretty_logging(self._logger)
 
         # save model if it's the last training batch (full blocks)
         last_block_train = len(cell_spec) == self.blocks
@@ -140,7 +134,7 @@ class Popnas:
         '''
 
         self._logger.info('Performing initial thrust with empty cell')
-        train_res = self.generate_and_train_model_from_spec([])
+        train_res = self.generate_and_train_model_from_spec(CellSpecification())
 
         # last fields are exploration and data augmentation
         time_data = [train_res.training_time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
@@ -168,7 +162,7 @@ class Popnas:
         # accuracy features need data augmentation to generalize on equivalent cell specifications
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
-        full_cell_spec = train_res.cell_spec + [(None, None, None, None)] * (self.blocks - current_blocks)
+        full_cell_spec = train_res.cell_spec + [BlockSpecification(None, None, None, None)] * (self.blocks - current_blocks)
         score = getattr(train_res, self.score_metric_name)
 
         acc_rows = [[score] + self.predictors_handler.generate_cell_score_features(eqv_cell) + [exploration, eqv_cell != full_cell_spec]

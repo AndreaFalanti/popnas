@@ -16,10 +16,10 @@ import log_service
 from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
 from models.results.base import TargetMetric, get_best_metric_and_epoch_index
+from search_space import CellSpecification, parse_cell_strings
 from utils.config_utils import retrieve_search_config
-from utils.func_utils import create_empty_folder, parse_cell_structures, from_seconds_to_hms
+from utils.func_utils import create_empty_folder, from_seconds_to_hms
 from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution
-from utils.rstr import rstr
 
 
 class MacroConfig(NamedTuple):
@@ -52,13 +52,6 @@ def define_callbacks(score_metric: str, multi_output: bool, output_names: 'list[
     tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
 
     return [ckpt_callback, tb_callback]
-
-
-def log_cell_structure(logger: logging.Logger, cell_spec: list, index: int = 0):
-    logger.info('%s', f' CELL INFO ({index}) ')
-    logger.info('Cell specification:')
-    for i, block in enumerate(cell_spec):
-        logger.info("\tBlock %d: %s", i + 1, rstr(block))
 
 
 def create_model_log_folder(log_path: str):
@@ -232,7 +225,7 @@ def save_evaluation_results(model: Model, ds: tf.data.Dataset, model_path: str):
         f.write(f'Results: {results}')
 
 
-def get_best_cell_specs(log_folder_path: str, n: int, metric: TargetMetric) -> 'tuple[list[list], list[float]]':
+def get_best_cell_specs(log_folder_path: str, n: int, metric: TargetMetric) -> 'tuple[list[CellSpecification], list[float]]':
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
     # exclude empty cell, which gives exceptions in macro-structure tuning.
@@ -240,5 +233,5 @@ def get_best_cell_specs(log_folder_path: str, n: int, metric: TargetMetric) -> '
     df = df[df['cell structure'] != '[]']
     best_acc_rows = df.nlargest(n, columns=[metric.results_csv_column])
 
-    cell_specs = parse_cell_structures(best_acc_rows['cell structure'])
+    cell_specs = parse_cell_strings(best_acc_rows['cell structure'])
     return cell_specs, best_acc_rows[metric.results_csv_column].to_list()

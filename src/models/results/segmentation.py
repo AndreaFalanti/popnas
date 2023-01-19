@@ -1,8 +1,9 @@
+from search_space import CellSpecification
 from .base import BaseTrainingResults, TargetMetric, extract_metric_from_train_histories
 
 
 class SegmentationTrainingResults(BaseTrainingResults):
-    def __init__(self, cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int,
+    def __init__(self, cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int,
                  accuracy: float, mean_io_u: float) -> None:
         super().__init__(cell_spec, training_time, inference_time, params, flops)
 
@@ -10,7 +11,7 @@ class SegmentationTrainingResults(BaseTrainingResults):
         self.mean_io_u = mean_io_u
 
     @staticmethod
-    def from_training_histories(cell_spec: 'list[tuple]', training_time: float, inference_time: float, params: int, flops: int,
+    def from_training_histories(cell_spec: CellSpecification, training_time: float, inference_time: float, params: int, flops: int,
                                 histories: 'list[dict[str, list]]', multi_output: bool) -> BaseTrainingResults:
         accuracy = extract_metric_from_train_histories(histories, 'accuracy', max, multi_output)
         mean_io_u = extract_metric_from_train_histories(histories, 'mean_io_u', max, multi_output)

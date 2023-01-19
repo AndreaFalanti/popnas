@@ -1,4 +1,4 @@
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification, BlockSpecification
 
 
 def generate_legacy_dynamic_reindex_function(operators: 'list[str]', op_timers: 'dict[str, float]'):
@@ -50,7 +50,7 @@ def build_legacy_feature_names(max_blocks: int):
     return time_csv_headers, time_header_types, acc_csv_headers, acc_header_types
 
 
-def generate_legacy_features(search_space: SearchSpace, current_blocks: int, time: float, accuracy: float, cell_spec: list):
+def generate_legacy_features(search_space: SearchSpace, current_blocks: int, time: float, accuracy: float, cell_spec: CellSpecification):
     '''
     Builds all the allowed permutations of the blocks present in the cell, which are the equivalent encodings.
     Then, for each equivalent cell, produce the features set for both time and accuracy predictors.
@@ -65,8 +65,8 @@ def generate_legacy_features(search_space: SearchSpace, current_blocks: int, tim
     eqv_cells, _ = search_space.generate_eqv_cells(cell_spec, size=search_space.B)
 
     # expand cell_spec for bool comparison of data_augmented field
-    cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - current_blocks)
+    cell_spec = cell_spec + [BlockSpecification(None, None, None, None)] * (search_space.B - current_blocks)
 
-    return [[time, current_blocks] + search_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex') + [cell != cell_spec]
+    return [[time, current_blocks] + search_space.encode_cell_spec(cell, op_enc_name='dynamic_reindex').to_flat_list() + [cell != cell_spec]
             for cell in eqv_cells],\
-           [[accuracy, current_blocks] + search_space.encode_cell_spec(cell) + [cell != cell_spec] for cell in eqv_cells]
+           [[accuracy, current_blocks] + search_space.encode_cell_spec(cell).to_flat_list() + [cell != cell_spec] for cell in eqv_cells]

@@ -5,7 +5,7 @@ from typing import Callable
 
 import igraph
 
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification
 from utils.func_utils import list_flatten, to_list_of_tuples
 
 
@@ -63,13 +63,6 @@ def initialize_features_csv_files(time_headers: list, time_feature_types: list, 
     with open(os.path.join(csv_folder_path, 'training_score.csv'), mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(acc_headers)
-# endregion
-
-
-# region SHARED_FEATURES_GEN
-def compute_blocks(cell_spec: list):
-    ''' Trivial function, but useful to exclude None tuples if present in the specification '''
-    return len([t for t in cell_spec if t != (None, None, None, None)])
 # endregion
 
 
@@ -136,13 +129,13 @@ def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int,
     return [dag_depth, concat_inputs_len, heaviest_path_op_score_fraction]
 
 
-def generate_time_features(cell_spec: list, search_space: SearchSpace, compute_real_cell_depth: Callable[[list], int]):
-    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex')[1::2]
-    op_time_features = to_list_of_tuples(op_time_features_flat, 2)
-    inputs = list_flatten(cell_spec)[::2]
-
+def generate_time_features(cell_spec: CellSpecification, search_space: SearchSpace, compute_real_cell_depth: Callable[[CellSpecification], int]):
+    inputs = cell_spec.inputs()
     blocks = len(cell_spec)
     total_cells = compute_real_cell_depth(cell_spec)
+
+    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex').operators()
+    op_time_features = to_list_of_tuples(op_time_features_flat, 2)
 
     total_op_score = sum(op_time_features_flat)
     use_different_lookbacks = 1 if len(set([inp for inp in inputs if inp < 0])) > 1 else 0
@@ -155,7 +148,7 @@ def generate_time_features(cell_spec: list, search_space: SearchSpace, compute_r
 
 
 # region ACC_FEATURES_GEN
-def compute_blocks_incidence_matrix(cell_spec: list, max_b: int):
+def compute_blocks_incidence_matrix(cell_spec: CellSpecification, max_b: int):
     '''
     Compute the useful part of blocks incidence matrix (lower triangular), that can be used as a list of features in ML algorithms.
 
@@ -186,7 +179,7 @@ def compute_blocks_incidence_matrix(cell_spec: list, max_b: int):
     return incidence_features
 
 
-def compute_lookback_usage_features(cell_spec: list, max_lookback: int):
+def compute_lookback_usage_features(cell_spec: CellSpecification, max_lookback: int):
     '''
     Produce a list of int (0 or 1), that states if a lookback depth is used in the cell specification.
     List starts from lowest depth usage (-1).
@@ -198,20 +191,19 @@ def compute_lookback_usage_features(cell_spec: list, max_lookback: int):
     Returns:
         (list[int]): list of boolean (0 or 1) features about lookback usage
     '''
-    cell_inputs = list_flatten(cell_spec)[::2]
     # remove inputs = None
-    cell_inputs = [inp for inp in cell_inputs if inp is not None]
+    cell_inputs = [inp for inp in cell_spec.inputs() if inp is not None]
 
     return [(1 if -i - 1 in cell_inputs else 0) for i in range(max_lookback)]
 
 
-def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lookback: int):
+def compute_blocks_lookback_incidence_matrix(cell_spec: CellSpecification, max_b: int, max_lookback: int):
     '''
     Compute the incidence matrix of lookback inputs in blocks, that can be used as a list of features in ML algorithms.
 
     Args:
         cell_spec: plain cell specification
-        max_b: maximum amount of blocks in a cell
+        max_b: maximum number of blocks in a cell
         max_lookback: max lookback distance, in positive value
 
     Returns:
@@ -226,12 +218,10 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: list, max_b: int, max_lo
     return incidence_features
 
 
-def generate_acc_features(cell_spec: list, search_space: SearchSpace, compute_real_cell_depth: Callable[[list], int]):
-    # expand cell spec to maximum amount of blocks, if needed
-    blocks = compute_blocks(cell_spec)
-    cell_spec = cell_spec + [(None, None, None, None)] * (search_space.B - len(cell_spec))
+def generate_acc_features(cell_spec: CellSpecification, search_space: SearchSpace, compute_real_cell_depth: Callable[[CellSpecification], int]):
+    blocks = len(cell_spec)
 
-    op_features = search_space.encode_cell_spec(cell_spec)[1::2]
+    op_features = search_space.encode_cell_spec(cell_spec).operators()
     max_blocks = search_space.B
     max_lookback_depth = abs(search_space.input_lookback_depth)
 

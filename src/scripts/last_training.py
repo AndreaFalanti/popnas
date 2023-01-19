@@ -11,13 +11,13 @@ from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
-from utils.func_utils import parse_cell_structures, cell_spec_to_str
+from search_space import CellSpecification
 from utils.network_graph import save_cell_dag_image
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, define_callbacks, \
     override_checkpoint_callback, save_trimmed_json_config, compile_post_search_model, build_config, \
-    save_evaluation_results, get_best_cell_specs, log_cell_structure, extract_final_training_results, log_training_results_summary, \
+    save_evaluation_results, get_best_cell_specs, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict, extend_keras_metrics
 
 # disable Tensorflow info and warning messages
@@ -80,15 +80,16 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
         cell_spec, best_score = get_best_cell_specs(p, n=1, metric=target_metric)
         cell_spec, best_score = cell_spec[0], best_score[0]
 
-        log_cell_structure(logger, cell_spec)
+        logger.info('CELL INFO')
+        cell_spec.pretty_logging(logger)
         logger.info('Best score (%s) reached during training: %0.4f', target_metric.name, best_score)
     else:
-        cell_spec = parse_cell_structures([spec])[0]
+        cell_spec = CellSpecification.from_str(spec)
 
     logger.info('Generating Keras model from cell specification...')
     # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
     with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
-        f.write(cell_spec_to_str(cell_spec))
+        f.write(str(cell_spec))
 
     save_trimmed_json_config(config, save_path)
 

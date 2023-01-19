@@ -4,11 +4,11 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from search_space import SearchSpace
+from search_space import SearchSpace, CellSpecification
 from utils.func_utils import to_list_of_tuples
 
 
-def __prepare_rnn_inputs_2i(search_space: SearchSpace, cell_spec: list):
+def __prepare_rnn_inputs_2i(search_space: SearchSpace, cell_spec: CellSpecification):
     '''
     Splits a cell specification (list of [in, op]) into separate inputs
     and operators tensors to be used in LSTM.
@@ -22,18 +22,15 @@ def __prepare_rnn_inputs_2i(search_space: SearchSpace, cell_spec: list):
     # use categorical encoding for both input and operators, since LSTM works with categorical
     cell_encoding = search_space.encode_cell_spec(cell_spec)
 
-    inputs = cell_encoding[0::2]  # even place data
-    operators = cell_encoding[1::2]  # odd place data
-
     # add sequence dimension (final shape is (B, 2)),
     # to process blocks one at a time by the LSTM (2 inputs, 2 operators)
-    inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(inputs, 2)]
-    operators = [[op1, op2] for op1, op2 in to_list_of_tuples(operators, 2)]
+    inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(cell_encoding.inputs(), 2)]
+    operators = [[op1, op2] for op1, op2 in to_list_of_tuples(cell_encoding.operators(), 2)]
 
     return [inputs, operators]
 
 
-def __prepare_rnn_inputs(search_space: SearchSpace, cell_spec: list):
+def __prepare_rnn_inputs(search_space: SearchSpace, cell_spec: CellSpecification):
     '''
     Encode a cell specification to be used in LSTM.
 
@@ -44,7 +41,7 @@ def __prepare_rnn_inputs(search_space: SearchSpace, cell_spec: list):
         (tuple): contains list of inputs and list of operators.
     '''
     # use categorical encoding for both input and operators, since LSTM works with categorical
-    return search_space.encode_cell_spec(cell_spec, flatten=False)
+    return search_space.encode_cell_spec(cell_spec)
 
 
 def __generate_equivalent_cells_and_rewards(search_space: SearchSpace, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None):

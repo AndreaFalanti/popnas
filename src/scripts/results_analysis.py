@@ -8,7 +8,8 @@ from typing import Iterable
 import pandas as pd
 
 from models.generators import ClassificationModelGenerator
-from utils.func_utils import parse_cell_structures, cell_spec_to_str, from_seconds_to_hms
+from search_space import CellSpecification
+from utils.func_utils import from_seconds_to_hms
 
 
 class SearchInfo:
@@ -36,7 +37,7 @@ class SearchInfo:
 
 
 class FinalTrainingInfo:
-    def __init__(self, dataset_name: str, cell_spec: list, params: int, motifs: int, normal_cells_per_motif: int, filters: int,
+    def __init__(self, dataset_name: str, cell_spec: CellSpecification, params: int, motifs: int, normal_cells_per_motif: int, filters: int,
                  accuracy: float, training_time: float):
         self.dataset_name = dataset_name
         self.cell_spec = cell_spec
@@ -63,7 +64,7 @@ class FinalTrainingInfo:
 
     def to_csv_row(self):
         return [self.dataset_name, self.blocks, self.motifs, self.normal_cells_per_motif, self.filters, format(self.params / 1e6, '.2f'),
-                format(self.accuracy, '.3f'), self.training_time_str, cell_spec_to_str(self.cell_spec)]
+                format(self.accuracy, '.3f'), self.training_time_str, str(self.cell_spec)]
 
 
 def from_seconds_to_time_str(total_seconds: float):
@@ -144,7 +145,7 @@ def get_final_network_cell_spec(log_path: str):
     with open(os.path.join(log_path, 'final_model_training', 'cell_spec.txt'), 'r') as f:
         cell_spec = f.readline()
 
-    return parse_cell_structures([cell_spec])[0]
+    return CellSpecification.from_str(cell_spec)
 
 
 def get_final_network_accuracy(log_path: str):

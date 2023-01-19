@@ -13,7 +13,7 @@ import log_service
 import models.operators.layers as ops
 from models.operators.op_instantiator import OpInstantiator
 from models.results.base import BaseTrainingResults
-from utils.func_utils import list_flatten
+from search_space import CellSpecification
 from utils.graph_generator import GraphGenerator
 from utils.nn_utils import compute_bytes_from_tensor_shape
 
@@ -23,7 +23,7 @@ class NetworkBuildInfo:
     '''
     Helper class storing relevant info extracted from the cell specification, used for building the actual neural network model.
     '''
-    cell_specification: 'list[tuple]'
+    cell_specification: CellSpecification
     blocks: int
     used_lookbacks: 'set[int]'
     unused_block_outputs: 'list[int]'
@@ -107,7 +107,7 @@ class BaseModelGenerator(ABC):
     def get_maximum_cells(self):
         return self.motifs * (self.normal_cells_per_motif + 1) - 1
 
-    def get_real_cell_depth(self, cell_spec: 'list[tuple]') -> int:
+    def get_real_cell_depth(self, cell_spec: CellSpecification) -> int:
         '''
         Compute the real number of cells stacked in a CNN, based on the cell specification and the actual cell stack target.
         Usually, the number of cells stacked in a CNN is the target imposed, but if the inputs use only lookback input values < -1,
@@ -119,7 +119,7 @@ class BaseModelGenerator(ABC):
         Returns:
             the number of cells stacked in the architecture
         '''
-        lookback_inputs = [inp for inp in list_flatten(cell_spec)[::2] if inp is not None and inp < 0]
+        lookback_inputs = [inp for inp in cell_spec.inputs() if inp is not None and inp < 0]
         nearest_lookback_abs = abs(max(lookback_inputs))
 
         return math.ceil(self.total_cells / nearest_lookback_abs)
@@ -137,7 +137,7 @@ class BaseModelGenerator(ABC):
         self.graph_gen.alter_macro_structure(m, n, f)
 
     @abstractmethod
-    def _generate_network_info(self, cell_spec: 'list[tuple]', use_stem: bool) -> NetworkBuildInfo:
+    def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         '''
         Generate a NetworkBuildInfo instance, which stores metadata useful for generating the model from the given cell specification.
 
@@ -163,7 +163,7 @@ class BaseModelGenerator(ABC):
     def _cur_target_shape(self):
         return self.cell_output_shapes[self.cell_index]
 
-    def compute_network_partitions(self, cell_spec: 'list[tuple]', tensor_dtype: tf.dtypes.DType = tf.float32):
+    def compute_network_partitions(self, cell_spec: CellSpecification, tensor_dtype: tf.dtypes.DType = tf.float32):
         # empty cell has no partitions
         if len(cell_spec) == 0:
             return {}
@@ -247,7 +247,7 @@ class BaseModelGenerator(ABC):
         return list(self.output_layers.keys()) if len(self.output_layers.keys()) > 1 else ['']
 
     @abstractmethod
-    def build_model(self, cell_spec: 'list[tuple]', add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
+    def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         '''
         Build a Keras model from the given cell specification.
         The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
@@ -261,9 +261,9 @@ class BaseModelGenerator(ABC):
         '''
         raise NotImplementedError()
 
-    def _get_macro_params(self, cell_spec: list) -> 'tuple[int, int]':
+    def _get_macro_params(self, cell_spec: CellSpecification) -> 'tuple[int, int]':
         ''' Returns M and N, setting them to 0 if the cell specification is the empty cell. '''
-        return (self.motifs, self.normal_cells_per_motif) if len(cell_spec) > 0 else (0, 0)
+        return (0, 0) if cell_spec.is_empty_cell() else (self.motifs, self.normal_cells_per_motif)
 
     def _reset_metadata_indexes(self):
         ''' Reset metadata indexes associated to cells and blocks. '''

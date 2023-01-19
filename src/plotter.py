@@ -10,8 +10,9 @@ from sklearn.metrics import r2_score
 
 import log_service
 from models.results.base import TargetMetric
+from search_space import CellSpecification, parse_cell_strings
 from utils.cell_counter import CellCounter
-from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, parse_cell_structures, compute_mape
+from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, compute_mape
 from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_boxplot, plot_pie_chart, plot_scatter, \
     plot_squared_scatter_chart, plot_pareto_front, plot_predictions_pareto_scatter_chart, generate_avg_max_min_bars
 
@@ -40,7 +41,7 @@ def plot_specular_monoblock_info(target_metrics: 'list[TargetMetric]'):
     # take only mono block cells
     df = df[df['# blocks'] == 1]
 
-    cells = parse_cell_structures(df['cell structure'])
+    cells = parse_cell_strings(df['cell structure'])
     # cells have a single block, extrapolate the tuple instead of using the list of blocks
     first_block_iter = map(lambda blocks: blocks[0], cells)
 
@@ -93,7 +94,7 @@ def plot_metrics_boxplot_per_block(B: int, target_metrics: 'list[TargetMetric]')
         plot_boxplot(data, x, x_axis_label, m.name, title=f'{m.name} overview', save_name=f'{m.name}_boxplot')
 
 
-def _get_cell_elems_usages_as_ordered_lists(cells: 'list[list]', input_keys: 'list[int]', op_keys: 'list[str]'):
+def _get_cell_elems_usages_as_ordered_lists(cells: 'list[CellSpecification]', input_keys: 'list[int]', op_keys: 'list[str]'):
     cell_counter = CellCounter(input_keys, op_keys)
     for cell_spec in cells:
         cell_counter.update_from_cell_spec(cell_spec)
@@ -110,7 +111,7 @@ def plot_pareto_inputs_and_operators_usage(b: int, operators: 'list[str]', input
     if limit:
         df = df.head(limit)
 
-    cells = parse_cell_structures(df['cell structure'])
+    cells = parse_cell_strings(df['cell structure'])
     input_values, op_values = _get_cell_elems_usages_as_ordered_lists(cells, inputs, operators)
 
     plot_pie_chart(op_values, operators, f'Operators usage in b={b} pareto front', f'pareto_op_usage_B{b}')
@@ -133,7 +134,7 @@ def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', 
         __logger.info('Exploration Pareto front was empty, skipping plot generation')
         return
 
-    cells = parse_cell_structures(df['cell structure'])
+    cells = parse_cell_strings(df['cell structure'])
     input_values, op_values = _get_cell_elems_usages_as_ordered_lists(cells, inputs, operators)
 
     plot_pie_chart(op_values, operators, f'Operators usage in b={b} exploration pareto front', f'exploration_op_usage_B{b}')
