@@ -182,7 +182,13 @@ def perform_global_memory_clear():
 
 
 def remove_annoying_tensorflow_messages():
-    ''' Disable multiple warnings and errors which seems to be bugged. Avoid using this during development, in case there are actual problems. '''
+    '''
+    Disable multiple warnings and errors, which seems to be bugged or unclear how to address them.
+
+    When performing major changes or updating Tensorflow, shortcut this function with a *return*, to check eventual problematic warnings.
+    '''
+    # return
+
     # disable Tensorflow messages
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -199,4 +205,5 @@ def remove_annoying_tensorflow_messages():
     # Disable warning triggered at every training. get_config is actually implemented for each custom layer of ops module.
     # The module responsible for this annoying warning: tensorflow\python\keras\utils\generic_utils.py, line 494
     warnings.filterwarnings(action='ignore',
-                            message='Custom mask layers require a config and must override get_config. When loading, the custom mask layer must be passed to the custom_objects argument.')
+                            message='Custom mask layers require a config and must override get_config. '
+                                    'When loading, the custom mask layer must be passed to the custom_objects argument.')
