@@ -41,7 +41,8 @@ class OpInstantiator:
             'dconv': SeparableConvolutionOpAllocator(self.op_dims),
             'tconv': TransposeConvolutionOpAllocator(self.op_dims),
             'stack_conv': StackedConvolutionOpAllocator(self.op_dims),
-            'pool': PoolOpAllocator(self.op_dims)
+            'pool': PoolOpAllocator(self.op_dims),
+            'se': SqueezeExcitationOpAllocator(self.op_dims)
         }
 
     def _define_2d_specific_allocators(self) -> 'dict[str, BaseOpAllocator]':

@@ -33,7 +33,7 @@ class SqueezeExcitation(Layer):
         self.second_dc = conv(filters, kernel_size=1, activation=activations.sigmoid, use_bias=use_bias,
                               kernel_initializer='VarianceScaling', kernel_regularizer=weight_reg)
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         x = self.gap(inputs)
         x = self.first_dc(x)
         x = self.second_dc(x)
@@ -47,5 +47,28 @@ class SqueezeExcitation(Layer):
             'se_ratio': self.se_ratio,
             'use_bias': self.use_bias,
             'weight_reg': self.weight_reg,
+        })
+        return config
+
+
+class ResizableSqueezeExcitation(Layer):
+    ''' Layer which allow to resize tensor shape inside a *Squeeze-and-Excitation* block,
+     thanks to a preliminary layer (e.g. pooling) executed before the SE block. '''
+
+    def __init__(self, se_layer: SqueezeExcitation, resize_layer: Layer, name='resized_squeeze_excitation', **kwargs):
+        super().__init__(name=name, **kwargs)
+
+        self.se_layer = se_layer
+        self.resize_layer = resize_layer
+
+    def call(self, inputs, **kwargs):
+        x = self.resize_layer(inputs)
+        return self.se_layer(x)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'se_layer': self.se_layer,
+            'resize_layer': self.resize_layer
         })
         return config
