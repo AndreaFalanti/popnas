@@ -143,7 +143,7 @@ def plot_exploration_inputs_and_operators_usage(b: int, operators: 'list[str]', 
     __logger.info("Exploration Pareto inputs usage plot for b=%d written successfully", b)
 
 
-def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[list]'):
+def plot_children_inputs_and_operators_usage(b: int, operators: 'list[str]', inputs: 'list[int]', children_cnn: 'list[CellSpecification]'):
     __logger.info("Analyzing operators and inputs usage of CNN children to train for b=%d", b)
     input_values, op_values = _get_cell_elems_usages_as_ordered_lists(children_cnn, inputs, operators)
 

@@ -1,8 +1,9 @@
 # These classes are used for representing models in a more structured way, so that it's possible to compare
 # them more easily (trim specular cells and equivalent models in general).
+from search_space import CellSpecification
+
+
 # TODO: name could be misleading, they are not actual encodings used by algorithm.
-
-
 class BlockEncoding:
     def __init__(self, in1: str, op1: str, in2: str, op2: str) -> None:
         self.L = in1 + op1
@@ -16,7 +17,7 @@ class BlockEncoding:
 
 
 class CellEncoding:
-    def __init__(self, model_list: 'list[tuple]') -> None:
+    def __init__(self, model_list: CellSpecification) -> None:
         self.blocks = []
 
         for in1, op1, in2, op2 in model_list:
@@ -54,14 +55,14 @@ class CellEncoding:
 # Pruning functions
 
 
-def prune_equivalent_cell_models(models: 'list[list[tuple]]', k: int):
+def prune_equivalent_cell_models(models: 'list[CellSpecification]', k: int):
     '''
     Prune equivalent models from given models list until k models have been obtained, then return them.
     Useful for pruning eqv models during PNAS mode children selection.
 
     Args:
-        models ([type]): [description]
-        k ([type]): model count
+        models: list of cell specifications
+        k: model count
 
     Returns:
         (tuple): prime models list and int counter of total pruned models

@@ -1,6 +1,6 @@
 import os
 from logging import Logger
-from typing import Union, Tuple, Sequence
+from typing import Union, Tuple, Sequence, Optional
 
 import lightgbm as lgb
 import matplotlib.pyplot as plt
@@ -16,8 +16,15 @@ from .predictor import Predictor
 
 
 class LGBMPredictor(Predictor):
-    def __init__(self, logger: Logger, log_folder: str, name: str = None, cat_feature_names: 'list[str]' = [], drop_feature_names: 'list[str]' = [],
-                 override_logs: bool = True, use_random_search: bool = False, task_type: str = 'CPU', perform_feature_analysis: bool = True):
+    def __init__(self, logger: Logger, log_folder: str, name: str = None, cat_feature_names: Optional[list[str]] = None,
+                 drop_feature_names : Optional[list[str]] = None, override_logs: bool = True, use_random_search: bool = False,
+                 task_type: str = 'CPU', perform_feature_analysis: bool = True):
+        # avoids mutable arguments, set to an empty list by default if not provided
+        if drop_feature_names is None:
+            drop_feature_names = []
+        if cat_feature_names is None:
+            cat_feature_names = []
+
         # generate a relevant name if not set
         if name is None:
             name = f'LGBM_{task_type}_{"rs" if use_random_search else "default"}'

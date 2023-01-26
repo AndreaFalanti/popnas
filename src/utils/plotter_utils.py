@@ -113,7 +113,7 @@ def plot_boxplot(values: Sequence, labels: Sequence[str], x_label: str, y_label:
     save_and_finalize_plot(fig, title, save_name)
 
 
-def plot_pie_chart(values: Sequence, labels: Sequence[str], title: str, save_name: str):
+def plot_pie_chart(values: Sequence, labels: Sequence, title: str, save_name: str):
     fig, ax = plt.subplots()
 
     pie_cm = plt.get_cmap('tab20')
