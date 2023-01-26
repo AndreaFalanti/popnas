@@ -18,10 +18,10 @@ def get_image_data_augmentation_model():
     - whitening (not always used, here it's not performed)
     '''
     return Sequential([
-        layers.experimental.preprocessing.RandomFlip('horizontal'),
-        # layers.experimental.preprocessing.RandomRotation(20/360),   # 20 degrees range
-        # layers.experimental.preprocessing.RandomZoom(height_factor=0.1, width_factor=0.1),
-        layers.experimental.preprocessing.RandomTranslation(height_factor=0.125, width_factor=0.125)
+        layers.RandomFlip('horizontal'),
+        # layers.RandomRotation(20/360),   # 20 degrees range
+        # layers.RandomZoom(height_factor=0.1, width_factor=0.1),
+        layers.RandomTranslation(height_factor=0.125, width_factor=0.125)
     ], name='data_augmentation')
 
 
