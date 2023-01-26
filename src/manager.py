@@ -181,7 +181,7 @@ class NetworkManager:
         inference_time = mean(inference_time_cb.logs[1:])
 
         # empty cell has a single output even if the multi-output flag is set
-        is_multi_output = self.multi_output_model and len(cell_spec) > 0
+        is_multi_output = self.multi_output_model and not cell_spec.is_empty_cell()
         training_res = self.TrainingResults.from_training_histories(cell_spec, training_time, inference_time, total_params, flops,
                                                                     histories, is_multi_output)
 

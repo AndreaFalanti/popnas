@@ -165,7 +165,7 @@ class BaseModelGenerator(ABC):
 
     def compute_network_partitions(self, cell_spec: CellSpecification, tensor_dtype: tf.dtypes.DType = tf.float32):
         # empty cell has no partitions
-        if len(cell_spec) == 0:
+        if cell_spec.is_empty_cell():
             return {}
 
         network_info = self._generate_network_info(cell_spec, use_stem=False)

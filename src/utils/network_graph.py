@@ -4,6 +4,7 @@ This means that any change to the ModelGenerator must also be reflected in this 
 TODO WORKAROUND: to support 1D operators, tensor shapes have been kept in 3D but setting 'w' to 1, it should work fine
  but a refactor could make the code more clear.
 '''
+import math
 import re
 from collections import namedtuple
 from typing import Union, Any

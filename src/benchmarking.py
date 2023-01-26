@@ -39,9 +39,7 @@ class NATSbench:
 
         cell_blocks = len(cell_spec)
         cell_inputs = cell_spec.inputs()
-        cell_ops = cell_spec.operators()
-
-        nas_bench_ops = [self.op_conversion_map[op] for op in cell_ops]
+        nas_bench_ops = [self.op_conversion_map[op] for op in cell_spec.operators()]
 
         # node 0 is -1 input lookback. No need to check inputs for first block, since it is fixed.
         # node 2 is the output of the first block
