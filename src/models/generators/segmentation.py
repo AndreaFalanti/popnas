@@ -191,7 +191,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         return losses.CategoricalCrossentropy()
 
     def _get_metrics(self) -> 'list[metrics.Metric]':
-        return ['accuracy', metrics.MeanIoU(self.output_classes_count)]
+        return ['accuracy', metrics.OneHotMeanIoU(self.output_classes_count, name='mean_iou')]
 
     @staticmethod
     def get_results_processor_class() -> Type[BaseTrainingResults]:
