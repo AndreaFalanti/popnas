@@ -225,7 +225,7 @@ def generate_acc_features(cell_spec: CellSpecification, search_space: SearchSpac
     max_blocks = search_space.B
     max_lookback_depth = abs(search_space.input_lookback_depth)
 
-    total_cells = compute_real_cell_depth(cell_spec)
+    total_cells = compute_real_cell_depth(cell_spec.prune_fictitious_blocks())
     lookback_usage_features = compute_lookback_usage_features(cell_spec, max_lookback_depth)
     lookback_incidence_features = compute_blocks_lookback_incidence_matrix(cell_spec, max_blocks, max_lookback_depth)
     block_incidence_features = compute_blocks_incidence_matrix(cell_spec, max_blocks)

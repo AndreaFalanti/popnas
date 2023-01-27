@@ -42,6 +42,11 @@ class CellSpecification:
     def __getitem__(self, index: int) -> BlockSpecification:
         return self._data.__getitem__(index)
 
+    def __eq__(self, o: object) -> bool:
+        if isinstance(o, CellSpecification):
+            return self._flat_data == o._flat_data
+        return False
+
     def __len__(self) -> int:
         # avoids potential fictitious blocks (None, None, None, None)
         # TODO: i think fictitious blocks are associate to functions not important for the algorithm, maybe it's possible to get rid of them.
@@ -86,6 +91,9 @@ class CellSpecification:
 
         block = self._data[0]
         return block.in1 == block.in2 and block.op1 == block.op2 and block.in1 == -1
+
+    def prune_fictitious_blocks(self):
+        return CellSpecification(b for b in self._data if b != (None, None, None, None))
 
 
 class SearchSpace:

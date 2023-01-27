@@ -28,12 +28,13 @@ class SegmentationModelGenerator(BaseModelGenerator):
             return self.get_maximum_cells()
         else:
             encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
+            max_lookback = max(used_lookbacks)
             # assign -1 to upsample units, which are discarded from actual count of cells
             architecture_indexes = list(range(encoder_cells)) + \
                                    [val for c_index in range(encoder_cells, encoder_cells + self.motifs - 1) for val in (-1, c_index)]
 
-            # additional info regarding the cell stack
-            return len([index for index in architecture_indexes if index != -1])
+            # process the cell stack from the end (slice with negative step), skipping upsample units (-1) since they are not properly cells
+            return len([index for index in architecture_indexes[::max_lookback] if index != -1])
 
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         # it's a list of tuples, so already grouped by 4
