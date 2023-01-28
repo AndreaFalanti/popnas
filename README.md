@@ -81,6 +81,18 @@ To enable GPU computations locally, you must satisfy Tensorflow GPU hardware and
 Follow https://www.tensorflow.org/install/gpu instructions to set up your device. Make sure
 to install the exact versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
 
+### Note for fellow developers
+If you open the project with an IDE, the imports from _tensorflow.keras_ will be marked as error and autocomplete will not work.
+Actually, the import works fine, but the Keras library is lazily loaded by tensorflow, causing 
+[issues](https://github.com/tensorflow/tensorflow/issues/56231) with autocomplete.
+
+You can solve the problem by creating a symlink to Keras inside the Tensorflow package located in the virtual environment,
+using the following command:
+```
+mklink /D keras ..\keras\api\_v2\keras      (windows)
+ln -s ..\keras\api\_v2\keras keras          (linux)
+```
+
 ## Build Docker container
 In the _docker_ folder, it is provided a dockerfile to extend an official Tensorflow container with pip packages required by the project
 and finally mounting POPNAS source code.
