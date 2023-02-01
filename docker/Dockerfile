@@ -1,4 +1,4 @@
-FROM python:3.8 as poetry-build
+FROM python:3.10 as poetry-build
 
 ENV POETRY_VERSION=1.3.2
 
@@ -10,7 +10,7 @@ RUN pip install poetry==${POETRY_VERSION}
 RUN poetry export --without-hashes --no-interaction --no-ansi -o requirements.txt
 
 
-FROM tensorflow/tensorflow:2.7.3-gpu
+FROM tensorflow/tensorflow:2.8.4-gpu
 
 ENV PYTHONFAULTHANDLER=1 \
   PYTHONUNBUFFERED=1 \
