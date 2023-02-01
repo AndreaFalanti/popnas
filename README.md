@@ -130,12 +130,13 @@ Here it is presented a list of the configuration sections and fields, with a bri
   since they are recognized by regexes.
   The currently supported operators, with customizable integer parameters(@) for kernel size and other parameters based on the operation type, are:
   - identity
-  - @x@:@dr dconv (Depthwise-separable convolution)
-  - @x@-@x@:@dr conv (Stacked convolutions)
-  - @x@ conv
+  - @x@:@dr dconv (depthwise-separable convolution)
+  - @x@-@x@ conv (spatial-separable convolutions)
+  - @x@:@dr conv
   - @x@ maxpool
   - @x@ avgpool
-  - @x@ tconv (Transpose convolution)
+  - @x@ tconv (transpose convolution)
+  - @r SE (Squeeze and Excitation)
   - (2D only) @k-@h-@b cvt (Convolutional Vision Transformer)
   - (2D only) @k-@h scvt (Simplified Convolutional Vision Transformer, custom operator not from literature)
   - (1D only) lstm
