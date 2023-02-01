@@ -3,7 +3,7 @@
 In this file I provide a summary of the new features and major refactors performed between the third version (on arXiv as preprint) and
 the newest version of POPNAS, currently in development.
 
-### v3.1
+### v3.1.0
 
 A huge refactor of the whole repository structure, to make the algorithm more flexible to new use cases and increase code readability and consistency.
 - Add ModelGenerator hierarchy, which takes care of instantiating models for different types of tasks. 
@@ -24,3 +24,17 @@ A huge refactor of the whole repository structure, to make the algorithm more fl
 ### v3.1.1
 
 Update the Poetry lock file to the latest version (Poetry >= 1.2.0 is required to read it), fix the dependencies and the docker image generation.
+
+### v3.2.0
+
+Performs a major update of the dependencies.
+It also introduces a new operator and some other structural refactors.
+- Update TensorFlow from v2.7.3 to v2.8.4
+- Update supported python versions from (>=3.7.2, <3.9) to (>=3.8, <3.11) 
+- Update other dependencies to recent versions
+- Add the Squeeze-and-Excitation layer as an operator for POPNAS cells. Previously, it could only be applied to cell outputs.
+- Add CellSpecification and BlockSpecification classes, which represent explicitly POPNAS phenotype/genotype.
+  These classes are extended with their respective utility functions, making it easier to work with these specific types
+  instead of using lists of tuples.
+- Fix legacy Keras imports, updating them to the "standard" ones.
+- Replace MeanIoU with OneHotMeanIoU in the segmentation models prototype.
