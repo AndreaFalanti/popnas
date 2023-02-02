@@ -152,7 +152,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # take last cell output and use it in the final output
         last_output = cell_inputs[-1]
 
-        model = self._finalize_model(model_input, last_output)
+        model = self._finalize_model(model_input, last_output.tensor)
         return model, self._get_output_names()
 
     def _build_upsample_unit(self, cell_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]', filters: int) -> 'list[WrappedTensor]':
@@ -178,7 +178,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # build -1 lookback input, as a linear upsample + concatenation with specular output of last encoder layer on the same U-net "level".
         # the number of filters is regularized with a pointwise convolution.
         linear_upsampled_tensor = self.op_instantiator.generate_linear_upsample(2, name=f'lin_upsample_c{self.cell_index}')(valid_input)
-        specular_output = level_outputs.pop()
+        specular_output = level_outputs.pop().tensor
         upsample_specular_concat = layers.Concatenate()([linear_upsampled_tensor, specular_output])
         lb1 = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
                                                            name=f'up_pointwise_filter_compressor_c{self.cell_index}')(upsample_specular_concat)
