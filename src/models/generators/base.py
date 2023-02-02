@@ -1,4 +1,3 @@
-import math
 import os.path
 import re
 from abc import ABC, abstractmethod
@@ -65,7 +64,6 @@ class BaseModelGenerator(ABC):
         self.lookback_reshape = arc_params['lookback_reshape']
         self.motifs = arc_params['motifs']
         self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
-        self.total_cells = self.get_maximum_cells()
         self.multi_output = arc_params['multi_output']
         self.residual_cells = arc_params['residual_cells']
         self.se_cell_output = arc_params['se_cell_output']
@@ -120,7 +118,13 @@ class BaseModelGenerator(ABC):
         self.output_layers = {}
 
     def get_maximum_cells(self):
+        ''' Returns the maximum number of cells that can be stacked in the macro-architecture.'''
         return self.motifs * (self.normal_cells_per_motif + 1) - 1
+
+    def _get_cell_ratio(self, cell_index: int):
+        ''' Returns a value in [0, 1], proportional to the cell position in the macro-architecture. '''
+        # +1 since cells are 0-indexed
+        return (cell_index + 1) / self.get_maximum_cells()
 
     def get_real_cell_depth(self, cell_spec: CellSpecification) -> int:
         '''
@@ -135,9 +139,10 @@ class BaseModelGenerator(ABC):
             the number of cells stacked in the architecture
         '''
         lookback_inputs = [inp for inp in cell_spec.inputs() if inp is not None and inp < 0]
-        nearest_lookback_abs = abs(max(lookback_inputs))
+        nearest_lookback = max(lookback_inputs)
+        cell_indexes = list(range(self.get_maximum_cells()))
 
-        return math.ceil(self.total_cells / nearest_lookback_abs)
+        return len([c_index for c_index in cell_indexes[::nearest_lookback]])
 
     def alter_macro_structure(self, m: int, n: int, f: int):
         self.motifs = m
@@ -146,7 +151,6 @@ class BaseModelGenerator(ABC):
         self.filters_ratio = self.input_shape[-1] / f
 
         # recompute properties associated to the macro-structure parameters
-        self.total_cells = self.get_maximum_cells()
         self.cell_output_shapes = self._compute_cell_output_shapes()
 
         # update also the graph generator with the new macro-structure
@@ -349,7 +353,7 @@ class BaseModelGenerator(ABC):
 
             if self.multi_output:
                 # use a dropout rate which is proportional to the cell index
-                drop_rate = round(self.dropout_prob * ((self.cell_index + 1) / self.total_cells), 2)
+                drop_rate = round(self.dropout_prob * self._get_cell_ratio(self.cell_index), 2)
                 self._generate_output(cell_output.tensor, dropout_prob=drop_rate)
         else:
             cell_output = None
@@ -444,7 +448,7 @@ class BaseModelGenerator(ABC):
         # concatenate multiple block outputs together
         if len(block_tensors) > 1:
             if self.drop_path_keep_prob < 1.0:
-                cell_ratio = (self.cell_index + 1) / self.total_cells
+                cell_ratio = self._get_cell_ratio(self.cell_index)
                 total_train_steps = self.training_steps_per_epoch * self.epochs
 
                 sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
@@ -511,7 +515,7 @@ class BaseModelGenerator(ABC):
 
         # apply the scheduled drop path if enabled
         if self.drop_path_keep_prob < 1.0:
-            cell_ratio = (self.cell_index + 1) / self.total_cells
+            cell_ratio = self._get_cell_ratio(self.cell_index)
             total_train_steps = self.training_steps_per_epoch * self.epochs
 
             sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
@@ -566,7 +570,7 @@ class BaseModelGenerator(ABC):
             for key in self.output_layers:
                 index = int(re.match(r'Softmax_c(\d+)', key).group(1))
                 loss.update({key: self._get_loss_function()})
-                loss_weights.update({key: 1 / (2 ** (self.total_cells - index))})
+                loss_weights.update({key: 1 / (2 ** (self.get_maximum_cells() - index))})
         else:
             loss = self._get_loss_function()
             loss_weights = None

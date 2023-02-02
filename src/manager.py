@@ -72,7 +72,7 @@ class NetworkManager:
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.keras_metrics_considered()
-                                         for i in range(self.model_gen.total_cells)] + ['cell_spec']
+                                         for i in range(self.model_gen.get_maximum_cells())] + ['cell_spec']
 
         self.save_onnx = save_as_onnx
 

@@ -92,7 +92,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
     def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
-        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.total_cells else ''
+        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.get_maximum_cells() else ''
 
         if dropout_prob > 0.0:
             input_tensor = layers.Dropout(dropout_prob)(input_tensor)

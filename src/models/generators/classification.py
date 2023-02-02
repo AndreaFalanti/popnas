@@ -17,8 +17,8 @@ class ClassificationModelGenerator(BaseModelGenerator):
     '''
 
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
-        # it's a list of tuples, so already grouped by 4
         blocks = len(cell_spec)
+        total_cells = self.get_maximum_cells()
 
         cell_inputs = cell_spec.inputs()
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
@@ -28,14 +28,15 @@ class ClassificationModelGenerator(BaseModelGenerator):
         use_skip = used_lookbacks.issuperset({-2})
 
         # additional info regarding the cell stack, with stem the logic is similar but dividing the two cases make the code more clear
+        # TODO: actually, this is a mess, refactor this if stem is kept in the future
         if use_stem:
-            total_cells = self.total_cells + 2
+            total_cells = total_cells + 2
             used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
             reduction_cell_indexes = [0, 1] + list(range(2 + self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
             need_input_norm_indexes = [0] + [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
         else:
-            used_cell_indexes = list(range(self.total_cells - 1, -1, max(used_lookbacks, default=self.total_cells)))
-            reduction_cell_indexes = list(range(self.normal_cells_per_motif, self.total_cells, self.normal_cells_per_motif + 1))
+            used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
+            reduction_cell_indexes = list(range(self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
             need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
 
         return NetworkBuildInfo(cell_spec, blocks, used_lookbacks, unused_block_outputs, use_skip, used_cell_indexes,
@@ -60,7 +61,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
 
     def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
-        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.total_cells else ''
+        name_suffix = f'_c{self.cell_index}' if self.cell_index < self.get_maximum_cells() else ''
 
         gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
