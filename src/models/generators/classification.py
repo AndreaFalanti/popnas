@@ -1,13 +1,13 @@
-import math
 from typing import Type
 
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras import layers, Model, losses, metrics
 
-from models.generators.base import BaseModelGenerator, NetworkBuildInfo
+from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.results import BaseTrainingResults, ClassificationTrainingResults
 from search_space import CellSpecification
+from utils.func_utils import elementwise_mult
 
 
 class ClassificationModelGenerator(BaseModelGenerator):
@@ -43,8 +43,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
 
     def _compute_cell_output_shapes(self) -> 'list[list[int, ...]]':
         output_shapes = []
-        current_shape = list(self.input_shape)
-        current_shape[-1] = self.filters
+        current_shape = [1] * self.op_dims + [self.filters_ratio]
         reduction_tx = [0.5] * self.op_dims + [2]
 
         for motif_index in range(self.motifs):
@@ -52,9 +51,9 @@ class ClassificationModelGenerator(BaseModelGenerator):
             for _ in range(self.normal_cells_per_motif):
                 output_shapes.append(current_shape)
 
-            # add 1 time a reduction cell, except for last motif
+            # add 1 time a reduction cell, except for the last motif
             if motif_index + 1 < self.motifs:
-                current_shape = [math.ceil(val * tx) for val, tx in zip(current_shape, reduction_tx)]
+                current_shape = elementwise_mult(current_shape, reduction_tx)
                 output_shapes.append(current_shape)
 
         return output_shapes
@@ -81,7 +80,9 @@ class ClassificationModelGenerator(BaseModelGenerator):
         self._reset_metadata_indexes()
 
         model_input = layers.Input(shape=self.input_shape)
-        initial_lookback_input = self._apply_preprocessing_and_augmentation(model_input)
+        initial_lookback_tensor = self._apply_preprocessing_and_augmentation(model_input)
+        initial_shape_ratios = [1] * len(self.input_shape)
+        initial_lookback_input = WrappedTensor(initial_lookback_tensor, initial_shape_ratios)
         # define inputs usable by blocks, both set to input image (or preprocessed / data augmentation of the input) at start
         cell_inputs = [initial_lookback_input, initial_lookback_input]  # [skip, last]
 
@@ -102,7 +103,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
-        model = self._finalize_model(model_input, last_output)
+        model = self._finalize_model(model_input, last_output.tensor)
         return model, self._get_output_names()
 
     def _get_loss_function(self) -> losses.Loss:

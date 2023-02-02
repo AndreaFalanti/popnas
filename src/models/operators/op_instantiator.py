@@ -83,7 +83,7 @@ class OpInstantiator:
         #  Refer to this issue for extending it: https://github.com/tensorflow/tensorflow/issues/46609
         return upsampler(upsample_factor, interpolation=interpolation_type, name=name)
 
-    def build_op_layer(self, op_name: str, filters: int, input_filters: int, layer_name_suffix: str, strided: bool = False) -> Layer:
+    def build_op_layer(self, op_name: str, filters: int, layer_name_suffix: str, adapt_spatial: bool = False, adapt_depth: bool = False) -> Layer:
         '''
         Generate a custom Keras layer for the provided operator and parameter. Certain operations are handled in a different way
         when used in reduction cells, compared to the normal cells, to handle the tensor shape changes and allow addition at the end of a block.
@@ -93,21 +93,21 @@ class OpInstantiator:
             filters: number of filters
             input_filters: number of filters of the input of this new layer
             layer_name_suffix: suffix appended to layer name, basically unique metadata about block and cell indexes
-            strided: if op must use a stride different from 1 (reduction cells)
+            adapt_spatial: if op must adapt the tensor spatial dimensionality (commonly by using a stride different from 1)
+            adapt_depth: if op must adapt the tensor channels
 
         # Returns:
             (tf.keras.layers.Layer): The custom layer corresponding to the operator
         '''
-        adapt_depth = filters != input_filters
-        strides = self.reduction_stride if strided else self.normal_stride
+        strides = self.reduction_stride if adapt_spatial else self.normal_stride
 
         # iterate on allocators, stop at first match and allocates the Keras layer based on conditions
         for allocator in self.op_allocators.values():
             match = allocator.is_match(op_name)
             if match:
-                if adapt_depth and strided:
+                if adapt_depth and adapt_spatial:
                     return allocator.generate_reduction_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
-                elif strided:
+                elif adapt_spatial:
                     return allocator.generate_spatial_adaptation_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
                 elif adapt_depth:
                     return allocator.generate_depth_adaptation_layer(match, filters, self.weight_reg, name_suffix=layer_name_suffix)

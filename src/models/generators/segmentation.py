@@ -1,12 +1,12 @@
-import math
 from typing import Type
 
 import tensorflow as tf
 from tensorflow.keras import layers, metrics, Model, losses
 
-from models.generators.base import BaseModelGenerator, NetworkBuildInfo
+from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
+from utils.func_utils import elementwise_mult
 
 
 class SegmentationModelGenerator(BaseModelGenerator):
@@ -64,8 +64,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
     def _compute_cell_output_shapes(self) -> 'list[list[int, ...]]':
         output_shapes = []
-        current_shape = list(self.input_shape)
-        current_shape[-1] = self.filters
+        current_shape = [1] * self.op_dims + [self.filters_ratio]
         reduction_tx = [0.5] * self.op_dims + [2]
         upsample_tx = [2.0] * self.op_dims + [0.5]
 
@@ -77,13 +76,13 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
             # add 1 time a reduction cell, except for the last motif
             if motif_index + 1 < self.motifs:
-                current_shape = [math.ceil(val * tx) for val, tx in zip(current_shape, reduction_tx)]
+                current_shape = elementwise_mult(current_shape, reduction_tx)
                 output_shapes.append(current_shape)
 
         # DECODER shapes
         for motif_index in range(self.motifs - 1):
             # upsample
-            current_shape = [math.ceil(val * tx) for val, tx in zip(current_shape, upsample_tx)]
+            current_shape = elementwise_mult(current_shape, upsample_tx)
 
             # add N times a normal cell
             for _ in range(self.normal_cells_per_motif):
@@ -117,7 +116,9 @@ class SegmentationModelGenerator(BaseModelGenerator):
         self._reset_metadata_indexes()
 
         model_input = layers.Input(shape=self.input_shape)
-        initial_lookback_input = self._apply_preprocessing_and_augmentation(model_input)
+        initial_lookback_tensor = self._apply_preprocessing_and_augmentation(model_input)
+        initial_shape_ratios = [1] * len(self.input_shape)
+        initial_lookback_input = WrappedTensor(initial_lookback_tensor, initial_shape_ratios)
         # define inputs usable by blocks, both set to input image (or preprocessed / data augmentation of the input) at start
         cell_inputs = [initial_lookback_input, initial_lookback_input]  # [skip, last]
 
@@ -154,7 +155,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         model = self._finalize_model(model_input, last_output)
         return model, self._get_output_names()
 
-    def _build_upsample_unit(self, cell_inputs: 'list[tf.Tensor]', level_outputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
+    def _build_upsample_unit(self, cell_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]', filters: int) -> 'list[WrappedTensor]':
         '''
         Generate an upsample unit to alter the lookback inputs. The upsample unit structure is fixed and therefore not searched during NAS.
         The first valid lookback input is processed to generate the first new lookback, using a linear upsample,
@@ -172,7 +173,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
             the new lookback inputs.
         '''
         # scan the reversed list of lookback inputs, checking for the first not None tensor (nearest lookback usable).
-        valid_input = next(inp for inp in cell_inputs[::-1] if inp is not None)
+        valid_input = next(inp.tensor for inp in cell_inputs[::-1] if inp is not None)
 
         # build -1 lookback input, as a linear upsample + concatenation with specular output of last encoder layer on the same U-net "level".
         # the number of filters is regularized with a pointwise convolution.
@@ -185,7 +186,8 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # build -2 lookback input
         lb2 = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_conv_upsample_c{self.cell_index}')(valid_input)
 
-        return [lb2, lb1]
+        target_shape = self._current_target_shape()
+        return [WrappedTensor(lb2, target_shape), WrappedTensor(lb1, target_shape)]
 
     def _get_loss_function(self) -> losses.Loss:
         return losses.CategoricalCrossentropy()

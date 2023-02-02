@@ -28,6 +28,10 @@ def clamp(n: float, lower_bound: float, upper_bound: float):
     return max(lower_bound, min(n, upper_bound))
 
 
+def elementwise_mult(a: Iterable[float], b: Iterable[float]):
+    return [el_a * el_b for el_a, el_b in zip(a, b)]
+
+
 def compute_spearman_rank_correlation_coefficient(y_true: 'list[float]', y_pred: 'list[float]'):
     '''
     Spearman rank correlation coefficient, given two lists.

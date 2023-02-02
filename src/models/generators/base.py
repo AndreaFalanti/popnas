@@ -3,7 +3,7 @@ import os.path
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Type
+from typing import Optional, Type, NamedTuple
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -11,11 +11,24 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, 
 
 import log_service
 import models.operators.layers as ops
+import utils.tensor_utils as tu
 from models.operators.op_instantiator import OpInstantiator
 from models.results.base import BaseTrainingResults
 from search_space import CellSpecification
+from utils.func_utils import elementwise_mult
 from utils.graph_generator import GraphGenerator
-from utils.nn_utils import compute_bytes_from_tensor_shape
+
+
+class WrappedTensor(NamedTuple):
+    '''
+    Wrapper for a TF tensor, which is associated to a shape represented with a list containing a number for each dimension (no batch size).
+
+    The shape could be the actual size, but usually it contains multipliers of the input size per dimension
+    (e.g. [0.5, 0.5, 4] means that the shape has half the spatial dimension of the input image, but 4 times the number of channels).
+    In this way, fully convolutional NN can set the input spatial dimensions to None, but still keep track of when the tensor shapes are altered.
+    '''
+    tensor: tf.Tensor
+    shape: 'list[int, ...]'
 
 
 @dataclass
@@ -36,9 +49,10 @@ class NetworkBuildInfo:
 class BaseModelGenerator(ABC):
     '''
     Abstract class used as baseline for model generators concrete implementations.
-    This class contains all the shared logic between the models, like how the blocks and cells are built, while the macro-implementation can
-    be defined ad-hoc for the type of tasks addressed.
-    Default loss function, optimizer and metrics are provided, but can be overridden and extended when necessary.
+    This class contains all the shared logic between the models, like how the blocks and cells are built,
+    while the macro-implementation, loss function, optimizer, and metrics can be defined ad-hoc for the type of tasks addressed.
+
+    For fully convolution neural networks, the input shape can have the spatial dimensions set to None, but the number of channels must be provided.
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
@@ -68,6 +82,7 @@ class BaseModelGenerator(ABC):
         self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
         self.dropout_prob = cnn_hp['softmax_dropout']  # dropout probability on final softmax
         self.cdr_config = cnn_hp['cosine_decay_restart']  # type: dict
+        self.filters_ratio = self.filters / self.input_shape[-1]  # the filters expansion ratio applied between input and first layer
 
         self.save_weights = save_weights
 
@@ -128,6 +143,7 @@ class BaseModelGenerator(ABC):
         self.motifs = m
         self.normal_cells_per_motif = n
         self.filters = f
+        self.filters_ratio = self.input_shape[-1] / f
 
         # recompute properties associated to the macro-structure parameters
         self.total_cells = self.get_maximum_cells()
@@ -160,12 +176,17 @@ class BaseModelGenerator(ABC):
         '''
         raise NotImplementedError()
 
-    def _cur_target_shape(self):
+    def _current_target_shape(self):
         return self.cell_output_shapes[self.cell_index]
 
     def compute_network_partitions(self, cell_spec: CellSpecification, tensor_dtype: tf.dtypes.DType = tf.float32):
         # empty cell has no partitions
         if cell_spec.is_empty_cell():
+            return {}
+
+        # avoid the computation of partitions when the input shape is not fixed (fully convolutional NN can work with arbitrary sizes)
+        if any(el is None for el in self.input_shape):
+            self._logger.debug('Partitions not computed since the input shape is not fixed')
             return {}
 
         network_info = self._generate_network_info(cell_spec, use_stem=False)
@@ -186,42 +207,11 @@ class BaseModelGenerator(ABC):
         for cell_index in sorted(network_info.used_cell_indexes):
             current_name = f'cell_{cell_index}'
             partitions_dict[f'{previous_name} -> {current_name}'] = \
-                sum(compute_bytes_from_tensor_shape(output_shapes[lb + max_lookback + cell_index], dtype_size) for lb in network_info.used_lookbacks)
+                sum(tu.compute_bytes_from_tensor_shape(output_shapes[lb + max_lookback + cell_index], dtype_size)
+                    for lb in network_info.used_lookbacks)
             previous_name = current_name
 
         return partitions_dict
-
-    def _build_cell_util(self, filters: int, inputs: 'list[tf.Tensor]', reduction: bool = False) -> 'list[tf.Tensor]':
-        '''
-        Simple helper function for building a cell and quickly return the inputs for the next cell.
-
-        Args:
-            filters: number of filters
-            inputs: previous cells output, that can be used as inputs in the current cell
-            reduction: set it to true in reduction cells
-
-        Returns:
-            lookback inputs for the next cell
-        '''
-        # this check avoids building cells not used in the final model (cells not linked to output), also removing the problem of multi-branch
-        # models in case of multi-output models without -1 lookback usage (it was like training parallel uncorrelated models for each branch)
-        if self.cell_index in self.network_build_info.used_cell_indexes:
-            cell_output = self._build_cell(filters, reduction, inputs)
-            self.prev_cell_index = self.cell_index
-
-            if self.multi_output:
-                # use a dropout rate which is proportional to the cell index
-                drop_rate = round(self.dropout_prob * ((self.cell_index + 1) / self.total_cells), 2)
-                self._generate_output(cell_output, dropout_prob=drop_rate)
-        # skip cell creation, since it will not be used
-        else:
-            cell_output = None
-
-        self.cell_index += 1
-
-        # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
-        # while -1 is the output of the created cell
-        return [inputs[-1], cell_output]
 
     @abstractmethod
     def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
@@ -246,21 +236,6 @@ class BaseModelGenerator(ABC):
         '''
         return list(self.output_layers.keys()) if len(self.output_layers.keys()) > 1 else ['']
 
-    @abstractmethod
-    def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
-        '''
-        Build a Keras model from the given cell specification.
-        The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
-
-        Args:
-            cell_spec: the cell specification defining the model motifs.
-            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
-
-        Returns:
-            Keras model, and the name of the output layers.
-        '''
-        raise NotImplementedError()
-
     def _get_macro_params(self, cell_spec: CellSpecification) -> 'tuple[int, int]':
         ''' Returns M and N, setting them to 0 if the cell specification is the empty cell. '''
         return (0, 0) if cell_spec.is_empty_cell() else (self.motifs, self.normal_cells_per_motif)
@@ -281,7 +256,7 @@ class BaseModelGenerator(ABC):
             model_input: the initial model input
 
         Returns:
-            the input tensor itself, or its modification due to the preprocessing and augmentation models when defined.
+            the input tensor itself, or its modification due to the preprocessing and augmentation models, when defined.
         '''
         initial_lookback_input = model_input
         # some data preprocessing is integrated in the model. Update lookback inputs to be the output of the preprocessing model.
@@ -294,7 +269,7 @@ class BaseModelGenerator(ABC):
         return initial_lookback_input
 
     # TODO: adapt it for 1D (time-series)
-    def _prepend_imagenet_stem(self, cell_inputs: list, filters: int) -> 'tuple[list[tf.Tensor], int]':
+    def _prepend_imagenet_stem(self, cell_inputs: list[WrappedTensor], filters: int) -> 'tuple[list[WrappedTensor], int]':
         '''
         Add a stride-2 3x3 convolution layer followed by 2 reduction cells at the start of the network.
         The stem originates from PNAS and NASNet works, which used this stack of layers to quickly reduce the input dimensionality when
@@ -308,14 +283,30 @@ class BaseModelGenerator(ABC):
             the new tensors usable as lookbacks, and the new number of filters.
         '''
         model_input = cell_inputs[-1]
-        stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input)
-        cell_inputs = [model_input, stem_conv]
+        stem_conv = ops.Convolution(filters, kernel=(3, 3), strides=(2, 2), name='stem_3x3_conv', weight_reg=self.l2_weight_reg)(model_input.tensor)
+        new_shape_ratio = elementwise_mult(model_input.shape, [0.5, 0.5, filters / self.input_shape[-1]])
+        cell_inputs = [model_input, WrappedTensor(stem_conv, new_shape_ratio)]
         filters = filters * 2
         cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
         filters = filters * 2
         cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
         return cell_inputs, filters
+
+    @abstractmethod
+    def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
+        '''
+        Build a Keras model from the given cell specification.
+        The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
+
+        Args:
+            cell_spec: the cell specification defining the model motifs.
+            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
+
+        Returns:
+            Keras model, and the name of the output layers.
+        '''
+        raise NotImplementedError()
 
     def _finalize_model(self, model_input: tf.Tensor, last_cell_output: tf.Tensor) -> Model:
         '''
@@ -337,7 +328,39 @@ class BaseModelGenerator(ABC):
             output = self._generate_output(last_cell_output, self.dropout_prob)
             return Model(inputs=model_input, outputs=output)
 
-    def _build_cell(self, filters: int, reduction: bool, inputs: 'list[tf.Tensor]') -> tf.Tensor:
+    def _build_cell_util(self, filters: int, inputs: 'list[WrappedTensor]', reduction: bool = False) -> 'list[WrappedTensor]':
+        '''
+        Simple helper function for building a cell and quickly return the lookback inputs for the next cell.
+
+        Args:
+            filters: number of filters
+            inputs: previous cells output, that can be used as inputs in the current cell (lookback inputs)
+            reduction: set it to true in reduction cells
+
+        Returns:
+            lookback inputs for the next cell
+        '''
+        # check that this cell is actually connected to the final output layer, otherwise skips its generation.
+        # in this way, multi-output models using only -2 lookback won't have separate uncorrelated branches with separate outputs,
+        # which is not the desired behavior.
+        if self.cell_index in self.network_build_info.used_cell_indexes:
+            cell_output = self._build_cell(filters, reduction, inputs)
+            self.prev_cell_index = self.cell_index
+
+            if self.multi_output:
+                # use a dropout rate which is proportional to the cell index
+                drop_rate = round(self.dropout_prob * ((self.cell_index + 1) / self.total_cells), 2)
+                self._generate_output(cell_output.tensor, dropout_prob=drop_rate)
+        else:
+            cell_output = None
+
+        self.cell_index += 1
+
+        # skip and last output, last previous output becomes the skip output for the next cell (from -1 to -2),
+        # while -1 is the output of the created cell
+        return [inputs[-1], cell_output]
+
+    def _build_cell(self, filters: int, reduction: bool, inputs: 'list[WrappedTensor]') -> WrappedTensor:
         '''
         Generate the cell neural network implementation from the cell encoding.
 
@@ -349,42 +372,28 @@ class BaseModelGenerator(ABC):
         Returns:
             output tensor of the cell
         '''
+
+        out_shape = self._current_target_shape()
         # normalize inputs if necessary (different spatial dimension of at least one input, from the one expected by the actual cell)
         if self.lookback_reshape and self.cell_index in self.network_build_info.need_input_norm_indexes:
             inputs = self._normalize_inputs(inputs, filters)
 
-        # else concatenate all the intermediate blocks that compose the cell
         block_outputs = []
-        total_inputs = inputs  # initialized with provided previous cell inputs (-1 and -2), but will contain also the block outputs of this cell
+        # initialized with provided lookback inputs (-1 and -2), but will contain also the block outputs of this cell
+        total_inputs = inputs
         for i, block in enumerate(self.network_build_info.cell_specification):
             self.block_index = i
             block_out = self._build_block(block, filters, reduction, total_inputs)
-
-            # allow fast insertion in order with respect to block creation
             block_outputs.append(block_out)
-            # concatenate the two lists to provide the whole inputs available for next blocks of the cell
+
+            # concatenate the two lists to provide the whole inputs available for the next blocks of the cell
             total_inputs = block_outputs + inputs
 
         if self.concat_only_unused:
             block_outputs = [block_outputs[i] for i in self.network_build_info.unused_block_outputs]
 
-        # concatenate and reduce depth to filters value, otherwise cell output would be a (b * filters) tensor depth
-        if len(block_outputs) > 1:
-            # concatenate all 'Add' layers, outputs of each single block
-            if self.drop_path_keep_prob < 1.0:
-                cell_ratio = (self.cell_index + 1) / self.total_cells
-                total_train_steps = self.training_steps_per_epoch * self.epochs
-
-                sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
-                                            name=f'sdp_c{self.cell_index}_concat')(block_outputs)
-                concat_layer = layers.Concatenate(axis=-1)(sdp)
-            else:
-                concat_layer = layers.Concatenate(axis=-1)(block_outputs)
-            x = self.op_instantiator.generate_pointwise_conv(filters, strided=False, name=f'concat_pointwise_conv_c{self.cell_index}')
-            cell_out = x(concat_layer)
-        # avoids concatenation, since it is unnecessary
-        else:
-            cell_out = block_outputs[0]
+        # concatenate and reduce depth to the number of filters, otherwise cell output would be a (b * filters) tensor depth
+        cell_out = self._concatenate_blocks_into_cell_output(block_outputs, filters)
 
         # perform squeeze-excitation (SE) on cell output, if set in the configuration.
         # Squeeze-excitation is performed before the residual sum, following SE paper indications.
@@ -392,43 +401,71 @@ class BaseModelGenerator(ABC):
             cell_out = ops.SqueezeExcitation(self.op_dims, filters, se_ratio=8, use_bias=False, weight_reg=self.l2_weight_reg,
                                              name=f'squeeze_excitation_c{self.cell_index}')(cell_out)
 
-        # if option is set in configuration, make the cell a residual unit, by summing cell output with nearest lookback input
+        # if the relative option is set in configuration, make the cell a residual unit, by summing cell output with nearest lookback input
         if self.residual_cells:
-            nearest_lookback = max(self.network_build_info.used_lookbacks)
-            lb_input = inputs[nearest_lookback]
+            cell_out = self._make_cell_output_residual(cell_out, filters, inputs, out_shape)
 
-            # check if a linear projection must be performed (case where input shape and output have different sizes, see Resnet paper)
-            lb_shape = lb_input.shape.as_list()
-            out_shape = cell_out.shape.as_list()
+        return WrappedTensor(cell_out, out_shape)
 
-            # 0 is the batch size, 1 is always related to spatial (for both 1D and 2D)
-            different_depth = lb_shape[-1] != out_shape[-1]
-            different_spatial = lb_shape[1] != out_shape[1]
+    def _make_cell_output_residual(self, cell_out: tf.Tensor, filters: int, lookback_inputs: list[WrappedTensor],
+                                   out_shape: 'list[int, ...]') -> tf.Tensor:
+        '''
+        Sum the nearest used lookback input to the cell output, making a residual connection.
+        If the shaped differ, a "linear projection" is applied to the input to reshape it.
+        '''
+        nearest_lookback = max(self.network_build_info.used_lookbacks)
+        lb_tensor, lb_shape = lookback_inputs[nearest_lookback]
 
-            # if shapes are different, apply a linear projection, otherwise use the lookback as it is
-            pool_kernel_groups = 'x'.join(['2'] * self.op_dims)
-            pool_name = f'{pool_kernel_groups} maxpool'
-            # linear projection = max pool + pointwise conv if also different depth (second and third arguments), otherwise just max pool
-            if different_spatial:
-                lb_input = self.op_instantiator.build_op_layer(pool_name, out_shape[-1], lb_shape[-1],
-                                                               f'_residual_proj_c{self.cell_index}', strided=True)(lb_input)
-            # linear projection = pointwise conv
-            elif different_depth:
-                lb_input = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
-                                                                        name=f'pointwise_conv_residual_proj_c{self.cell_index}')(lb_input)
+        # check if a linear projection must be performed (case where input shape and output have different sizes, see Resnet paper)
+        different_depth = not tu.have_tensors_same_depth(lb_shape, out_shape)
+        different_spatial = not tu.have_tensors_same_spatial(lb_shape, out_shape)
 
-            cell_out = layers.Add(name=f'residual_c{self.cell_index}')([cell_out, lb_input])
+        # if shapes are different, apply a linear projection, otherwise use the lookback as it is
+        pool_kernel_groups = 'x'.join(['2'] * self.op_dims)
+        pool_name = f'{pool_kernel_groups} maxpool'
+        # linear projection = max pool + pointwise conv if also different depth (second and third arguments), otherwise just max pool
+        if different_spatial:
+            lb_tensor = self.op_instantiator.build_op_layer(pool_name, filters, f'_residual_proj_c{self.cell_index}',
+                                                            adapt_spatial=True, adapt_depth=different_depth)(lb_tensor)
+        # linear projection = pointwise conv
+        elif different_depth:
+            lb_tensor = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
+                                                                     name=f'pointwise_conv_residual_proj_c{self.cell_index}')(lb_tensor)
 
-        return cell_out
+        return layers.Add(name=f'residual_c{self.cell_index}')([cell_out, lb_tensor])
 
-    def _normalize_inputs(self, inputs: 'list[tf.Tensor]', filters: int) -> 'list[tf.Tensor]':
+    def _concatenate_blocks_into_cell_output(self, block_outputs: list[WrappedTensor], filters: int) -> tf.Tensor:
+        '''
+        Concatenate all given block outputs, and reduce tensor depth to filters value.
+        If just a single block is provided, then the concatenation is not performed.
+        '''
+        block_tensors = [b.tensor for b in block_outputs]
+
+        # concatenate multiple block outputs together
+        if len(block_tensors) > 1:
+            if self.drop_path_keep_prob < 1.0:
+                cell_ratio = (self.cell_index + 1) / self.total_cells
+                total_train_steps = self.training_steps_per_epoch * self.epochs
+
+                sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
+                                            name=f'sdp_c{self.cell_index}_concat')(block_tensors)
+                concat_layer = layers.Concatenate(axis=-1)(sdp)
+            else:
+                concat_layer = layers.Concatenate(axis=-1)(block_tensors)
+            x = self.op_instantiator.generate_pointwise_conv(filters, strided=False, name=f'concat_pointwise_conv_c{self.cell_index}')
+            return x(concat_layer)
+        # avoids concatenation of a single block, since it is unnecessary
+        else:
+            return block_tensors[0]
+
+    def _normalize_inputs(self, inputs: 'list[WrappedTensor]', filters: int) -> 'list[WrappedTensor]':
         '''
         Normalize tensor dimensions between -2 and -1 inputs if they diverge (both spatial and depth normalization is applied).
         In actual architecture, the normalization should happen only if -2 is a normal cell output and -1 is instead the output
         of a reduction cell.
 
         Args:
-            inputs (list<tf.Tensor>): -2 and -1 input tensors
+            inputs: lookback input tensors
 
         Returns:
             updated tensor list
@@ -436,13 +473,22 @@ class BaseModelGenerator(ABC):
 
         # uniform the depth and spatial dimension between the two inputs, using a pointwise convolution
         self._logger.debug("Normalizing inputs' spatial dims (cell %d)", self.cell_index)
-        x = self.op_instantiator.generate_pointwise_conv(filters, strided=True, name=f'pointwise_conv_input_c{self.cell_index}')
+        pointwise = self.op_instantiator.generate_pointwise_conv(filters, strided=True, name=f'pointwise_conv_input_c{self.cell_index}')
         # override input with the normalized one
-        inputs[-2] = x(inputs[-2])
+        inputs[-2] = WrappedTensor(pointwise(inputs[-2].tensor), tu.alter_tensor_shape(inputs[-2].shape, 0.5, 2))
 
         return inputs
 
-    def _build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[tf.Tensor]') -> tf.Tensor:
+    def _build_branch(self, input_t: WrappedTensor, op: str, target_output_shape: 'list[int, ...]', filters: int, layer_name_suffix: str):
+        input_tensor, input_shape = input_t
+
+        adapt_spatial = not tu.have_tensors_same_spatial(input_shape, target_output_shape)
+        adapt_depth = not tu.have_tensors_same_depth(input_shape, target_output_shape)
+
+        # instantiate a Keras layer for the operator, called with the respective input
+        return self.op_instantiator.build_op_layer(op, filters, layer_name_suffix, adapt_spatial, adapt_depth)(input_tensor)
+
+    def _build_block(self, block_spec: tuple, filters: int, reduction: bool, inputs: 'list[WrappedTensor]') -> WrappedTensor:
         '''
         Generate a block, following PNAS conventions.
 
@@ -456,37 +502,25 @@ class BaseModelGenerator(ABC):
             Output of Add keras layer
         '''
         input_L, op_L, input_R, op_R = block_spec
-        input_L_shape = inputs[input_L].shape.as_list()
-        input_R_shape = inputs[input_R].shape.as_list()
-        cur_cell_target_output_shape = self._cur_target_shape()  # has no batch dimension, contrary to inputs
+        target_output_shape = self._current_target_shape()
+        # common name suffix to recognize all layers belonging to this specific block
+        layer_name_suffix = f'_c{self.cell_index}b{self.block_index}'
 
-        # in reduction cells, stride only on lookback inputs (first level of cell DAG)
-        strided_L = reduction and input_L < 0
-        strided_R = reduction and input_R < 0
+        left_layer = self._build_branch(inputs[input_L], op_L, target_output_shape, filters, f'{layer_name_suffix}L')
+        right_layer = self._build_branch(inputs[input_R], op_R, target_output_shape, filters, f'{layer_name_suffix}R')
 
-        # New option to avoid input shape regularization with pointwise conv, when -2 refers to a normal cell and -1 to a reduction cell
-        # normal cells can use stride if a "skip" lookback has a bigger dimension than cell target output
-        if not self.lookback_reshape:
-            strided_L = strided_L or (input_L < -1 and input_L_shape[1] != cur_cell_target_output_shape[0])
-            strided_R = strided_R or (input_R < -1 and input_R_shape[1] != cur_cell_target_output_shape[0])
-
-        input_L_depth = input_L_shape[-1]
-        input_R_depth = input_R_shape[-1]
-
-        # instantiate a Keras layer for operator, called with the respective input
-        name_suffix = f'_c{self.cell_index}b{self.block_index}'
-        left_layer = self.op_instantiator.build_op_layer(op_L, filters, input_L_depth, f'{name_suffix}L', strided=strided_L)(inputs[input_L])
-        right_layer = self.op_instantiator.build_op_layer(op_R, filters, input_R_depth, f'{name_suffix}R', strided=strided_R)(inputs[input_R])
-
+        # apply the scheduled drop path if enabled
         if self.drop_path_keep_prob < 1.0:
             cell_ratio = (self.cell_index + 1) / self.total_cells
             total_train_steps = self.training_steps_per_epoch * self.epochs
 
             sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
-                                        name=f'sdp{name_suffix}')([left_layer, right_layer])
-            return self.op_instantiator.generate_block_join_operator(name_suffix)(sdp)
+                                        name=f'sdp{layer_name_suffix}')([left_layer, right_layer])
+            out = self.op_instantiator.generate_block_join_operator(layer_name_suffix)(sdp)
         else:
-            return self.op_instantiator.generate_block_join_operator(name_suffix)([left_layer, right_layer])
+            out = self.op_instantiator.generate_block_join_operator(layer_name_suffix)([left_layer, right_layer])
+
+        return WrappedTensor(out, target_output_shape)
 
     def define_callbacks(self, tb_logdir: str, score_metric: str) -> 'list[callbacks.Callback]':
         '''
