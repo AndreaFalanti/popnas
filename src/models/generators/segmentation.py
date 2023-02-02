@@ -11,33 +11,18 @@ from utils.func_utils import elementwise_mult
 
 class SegmentationModelGenerator(BaseModelGenerator):
     '''
-    Model generator for image and time series classification tasks.
-    The generated models have a similar structure to the one defined by PNAS and NASNet.
+    Model generator for image semantic segmentation tasks.
+    The generated models have a U-Net like structure,
+    but each level of the encoder-decoder structure is composed of cells found during the NAS process.
     '''
 
     def get_maximum_cells(self):
         encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
-        decoder_cells = (self.motifs - 1) * self.normal_cells_per_motif
+        decoder_cells = (self.motifs - 1) * (self.normal_cells_per_motif + 1)
 
         return encoder_cells + decoder_cells
 
-    def get_real_cell_depth(self, cell_spec: CellSpecification):
-        used_lookbacks = set(filter(lambda el: el < 0, cell_spec.inputs()))
-
-        if -1 in used_lookbacks:
-            return self.get_maximum_cells()
-        else:
-            encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
-            max_lookback = max(used_lookbacks)
-            # assign -1 to upsample units, which are discarded from actual count of cells
-            architecture_indexes = list(range(encoder_cells)) + \
-                                   [val for c_index in range(encoder_cells, encoder_cells + self.motifs - 1) for val in (-1, c_index)]
-
-            # process the cell stack from the end (slice with negative step), skipping upsample units (-1) since they are not properly cells
-            return len([index for index in architecture_indexes[::max_lookback] if index != -1])
-
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
-        # it's a list of tuples, so already grouped by 4
         blocks = len(cell_spec)
 
         cell_inputs = cell_spec.inputs()
@@ -47,15 +32,11 @@ class SegmentationModelGenerator(BaseModelGenerator):
         unused_block_outputs = [x for x in range(0, blocks) if x not in used_block_outputs]
         use_skip = used_lookbacks.issuperset({-2})
 
-        # utility array for next computations, upsample units are not cells, but still considered for skip connections
-        # the first list is the encoder part, the second list refers to the decoder part
-        # -1 refers to upsample units and should be discarded
-        encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
-        architecture_indexes = list(range(encoder_cells)) + \
-                               [val for c_index in range(encoder_cells, encoder_cells + self.motifs - 1) for val in (-1, c_index)]
-
         # additional info regarding the cell stack
-        used_cell_indexes = [index for index in architecture_indexes if index != -1]
+        max_lookback = max(used_lookbacks, default=1)
+        used_cell_indexes = [index for index in list(range(self.get_maximum_cells()))[::max_lookback]]
+
+        encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         reduction_cell_indexes = list(range(self.normal_cells_per_motif, encoder_cells, self.normal_cells_per_motif + 1))
         need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
 
@@ -81,8 +62,9 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
         # DECODER shapes
         for motif_index in range(self.motifs - 1):
-            # upsample
+            # upsample cell
             current_shape = elementwise_mult(current_shape, upsample_tx)
+            output_shapes.append(current_shape)
 
             # add N times a normal cell
             for _ in range(self.normal_cells_per_motif):
@@ -142,8 +124,9 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # DECODER part of the U-net structure
         # add (M - 1) times an upsample unit followed by N normal cells
         for motif_index in range(M - 1):
-            # generate new lookback input with the upsample unit
-            cell_inputs = self._build_upsample_unit(cell_inputs, level_outputs, filters)
+            filters = filters // 2
+            # generate an upsample cell any time the model creates a new decoder level
+            cell_inputs = self._build_upsample_cell(cell_inputs, level_outputs, filters)
 
             # add N times a normal cell
             for _ in range(N):
@@ -155,39 +138,62 @@ class SegmentationModelGenerator(BaseModelGenerator):
         model = self._finalize_model(model_input, last_output.tensor)
         return model, self._get_output_names()
 
-    def _build_upsample_unit(self, cell_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]', filters: int) -> 'list[WrappedTensor]':
+    def _build_upsample_unit(self, lookback_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]',
+                             filters: int) -> 'list[WrappedTensor]':
         '''
         Generate an upsample unit to alter the lookback inputs. The upsample unit structure is fixed and therefore not searched during NAS.
-        The first valid lookback input is processed to generate the first new lookback, using a linear upsample,
-        then concatenated with the specular output of the encoder part (see U-net). The concatenation is processed by a pointwise convolution
-        to adapt the filters. The second lookback is instead generated using only a transpose convolution.
+
+        The -1 lookback input is processed using a linear upsample, then concatenated with the specular output of the encoder part (see U-net).
+        The concatenation is processed by a pointwise convolution to adapt the filters, finalizing -1 lookback generation.
+
+        The -2 lookback is instead generated using only a transpose convolution of the original -2 lookback.
 
         NOTE: the last level output is popped from the list, so this function contains a side effect, but it simplifies the logic and return.
 
         Args:
-            cell_inputs: original lookback inputs.
+            lookback_inputs: original lookback inputs.
             level_outputs: U-net encoder outputs.
             filters: target number of filters for the next cell.
 
         Returns:
-            the new lookback inputs.
+            the new lookback inputs, used in the upsample cell.
         '''
-        # scan the reversed list of lookback inputs, checking for the first not None tensor (nearest lookback usable).
-        valid_input = next(inp.tensor for inp in cell_inputs[::-1] if inp is not None)
+        target_shape = self._current_target_shape()
+        lb2, lb1 = lookback_inputs
 
         # build -1 lookback input, as a linear upsample + concatenation with specular output of last encoder layer on the same U-net "level".
         # the number of filters is regularized with a pointwise convolution.
-        linear_upsampled_tensor = self.op_instantiator.generate_linear_upsample(2, name=f'lin_upsample_c{self.cell_index}')(valid_input)
-        specular_output = level_outputs.pop().tensor
-        upsample_specular_concat = layers.Concatenate()([linear_upsampled_tensor, specular_output])
-        lb1 = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
-                                                           name=f'up_pointwise_filter_compressor_c{self.cell_index}')(upsample_specular_concat)
+        if lb1 is not None:
+            linear_upsampled_tensor = self.op_instantiator.generate_linear_upsample(2, name=f'lin_upsample_unit_c{self.cell_index}')(lb1.tensor)
+            specular_output = level_outputs.pop().tensor
+            unet_concat = layers.Concatenate(name=f'u_net_concat_c{self.cell_index}')([linear_upsampled_tensor, specular_output])
+            # TODO: the compression is not necessary since operators could directly adapt the depth dimension,
+            #  but using it should reduce quite a bit the number of parameters and FLOPs performed by the upsample cell operators.
+            lb1_tensor = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
+                                                                      name=f'up_pointwise_filter_compressor_c{self.cell_index}')(unet_concat)
+            lb1 = WrappedTensor(lb1_tensor, target_shape)
 
-        # build -2 lookback input
-        lb2 = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_conv_upsample_c{self.cell_index}')(valid_input)
+        # build -2 lookback input as an upsample of the original -2 lookback, with the use of a transpose convolution
+        if lb2 is not None:
+            lb2_tensor = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_conv_upsample_unit_c{self.cell_index}')(lb2.tensor)
+            lb2 = WrappedTensor(lb2_tensor, target_shape)
 
-        target_shape = self._current_target_shape()
-        return [WrappedTensor(lb2, target_shape), WrappedTensor(lb1, target_shape)]
+        return [lb2, lb1]
+
+    def _build_upsample_cell(self, lookback_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]',
+                             filters: int) -> 'list[WrappedTensor]':
+        target_output_shape = self._current_target_shape()
+        upsampled_lookbacks = self._build_upsample_unit(lookback_inputs, level_outputs, filters)
+        new_lookbacks = self._build_cell_util(filters, upsampled_lookbacks)
+
+        # as -2 lookback, keep the original -1 lookback upsampled through transpose convolution, instead of the "concat with encoder level" tensor
+        _, lb1 = lookback_inputs
+        if lb1 is not None:
+            lb2 = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_lb2_upsample_c{self.cell_index}')(lb1.tensor)
+        else:
+            lb2 = None
+
+        return [WrappedTensor(lb2, target_output_shape), new_lookbacks[-1]]
 
     def _get_loss_function(self) -> losses.Loss:
         return losses.CategoricalCrossentropy()
