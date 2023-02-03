@@ -80,10 +80,10 @@ class SegmentationModelGenerator(BaseModelGenerator):
             input_tensor = layers.Dropout(dropout_prob)(input_tensor)
 
         output = self.op_instantiator.generate_pointwise_conv(self.output_classes_count, strided=False, activation_f=tf.nn.softmax,
-                                                              name=f'Pointwise_Softmax{name_suffix}')(input_tensor)
+                                                              name=f'pointwise_softmax{name_suffix}')(input_tensor)
         # TODO: need upscaling (nearest neighbour) in case of intermediate outputs
 
-        self.output_layers.update({f'Pointwise_Softmax{name_suffix}': output})
+        self.output_layers.update({f'pointwise_softmax{name_suffix}': output})
         return output
 
     def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
@@ -114,10 +114,12 @@ class SegmentationModelGenerator(BaseModelGenerator):
             for _ in range(N):
                 cell_inputs = self._build_cell_util(filters, cell_inputs)
 
-            # add 1 time a reduction cell, except for the last motif
-            # also save the encoder level output, so that it can be used in skip connections on the same level of the decoder
+            # add 1 time a reduction cell (and save encoder tensor for skip connections), except for the last motif
             if motif_index + 1 < M:
-                level_outputs.append(cell_inputs[-1])
+                # save the last produced cell output of the encoder level, so that it can be used in skip connections on the same level of the decoder
+                last_encoder_output = next(t for t in cell_inputs[::-1] if t is not None)
+                level_outputs.append(last_encoder_output)
+
                 filters = filters * 2
                 cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
