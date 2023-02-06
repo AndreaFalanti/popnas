@@ -214,7 +214,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
         training_time = time_cb.get_total_time()
         results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
-                                                                                       output_names, using_val=False)
+                                                                                       output_names, using_val=True)
         log_training_results_summary(logger, best_epoch, cnn_config['epochs'], training_time, best_training_score, score_metric_name)
         log_training_results_dict(logger, results_dict)
 
