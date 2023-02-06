@@ -10,7 +10,7 @@ from tensorflow.keras.utils import plot_model
 
 import file_writer as fw
 import log_service
-from dataset.augmentation import get_image_data_augmentation_model
+from dataset.transformations.augmentation import get_image_classification_augmentations
 from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
 from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
 from models.generators.factory import model_generator_factory
@@ -65,7 +65,7 @@ class NetworkManager:
 
         self.model_gen = model_generator_factory(dataset_config['type'], cnn_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
-                                                 data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
+                                                 data_augmentation_model=get_image_classification_augmentations() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
                                                  save_weights=save_network_weights)
         self.TrainingResults = self.model_gen.get_results_processor_class()
@@ -77,14 +77,14 @@ class NetworkManager:
         self.save_onnx = save_as_onnx
 
         # take 6 batches of size provided in config, used to test the inference time.
-        # when using multiple step per execution, multiply the number of batches by the steps executed.
+        # when using multiple steps per execution, multiply the number of batches by the steps executed.
         self.inference_batch_size = dataset_config['inference_batch_size']
         self.inference_batches_count = 6 * self.execution_steps
         self.inference_batch = self.dataset_folds[0][0].unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
         # DEBUG ONLY
-        # test_data_augmentation(self.dataset_folds[0][0])
+        # test_data_augmentation(self.dataset_folds[0][0], get_image_classification_augmentations(use_cutout=True))
 
     def __compile_model(self, cell_spec: CellSpecification, tb_logdir: str) -> 'tuple[Model, list[Callback]]':
         '''

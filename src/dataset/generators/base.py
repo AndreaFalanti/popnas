@@ -6,7 +6,6 @@ import tensorflow as tf
 from tensorflow.keras import Sequential
 
 import log_service
-from dataset.preprocessing import DataPreprocessor
 
 AUTOTUNE = tf.data.AUTOTUNE
 AutoShardPolicy = tf.data.experimental.AutoShardPolicy
@@ -63,10 +62,11 @@ class BaseDatasetGenerator(ABC):
 
         self.enable_tpu_tricks = enable_tpu_tricks
 
-    def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
-                          keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation_fns: 'Optional[list[Callable]]' = None,
-                          shuffle: bool = False, fit_preprocessing_layers: bool = False,
-                          shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
+    def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], shuffle: bool = False,
+                          shard_policy: AutoShardPolicy = AutoShardPolicy.DATA,
+                          data_preprocessing: Optional[Callable] = None,
+                          model_embedded_preprocessing: Optional[Callable[[tf.data.Dataset], Sequential]] = None,
+                          data_augmentation: Optional[Callable] = None) -> 'tuple[tf.data.Dataset, int, Optional[Sequential]]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
         Basically apply batch, preprocessing, cache, data augmentation (only to training set) and prefetch.
@@ -74,55 +74,57 @@ class BaseDatasetGenerator(ABC):
         Args:
             ds: dataset to finalize
             batch_size: desired samples per batch
-            preprocessor: DataPreprocessor which should be applied
-            keras_data_augmentation: Keras model with data augmentation layers
-            tf_data_augmentation_fns: TF functions mappable on the dataset to perform additional data augmentation features not included in Keras
             shuffle: if True, shuffle dataset before batching and also shuffle batches at each training iteration
             shard_policy: AutoShardPolicy for distributing the dataset in multi-device environments
+            data_preprocessing: function mapped to TF dataset to preprocess the data samples
+            model_embedded_preprocessing: function mapped to TF dataset to generate a Keras model, which should be prepended to the actual network
+             to preprocess data directly on GPU, persisting the parameters fixed at training time (e.g., z-normalization)
+            data_augmentation: function mapped to TF dataset to augment the data
 
         Returns:
-            finalized dataset, batches count and the eventual preprocessing Keras model to apply in the architectures
+            finalized dataset, batches count and the eventual Keras preprocessing model to apply in the architectures
         '''
         # set sharding options to DATA. This improves performances on distributed environments.
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = shard_policy
         ds = ds.with_options(options)
 
-        # shuffle samples to avoid batches of same class (if samples are ordered)
+        # shuffle samples to avoid batches with where all samples have the same class (if samples are ordered)
         if shuffle:
             ds = ds.shuffle(len(ds), seed=SEED)
 
         # PREPROCESSING
         # TODO: should be done after batching, to exploit vectorization. Right now there is a problem with ragged tensors, so moved before batching.
-        ds = preprocessor.apply_preprocessing(ds, fit_preprocessing_layers)
+        if data_preprocessing is not None:
+            ds = ds.map(data_preprocessing, num_parallel_calls=AUTOTUNE)
+        keras_preprocessing_model = None if model_embedded_preprocessing is None else model_embedded_preprocessing(ds)
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
-            # make all batches of the same size, avoids drop remainder to not loss data, instead duplicates some samples
+            # make all batches of the same size, avoids "drop remainder" option to not lose data, instead duplicates some samples
             if self.enable_tpu_tricks:
                 duplicated_samples_count = batch_size - (len(ds) % batch_size)
                 duplicate_ds = ds.take(duplicated_samples_count)
                 ds = ds.concatenate(duplicate_ds)
 
-            ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
+            # ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
         # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
         if self.cache:
             ds = ds.cache()
 
+        # DATA AUGMENTATION
+        if data_augmentation:
+            ds = ds.map(data_augmentation, num_parallel_calls=AUTOTUNE)
+
+        if batch_size is not None:
+            ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
+
         # shuffle batches at each epoch
         if shuffle:
             ds = ds.shuffle(len(ds), reshuffle_each_iteration=True, seed=SEED)
 
-        # if data augmentation is performed on CPU, map it before prefetch
-        if keras_data_augmentation is not None and not self.augment_on_gpu:
-            ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
-
-        if tf_data_augmentation_fns is not None:
-            for data_aug_fn in tf_data_augmentation_fns:
-                ds = ds.map(data_aug_fn, num_parallel_calls=AUTOTUNE)
-
-        return ds.prefetch(AUTOTUNE), len(ds)
+        return ds.prefetch(AUTOTUNE), len(ds), keras_preprocessing_model
 
     @abstractmethod
     def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':

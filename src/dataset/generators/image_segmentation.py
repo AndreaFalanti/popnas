@@ -8,7 +8,6 @@ from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_tf_dataset_from_numpy_ragged_array
-from dataset.preprocessing import ImagePreprocessor
 
 
 class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
@@ -24,8 +23,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # TODO: currently not supported
         preprocessing_model = None
         keras_aug = None
-        tf_aug = None
-        # tf_aug = get_image_segmentation_tf_data_augmentation_functions(self.resize_dim)
+        # tf_aug = None
+        tf_aug = get_image_segmentation_tf_data_augmentation_functions(self.resize_dim, self.dataset_classes_count)
 
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
@@ -35,7 +34,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             # Custom dataset, loaded from numpy npz files
             if self.dataset_path is not None:
                 classes = self.dataset_classes_count
-                image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
+                # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
+                image_shape = (None, None, 3)
 
                 x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'), possibly_ragged=True)
                 # shuffle samples, then stratify in train-val split if needed.
@@ -62,11 +62,12 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError('Only custom datasets are supported right now')
 
             # finalize dataset generation, common logic to all dataset formats
-            data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
+            data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
-            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
+            # batch of single elements, since image have different sizes
+            val_ds, val_batches = self._finalize_dataset(val_ds, 1, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append((train_ds, val_ds))
 
             preprocessing_model = data_preprocessor.preprocessor_model
@@ -102,6 +103,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # TODO: currently not supported
         keras_aug = None
         tf_aug = None
+        # tf_aug = get_image_segmentation_tf_data_augmentation_functions(self.resize_dim)
 
         shard_policy = AutoShardPolicy.DATA
 

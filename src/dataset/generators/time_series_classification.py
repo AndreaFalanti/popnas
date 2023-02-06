@@ -9,7 +9,6 @@ from sktime import datasets as sktdata
 from tensorflow.keras import Sequential
 
 from dataset.generators.base import BaseDatasetGenerator, SEED, load_npz
-from dataset.preprocessing import TimeSeriesPreprocessor
 
 
 def _load_ts(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':

@@ -2,38 +2,37 @@ from collections import Counter
 
 import numpy as np
 import tensorflow as tf
+from albumentations import Compose
 from matplotlib import pyplot as plt
 
-from dataset.augmentation import get_image_data_augmentation_model
 from dataset.generators import *
 
 
-def test_data_augmentation(ds: tf.data.Dataset):
+def test_data_augmentation(ds: tf.data.Dataset, data_augmentation: Compose):
     '''
     Function helpful for debugging data augmentation and making sure it's working properly.
     DON'T USE IT IN ACTUAL RUNS.
 
     Args:
         ds: any TF dataset where data augmentation is applied
+        data_augmentation: a Compose of Albumentations transformations
     '''
     # switch to an interactive matplotlib backend
     plt.switch_backend('TkAgg')
 
-    data_augmentation_model = get_image_data_augmentation_model()
-
     # get a batch
     images, labels = next(iter(ds))
 
-    # display 9 transformation of the first 3 images of the first training batch
+    # display 9 transformation of the first 3 images taken from the first training batch
     for j in range(3):
         image = images[j]
         plt.imshow(image)
         plt.show()
 
         for i in range(9):
-            augmented_image = data_augmentation_model(image)
+            transformed = data_augmentation(image=image.numpy())
             _ = plt.subplot(3, 3, i + 1)
-            plt.imshow(augmented_image)
+            plt.imshow(transformed['image'])
             plt.axis('off')
 
         plt.show()
