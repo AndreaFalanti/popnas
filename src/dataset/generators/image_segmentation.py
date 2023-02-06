@@ -8,7 +8,7 @@ from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
 from dataset.augmentation import get_image_segmentation_tf_data_aug
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_tf_dataset_from_numpy_ragged_array
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset
 from dataset.preprocessing import ImagePreprocessor
 
 # make sure the spatial dimensions of any image are multiples of this value.
@@ -53,14 +53,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                     # TODO: stratification removed since not working properly on 2D labels. Find a way to add it.
                     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, random_state=SEED)
 
-                # if type is object, then the dataset was saved in a ragged array format
-                if x_train.dtype == np.object:
-                    train_ds = generate_tf_dataset_from_numpy_ragged_array(x_train, y_train, dtype=None)
-                    val_ds = generate_tf_dataset_from_numpy_ragged_array(x_val, y_val, dtype=None)
-                # normal case, samples of the same dimensions are expected
-                else:
-                    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-                    val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
+                train_ds = generate_possibly_ragged_dataset(x_train, y_train)
+                val_ds = generate_possibly_ragged_dataset(x_val, y_val)
             # Keras dataset case
             else:
                 raise NotImplementedError('Only custom datasets are supported right now')
@@ -90,9 +84,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         # Custom dataset, loaded from numpy npz files
         if self.dataset_path is not None:
-            x_test, y_test = load_npz(os.path.join(self.dataset_path, 'test.npz'))
-
-            test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+            x_test, y_test = load_npz(os.path.join(self.dataset_path, 'test.npz'), possibly_ragged=True)
+            test_ds = generate_possibly_ragged_dataset(x_test, y_test)
 
             classes = self.dataset_classes_count
             # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
@@ -117,16 +110,16 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         # Custom dataset, loaded from numpy npz files
         if self.dataset_path is not None:
-            x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'))
+            x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'), possibly_ragged=True)
 
             # merge validation split into train
             if self.val_size is None:
-                x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'))
+                x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'), possibly_ragged=True)
                 x_train = np.concatenate((x_train, x_val), axis=0)
                 y_train = np.concatenate((y_train, y_val), axis=0)
 
             x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
-            train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+            train_ds = generate_possibly_ragged_dataset(x_train, y_train)
 
             classes = self.dataset_classes_count
             # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
