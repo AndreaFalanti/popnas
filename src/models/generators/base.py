@@ -218,6 +218,11 @@ class BaseModelGenerator(ABC):
         return partitions_dict
 
     @abstractmethod
+    def get_output_layers_name(self) -> str:
+        ''' Return the name used in the output layers of this model generator. '''
+        raise NotImplementedError()
+
+    @abstractmethod
     def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
         '''
         Generate the layers necessary to produce the target output of the network.
@@ -533,12 +538,14 @@ class BaseModelGenerator(ABC):
         Returns:
             Keras callbacks to apply in model.fit() function.
         '''
-        # By default shows losses and metrics for both training and validation
+        # By default, shows losses and metrics for both training and validation
         model_callbacks = [callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch')]
 
         if self.save_weights:
             # Save best weights, using as metric the last output in case of multi-output models
-            target_metric = f'val_Softmax_c{max(self.network_build_info.used_cell_indexes)}_{score_metric}' \
+            output_layer_name = self.get_output_layers_name()
+            last_used_cell = max(self.network_build_info.used_cell_indexes)
+            target_metric = f'val_{output_layer_name}_c{last_used_cell}_{score_metric}' \
                 if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.h5'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
@@ -565,10 +572,12 @@ class BaseModelGenerator(ABC):
             loss function, loss weights for each output, optimizer, and a list of metrics to compute during training.
         '''
         if self.multi_output and len(self.output_layers) > 1:
+            output_name = self.get_output_layers_name()
             loss = {}
             loss_weights = {}
+
             for key in self.output_layers:
-                index = int(re.match(r'Softmax_c(\d+)', key).group(1))
+                index = int(re.match(rf'{output_name}_c(\d+)', key).group(1))
                 loss.update({key: self._get_loss_function()})
                 loss_weights.update({key: 1 / (2 ** (self.get_maximum_cells() - index))})
         else:

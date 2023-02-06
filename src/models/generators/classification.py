@@ -59,6 +59,9 @@ class ClassificationModelGenerator(BaseModelGenerator):
 
         return output_shapes
 
+    def get_output_layers_name(self) -> str:
+        return 'Softmax'
+
     def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
         name_suffix = f'_c{self.cell_index}' if self.cell_index < self.get_maximum_cells() else ''
@@ -66,10 +69,12 @@ class ClassificationModelGenerator(BaseModelGenerator):
         gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
-        output = layers.Dense(self.output_classes_count, activation='softmax', kernel_regularizer=self.l2_weight_reg,
-                              name=f'Softmax{name_suffix}')(gap)
 
-        self.output_layers.update({f'Softmax{name_suffix}': output})
+        output_name = self.get_output_layers_name()
+        output = layers.Dense(self.output_classes_count, activation='softmax', kernel_regularizer=self.l2_weight_reg,
+                              name=f'{output_name}{name_suffix}')(gap)
+
+        self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output
 
     def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
