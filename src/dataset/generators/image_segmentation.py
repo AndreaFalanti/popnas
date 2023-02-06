@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
+from dataset.augmentation import get_image_segmentation_tf_data_aug
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_tf_dataset_from_numpy_ragged_array
 from dataset.preprocessing import ImagePreprocessor
 
@@ -64,7 +65,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             # finalize dataset generation, common logic to all dataset formats
             data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                             keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
+                                                             keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append((train_ds, val_ds))
@@ -127,7 +128,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True)
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                         keras_data_augmentation=keras_aug, tf_data_augmentation_fns=tf_aug,
+                                                         keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
 
         self._logger.info('Final training dataset built successfully')

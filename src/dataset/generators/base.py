@@ -64,7 +64,7 @@ class BaseDatasetGenerator(ABC):
         self.enable_tpu_tricks = enable_tpu_tricks
 
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
-                          keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation_fns: 'Optional[list[Callable]]' = None,
+                          keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation: 'Optional[Callable]' = None,
                           shuffle: bool = False, fit_preprocessing_layers: bool = False,
                           shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
@@ -76,7 +76,7 @@ class BaseDatasetGenerator(ABC):
             batch_size: desired samples per batch
             preprocessor: DataPreprocessor which should be applied
             keras_data_augmentation: Keras model with data augmentation layers
-            tf_data_augmentation_fns: TF functions mappable on the dataset to perform additional data augmentation features not included in Keras
+            tf_data_augmentation: TF function mappable on the dataset to perform additional data augmentation features not included in Keras
             shuffle: if True, shuffle dataset before batching and also shuffle batches at each training iteration
             shard_policy: AutoShardPolicy for distributing the dataset in multi-device environments
 
@@ -118,9 +118,8 @@ class BaseDatasetGenerator(ABC):
         if keras_data_augmentation is not None and not self.augment_on_gpu:
             ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
-        if tf_data_augmentation_fns is not None:
-            for data_aug_fn in tf_data_augmentation_fns:
-                ds = ds.map(data_aug_fn, num_parallel_calls=AUTOTUNE)
+        if tf_data_augmentation is not None:
+            ds = ds.map(tf_data_augmentation, num_parallel_calls=AUTOTUNE)
 
         return ds.prefetch(AUTOTUNE), len(ds)
 

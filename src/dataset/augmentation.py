@@ -25,13 +25,17 @@ def get_image_data_augmentation_model():
     ], name='data_augmentation')
 
 
-def get_image_tf_data_augmentation_functions():
-    return [
-        lambda x, y: (tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y)
-    ]
+def get_image_classification_tf_data_aug():
+    def ds_mappable_f(x, y):
+        return tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y
+
+    return ds_mappable_f
 
 
-def get_image_segmentation_tf_data_augmentation_functions(crop_size: 'tuple[int, int]'):
-    return [
-        lambda x, y: (tf.image.random_crop(x, crop_size, seed=SEED), tf.image.random_crop(y, crop_size, seed=SEED))
-    ]
+def get_image_segmentation_tf_data_aug(crop_size: 'tuple[int, int]'):
+    def ds_mappable_f(x, y):
+        x, y = tf.image.random_crop(x, crop_size, seed=SEED), tf.image.random_crop(y, crop_size, seed=SEED)
+        x, y = tf.image.random_flip_left_right(x, seed=SEED), tf.image.random_flip_left_right(y, seed=SEED)
+        return x, y
+
+    return ds_mappable_f
