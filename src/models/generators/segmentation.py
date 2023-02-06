@@ -75,17 +75,28 @@ class SegmentationModelGenerator(BaseModelGenerator):
     def get_output_layers_name(self) -> str:
         return 'pointwise_softmax'
 
-    def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
+    def _generate_output(self, hidden_tensor: WrappedTensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
         name_suffix = f'_c{self.cell_index}' if self.cell_index < self.get_maximum_cells() else ''
 
+        # check the hidden state spatial ratio, since the resolution must match the initial input
+        # intermediate representations needs to upscale the resolution by (1 / ratio)
+        # since H and W have the same ratio, just check the first.
+        hidden_tensor_spatial_ratio = hidden_tensor.shape[0]
+        upscale_ratio = 1 / hidden_tensor_spatial_ratio
+
+        h_tensor = hidden_tensor.tensor
+        if upscale_ratio > 1:
+            # TODO: maybe it is better to make it "nearest neighbour" instead of bilinear. Perform some tests.
+            h_tensor = self.op_instantiator.generate_linear_upsample(int(upscale_ratio), name=f'output_upsample{name_suffix}')(h_tensor)
+
+        # TODO: a spatial dropout could be more indicated for this structure
         if dropout_prob > 0.0:
-            input_tensor = layers.Dropout(dropout_prob)(input_tensor)
+            h_tensor = layers.Dropout(dropout_prob)(h_tensor)
 
         output_name = self.get_output_layers_name()
         output = self.op_instantiator.generate_pointwise_conv(self.output_classes_count, strided=False, activation_f=tf.nn.softmax,
-                                                              name=f'{output_name}{name_suffix}')(input_tensor)
-        # TODO: need upscaling (nearest neighbour) in case of intermediate outputs
+                                                              name=f'{output_name}{name_suffix}')(h_tensor)
 
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output
@@ -141,7 +152,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # take last cell output and use it in the final output
         last_output = cell_inputs[-1]
 
-        model = self._finalize_model(model_input, last_output.tensor)
+        model = self._finalize_model(model_input, last_output)
         return model, self._get_output_names()
 
     def _build_upsample_unit(self, lookback_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]',

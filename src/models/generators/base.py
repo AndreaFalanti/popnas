@@ -223,14 +223,14 @@ class BaseModelGenerator(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
+    def _generate_output(self, hidden_tensor: WrappedTensor, dropout_prob: float = 0.0) -> tf.Tensor:
         '''
-        Generate the layers necessary to produce the target output of the network.
+        Generate the layers necessary to produce the target output of the network from a hidden layer.
         These layers can be stacked after any cell output to get the final output.
         They are always used at the network end, but could also be used for intermediate outputs.
 
         Args:
-            input_tensor: the tensor to process, i.e., any cell output.
+            hidden_tensor: the tensor to process, i.e., any cell output.
             dropout_prob: [0, 1] probability value for applying dropout on the exit.
 
         Returns:
@@ -317,7 +317,7 @@ class BaseModelGenerator(ABC):
         '''
         raise NotImplementedError()
 
-    def _finalize_model(self, model_input: tf.Tensor, last_cell_output: tf.Tensor) -> Model:
+    def _finalize_model(self, model_input: tf.Tensor, last_cell_output: WrappedTensor) -> Model:
         '''
         Finalize the generation of the Keras functional model.
         It transparently handles both single output and multi output models.
@@ -359,7 +359,7 @@ class BaseModelGenerator(ABC):
             if self.multi_output:
                 # use a dropout rate which is proportional to the cell index
                 drop_rate = round(self.dropout_prob * self._get_cell_ratio(self.cell_index), 2)
-                self._generate_output(cell_output.tensor, dropout_prob=drop_rate)
+                self._generate_output(cell_output, dropout_prob=drop_rate)
         else:
             cell_output = None
 

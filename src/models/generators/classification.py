@@ -62,11 +62,11 @@ class ClassificationModelGenerator(BaseModelGenerator):
     def get_output_layers_name(self) -> str:
         return 'Softmax'
 
-    def _generate_output(self, input_tensor: tf.Tensor, dropout_prob: float = 0.0) -> tf.Tensor:
+    def _generate_output(self, hidden_tensor: WrappedTensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
         name_suffix = f'_c{self.cell_index}' if self.cell_index < self.get_maximum_cells() else ''
 
-        gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(input_tensor)
+        gap = self.op_instantiator.gap(name=f'GAP{name_suffix}')(hidden_tensor.tensor)
         if dropout_prob > 0.0:
             gap = layers.Dropout(dropout_prob)(gap)
 
@@ -109,7 +109,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         # take last cell output and use it in GAP
         last_output = cell_inputs[-1]
 
-        model = self._finalize_model(model_input, last_output.tensor)
+        model = self._finalize_model(model_input, last_output)
         return model, self._get_output_names()
 
     def _get_loss_function(self) -> losses.Loss:
