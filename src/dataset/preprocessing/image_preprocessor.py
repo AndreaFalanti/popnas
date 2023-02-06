@@ -8,7 +8,7 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 class ImagePreprocessor(DataPreprocessor):
     def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], to_one_hot: Optional[int],
-                 resize_labels: bool = False):
+                 resize_labels: bool = False, pad_to_multiples_of: Optional[int] = None):
         '''
         Preprocessor which can be applied to datasets composed of images to apply some basic transformations.
 
@@ -23,6 +23,7 @@ class ImagePreprocessor(DataPreprocessor):
         self.rescaling = rescaling
         self.to_one_hot = to_one_hot
         self.resize_labels = resize_labels
+        self.pad_to_multiples_of = pad_to_multiples_of
 
     def _apply_preprocessing_on_dataset_pipeline(self, ds: tf.data.Dataset) -> tf.data.Dataset:
         if self.resize_dim is not None:
@@ -32,6 +33,30 @@ class ImagePreprocessor(DataPreprocessor):
                             num_parallel_calls=AUTOTUNE)
             else:
                 ds = ds.map(lambda x, y: (tf.image.resize(x, self.resize_dim), y), num_parallel_calls=AUTOTUNE)
+        else:
+            if self.pad_to_multiples_of is not None:
+                @tf.function
+                def zero_pad_to_multiples(image: tf.Tensor, label: tf.Tensor):
+                    ''' Zero pad spatial dimensions of images (and masks) to be multiples of *self.pad_to_multiples_of*. '''
+                    shape = tf.shape(image)
+                    # shape = image.shape.as_list()
+                    # get spatial dims (HW), avoid first dim if the dataset is batched (should be 4 dims)
+                    h, w = shape[0], shape[1]  # if len(shape) == 3 else shape[1:3]
+
+                    padding_y = self.pad_to_multiples_of - (h % self.pad_to_multiples_of)
+                    padding_x = self.pad_to_multiples_of - (w % self.pad_to_multiples_of)
+
+                    pads_y = [tf.math.ceil(padding_y / 2), tf.math.floor(padding_y / 2)]
+                    pads_x = [tf.math.ceil(padding_x / 2), tf.math.floor(padding_x / 2)]
+                    padding = [pads_y, pads_x, [0, 0]]
+                    # if len(shape) == 4:
+                    #     padding.insert(0, [0, 0])
+
+                    image = tf.pad(image, padding)
+                    label = tf.pad(label, padding) if self.resize_labels else label
+                    return image, label
+
+                ds = ds.map(zero_pad_to_multiples, num_parallel_calls=AUTOTUNE)
 
         # rescale pixel values (usually to [-1, 1] or [0, 1] domain), independent from dataset values so can be directly applied
         if self.rescaling is not None:
