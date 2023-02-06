@@ -53,7 +53,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 # if type is object, then the dataset was saved in a ragged array format
                 if x_train.dtype == np.object:
                     train_ds = generate_tf_dataset_from_numpy_ragged_array(x_train, y_train, dtype=None)
-                    val_ds = generate_tf_dataset_from_numpy_ragged_array(x_train, y_train, dtype=np.uint8)
+                    val_ds = generate_tf_dataset_from_numpy_ragged_array(x_val, y_val, dtype=None)
                 # normal case, samples of the same dimensions are expected
                 else:
                     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
