@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from dataset.augmentation import get_image_data_augmentation_model
+from dataset.augmentation import get_image_segmentation_tf_data_aug
 from dataset.generators import *
 
 
@@ -19,21 +19,30 @@ def test_data_augmentation(ds: tf.data.Dataset):
     # switch to an interactive matplotlib backend
     plt.switch_backend('TkAgg')
 
-    data_augmentation_model = get_image_data_augmentation_model()
+    # data_augmentation_model = get_image_data_augmentation_model()
+    data_aug = get_image_segmentation_tf_data_aug((112, 112))
 
     # get a batch
     images, labels = next(iter(ds))
 
-    # display 9 transformation of the first 3 images of the first training batch
+    # display 8 transformations of the first 3 images belonging to the first training batch
     for j in range(3):
         image = images[j]
+        label = labels[j]
+
         plt.imshow(image)
+        # plt.imshow(label[:, :, 0])
         plt.show()
 
-        for i in range(9):
-            augmented_image = data_augmentation_model(image)
-            _ = plt.subplot(3, 3, i + 1)
+        for i in range(0, 8, 2):
+            # augmented_image = data_augmentation_model(image)
+            augmented_image, augmented_mask = data_aug(image, label)
+            _ = plt.subplot(4, 2, i + 1)
             plt.imshow(augmented_image)
+            plt.axis('off')
+
+            _ = plt.subplot(4, 2, i + 2)
+            plt.imshow(augmented_mask[:, :, 0])
             plt.axis('off')
 
         plt.show()

@@ -66,7 +66,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 raise NotImplementedError('Only custom datasets are supported right now')
 
             # tf_aug = None
-            tf_aug = get_image_segmentation_tf_data_aug(self.resize_dim, 3, classes)
+            tf_aug = get_image_segmentation_tf_data_aug(self.resize_dim)
 
             # finalize dataset generation, common logic to all dataset formats
             data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
@@ -136,7 +136,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             raise NotImplementedError('Only custom datasets are supported right now')
 
         # tf_aug = None
-        tf_aug = get_image_segmentation_tf_data_aug(self.resize_dim, 3, classes)
+        tf_aug = get_image_segmentation_tf_data_aug(self.resize_dim)
 
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
