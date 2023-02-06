@@ -74,13 +74,14 @@ def get_best_metric_per_output(history: 'dict[str, list]', metric: str, optimal:
     Returns:
         (dict[str, float]): dictionary with best metric values, for each output.
     '''
-    r = re.compile(rf'val_Softmax_c(\d+)_{metric}')
-    output_indexes = [int(match.group(1)) for match in map(r.match, history.keys()) if match]
+    r = re.compile(rf'val_[\w_]+_c(\d+)_{metric}')
+    # get entire key and cell index for each successful match
+    key_matches = [(match.group(0), int(match.group(1))) for match in map(r.match, history.keys()) if match]
 
-    # save best score reached for each output
+    # save the best score reached for each output
     multi_output_scores = {}
-    for output_index in output_indexes:
-        multi_output_scores[f'c{output_index}_{metric}'] = optimal(history[f'val_Softmax_c{output_index}_{metric}'])
+    for key, output_index in key_matches:
+        multi_output_scores[f'c{output_index}_{metric}'] = optimal(history[key])
 
     return multi_output_scores
 
