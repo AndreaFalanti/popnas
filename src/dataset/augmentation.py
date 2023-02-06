@@ -32,9 +32,9 @@ def get_image_classification_tf_data_aug():
     return ds_mappable_f
 
 
-def get_image_segmentation_tf_data_aug(crop_size: 'tuple[int, int]'):
+def get_image_segmentation_tf_data_aug(crop_size: 'tuple[int, int]', image_channels: int, num_classes):
     def ds_mappable_f(x, y):
-        x, y = tf.image.random_crop(x, crop_size, seed=SEED), tf.image.random_crop(y, crop_size, seed=SEED)
+        x, y = tf.image.random_crop(x, crop_size + (image_channels,), seed=SEED), tf.image.random_crop(y, crop_size + (num_classes,), seed=SEED)
         x, y = tf.image.random_flip_left_right(x, seed=SEED), tf.image.random_flip_left_right(y, seed=SEED)
         return x, y
 
