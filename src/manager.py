@@ -77,8 +77,9 @@ class NetworkManager:
         self.save_onnx = save_as_onnx
 
         # take 6 batches of size provided in config, used to test the inference time.
-        # when using multiple step per execution, multiply the number of batches by the steps executed.
-        self.inference_batch_size = dataset_config['inference_batch_size']
+        # when using multiple steps per execution, multiply the number of batches by the steps executed.
+        # NOTE: since images can have different sizes in image_segmentation, it's not possible to batch multiple images together (batch_size = 1)
+        self.inference_batch_size = dataset_config['inference_batch_size'] if dataset_config['type'] != 'image_segmentation' else 1
         self.inference_batches_count = 6 * self.execution_steps
         self.inference_batch = self.dataset_folds[0][0].unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
@@ -169,10 +170,13 @@ class NetworkManager:
 
         training_time = times.mean()
         total_params = model.count_params()
+        # avoid computing FLOPs when the input size is not completely defined (networks supporting different sample sizes can have dims = None)
         # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
-        flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt')) if not isinstance(self.train_strategy, tf.distribute.TPUStrategy) \
-            else 0
+        if not any(dim is None for dim in self.model_gen.input_shape) and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
+            flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
+        else:
+            flops = 0
 
         # compute inference time from a prediction session
         inference_time_cb = InferenceTimingCallback()

@@ -104,8 +104,6 @@ class BaseDatasetGenerator(ABC):
                 duplicate_ds = ds.take(duplicated_samples_count)
                 ds = ds.concatenate(duplicate_ds)
 
-            ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
-
         # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
         if self.cache:
             ds = ds.cache()
@@ -120,6 +118,11 @@ class BaseDatasetGenerator(ABC):
 
         if tf_data_augmentation is not None:
             ds = ds.map(tf_data_augmentation, num_parallel_calls=AUTOTUNE)
+
+        # TODO: should be better to batch before applying preprocessing/augmentation to improve performance by vectorizing the operations,
+        #  but not all operators can be applied on batches.
+        if batch_size is not None:
+            ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
         return ds.prefetch(AUTOTUNE), len(ds)
 
