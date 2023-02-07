@@ -10,7 +10,7 @@ from typing import NamedTuple, Any
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras import callbacks, Model, metrics, losses
+from tensorflow.keras import callbacks, Model, losses
 
 import log_service
 from models.custom_callbacks import ModelCheckpointCustom
@@ -95,7 +95,6 @@ def extract_final_training_results(hist: callbacks.History, score_metric_name: s
 def extend_keras_metrics(keras_metrics: 'list[TargetMetric]'):
     return [
         TargetMetric('loss', min, ''),
-        TargetMetric('top_k_categorical_accuracy', max, '')
     ] + keras_metrics
 
 
@@ -140,12 +139,12 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
         config['dataset']['batch_size'] = batch_size
         config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (batch_size / search_config['dataset']['batch_size'])
 
-        # set score metric (to select best architecture if -spec is not provided)
+    # set score metric (to select the best architecture if "-spec" argument is not provided)
     config['search_strategy'] = {
         'score_metric': search_config['search_strategy'].get('score_metric', 'accuracy')
     }
 
-    # initialize train strategy (try-except to be retrocompatible with previous config format)
+    # initialize train strategy (try-except to be retrocompatible with the previous config format)
     try:
         ts_device = train_strategy if train_strategy is not None else search_config['others']['train_strategy']
         train_strategy = initialize_train_strategy(ts_device)
@@ -197,7 +196,6 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
     '''
     loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-    train_metrics.append(metrics.TopKCategoricalAccuracy(k=5))
 
     # enable label smoothing
     loss = losses.CategoricalCrossentropy(label_smoothing=0.1)

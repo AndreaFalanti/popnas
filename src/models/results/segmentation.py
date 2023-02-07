@@ -33,6 +33,6 @@ class SegmentationTrainingResults(BaseTrainingResults):
         return [self.accuracy, self.mean_iou] + super().to_csv_list()
 
     def log_results(self):
-        self._logger.info("Best accuracy reached: %0.4f", self.accuracy)
-        self._logger.info("Best mean IoU reached: %0.4f", self.mean_iou)
+        self._logger.info('Best accuracy reached: %0.4f', self.accuracy)
+        self._logger.info('Best mean IoU reached: %0.4f', self.mean_iou)
         super().log_results()

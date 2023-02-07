@@ -181,8 +181,8 @@ class BaseTrainingResults(ABC):
     @abstractmethod
     def log_results(self):
         ''' Print the results, in a human-readable format, to the logger. '''
-        self._logger.info("Training time: %0.4f", self.training_time)
+        self._logger.info('Training time: %0.4f', self.training_time)
         self._logger.info('Inference time: %0.4f', self.inference_time)
         # format is a workaround for thousands separator, since the python logger has no such feature
-        self._logger.info("Total parameters: %s", format(self.params, ','))
-        self._logger.info("Total FLOPS: %s", format(self.flops, ','))
+        self._logger.info('Total parameters: %s', format(self.params, ','))
+        self._logger.info('Total FLOPS: %s', format(self.flops, ','))
