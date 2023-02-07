@@ -16,8 +16,8 @@ from .predictor import Predictor
 
 
 class LGBMPredictor(Predictor):
-    def __init__(self, logger: Logger, log_folder: str, name: str = None, cat_feature_names: Optional[list[str]] = None,
-                 drop_feature_names : Optional[list[str]] = None, override_logs: bool = True, use_random_search: bool = False,
+    def __init__(self, logger: Logger, log_folder: str, name: str = None, cat_feature_names: Optional['list[str]'] = None,
+                 drop_feature_names: Optional['list[str]'] = None, override_logs: bool = True, use_random_search: bool = False,
                  task_type: str = 'CPU', perform_feature_analysis: bool = True):
         # avoids mutable arguments, set to an empty list by default if not provided
         if drop_feature_names is None:

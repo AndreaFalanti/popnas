@@ -278,7 +278,7 @@ class BaseModelGenerator(ABC):
         return initial_lookback_input
 
     # TODO: adapt it for 1D (time-series)
-    def _prepend_imagenet_stem(self, cell_inputs: list[WrappedTensor], filters: int) -> 'tuple[list[WrappedTensor], int]':
+    def _prepend_imagenet_stem(self, cell_inputs: 'list[WrappedTensor]', filters: int) -> 'tuple[list[WrappedTensor], int]':
         '''
         Add a stride-2 3x3 convolution layer followed by 2 reduction cells at the start of the network.
         The stem originates from PNAS and NASNet works, which used this stack of layers to quickly reduce the input dimensionality when
@@ -416,7 +416,7 @@ class BaseModelGenerator(ABC):
 
         return WrappedTensor(cell_out, out_shape)
 
-    def _make_cell_output_residual(self, cell_out: tf.Tensor, filters: int, lookback_inputs: list[WrappedTensor],
+    def _make_cell_output_residual(self, cell_out: tf.Tensor, filters: int, lookback_inputs: 'list[WrappedTensor]',
                                    out_shape: 'list[int, ...]') -> tf.Tensor:
         '''
         Sum the nearest used lookback input to the cell output, making a residual connection.
@@ -443,7 +443,7 @@ class BaseModelGenerator(ABC):
 
         return layers.Add(name=f'residual_c{self.cell_index}')([cell_out, lb_tensor])
 
-    def _concatenate_blocks_into_cell_output(self, block_outputs: list[WrappedTensor], filters: int) -> tf.Tensor:
+    def _concatenate_blocks_into_cell_output(self, block_outputs: 'list[WrappedTensor]', filters: int) -> tf.Tensor:
         '''
         Concatenate all given block outputs, and reduce tensor depth to filters value.
         If just a single block is provided, then the concatenation is not performed.
