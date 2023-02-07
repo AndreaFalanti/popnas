@@ -71,8 +71,11 @@ def main():
             model = models.load_model(os.path.join(args.p, 'best_model', 'tf_model'))
         print('Model loaded successfully from TF model files')
         save_evaluation_results(model, test_ds, model_path)
-        predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
-                                          save_path=os.path.join(model_path, 'test_confusion_matrix'))
+
+        # create confusion matrix only in classification tasks
+        if config['dataset']['type'] in ['image_classification', 'time_series_classification']:
+            predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
+                                              save_path=os.path.join(model_path, 'test_confusion_matrix'))
     else:
         with train_strategy.scope():
             model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, test_batches,
@@ -107,8 +110,10 @@ def main():
             print('Weights loaded successfully from checkpoint')
 
             save_evaluation_results(model, test_ds, m_path)
-            predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
-                                              save_path=os.path.join(m_path, 'test_confusion_matrix'))
+            # create confusion matrix only in classification tasks
+            if config['dataset']['type'] in ['image_classification', 'time_series_classification']:
+                predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
+                                                  save_path=os.path.join(m_path, 'test_confusion_matrix'))
 
     perform_global_memory_clear()
 

@@ -39,9 +39,10 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     cnn_config = config['cnn_hp']
     arc_config = config['architecture_parameters']
+    ds_config = config['dataset']
 
     multi_output = arc_config['multi_output']
-    augment_on_gpu = config['dataset']['data_augmentation']['perform_on_gpu']
+    augment_on_gpu = ds_config['data_augmentation']['perform_on_gpu']
     score_metric_name = config['search_strategy']['score_metric']
 
     # override config with command line parameters
@@ -51,10 +52,10 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_generator = dataset_generator_factory(config['dataset'], isinstance(train_strategy, tf.distribute.TPUStrategy))
+    dataset_generator = dataset_generator_factory(ds_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
     train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
     # produce weights for balanced loss if option is enabled in database config
-    balance_class_losses = config['dataset'].get('balance_class_losses', False)
+    balance_class_losses = ds_config.get('balance_class_losses', False)
     balanced_class_weights = generate_balanced_weights_for_classes(train_ds) if balance_class_losses else None
     logger.info('Datasets generated successfully')
 
@@ -62,7 +63,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # test_data_augmentation(train_ds)
 
     with train_strategy.scope():
-        model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, train_batches,
+        model_gen = model_generator_factory(ds_config['type'], cnn_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
@@ -132,8 +133,10 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     try:
         test_ds, _, _, test_batches = dataset_generator.generate_test_dataset()
         save_evaluation_results(model, test_ds, save_path)
-        predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
-                                          save_path=os.path.join(save_path, 'test_confusion_matrix'))
+        # create confusion matrix only in classification tasks
+        if ds_config['type'] in ['image_classification', 'time_series_classification']:
+            predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
+                                              save_path=os.path.join(save_path, 'test_confusion_matrix'))
     except:
         logger.info('Could not build the test dataset, or test dataset is not provided')
 
