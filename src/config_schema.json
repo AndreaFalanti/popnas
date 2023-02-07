@@ -40,7 +40,8 @@
                     "type": "string",
                     "enum": [
                         "accuracy",
-                        "f1_score"
+                        "f1_score",
+                        "mean_iou"
                     ]
                 },
                 "additional_pareto_objectives": {
