@@ -119,10 +119,6 @@ class BaseDatasetGenerator(ABC):
         if self.cache:
             ds = ds.cache()
 
-        # shuffle batches at each epoch
-        if shuffle:
-            ds = ds.shuffle(len(ds), reshuffle_each_iteration=True, seed=SEED)
-
         # if data augmentation is performed on CPU, map it before prefetch
         if keras_data_augmentation is not None and not self.augment_on_gpu:
             ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
@@ -134,6 +130,10 @@ class BaseDatasetGenerator(ABC):
         #  but not all operators can be applied on batches.
         if batch_size is not None:
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
+
+        # shuffle batches at each epoch
+        if shuffle:
+            ds = ds.shuffle(len(ds), reshuffle_each_iteration=True, seed=SEED)
 
         return ds.prefetch(AUTOTUNE), len(ds)
 
