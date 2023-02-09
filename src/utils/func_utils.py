@@ -3,7 +3,8 @@ import operator
 import os
 import shutil
 from configparser import ConfigParser
-from typing import Iterable
+from multiprocessing import Process
+from typing import Iterable, Callable
 
 import pandas as pd
 from sklearn.metrics import mean_absolute_percentage_error
@@ -110,3 +111,17 @@ def from_seconds_to_hms(time: float):
     seconds = total_seconds % 60
 
     return hours, minutes, seconds
+
+
+def run_as_sequential_process(f: Callable, args: tuple = (), kwargs: dict = None):
+    '''
+    Utility function used to encapsulate a function into a process, waiting immediately for its conclusion (so it's not meant for parallelization!).
+    It is a desperate move for encapsulating TF memory leaks and destroy them at the end of the process,
+    so that really long experiments can run flawlessly.
+    '''
+    if kwargs is None:
+        kwargs = {}
+
+    process = Process(target=f, args=args, kwargs=kwargs)
+    process.start()
+    process.join()

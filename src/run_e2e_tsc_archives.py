@@ -4,7 +4,6 @@ import math
 import os.path
 import pickle
 import sys
-from multiprocessing import Process
 from typing import Any
 
 import pandas as pd
@@ -13,7 +12,7 @@ import log_service
 import scripts
 from popnas import Popnas
 from utils.config_utils import validate_config_json
-from utils.func_utils import clamp
+from utils.func_utils import clamp, run_as_sequential_process
 from utils.nn_utils import initialize_train_strategy
 from utils.tsc_utils import TSCDatasetMetadata
 
@@ -99,22 +98,14 @@ def main():
 
         log_path = os.path.join('logs', run_folder_path)
         customized_config = adapt_config_to_dataset_metadata(base_config, ds_meta)
-
-        # NOTE: run each step of the E2E experiment in a separate process, to "encapsulate and destroy" memory leaks caused by Tensorflow...
-        # processes are run sequentially (immediate join). The workflow is exactly the same of just calling the functions.
-        process = Process(target=run_search_experiment, args=(log_path, customized_config))
-        process.start()
-        process.join()
-
         post_batch_size = customized_config['dataset']['batch_size'] if args.b is None else args.b
 
-        process = Process(target=run_model_selection, args=(log_path, post_batch_size, args.params, args.jms))
-        process.start()
-        process.join()
-
-        process = Process(target=run_last_training, args=(log_path, post_batch_size, args.jlt))
-        process.start()
-        process.join()
+        # NOTE: run each step of the E2E experiment in a separate process, to "encapsulate and destroy" memory leaks caused by Tensorflow...
+        # processes are run sequentially (immediate join). The workflow is exactly the same as just calling the functions.
+        run_as_sequential_process(f=run_search_experiment, args=(log_path, customized_config))
+        run_as_sequential_process(f=scripts.execute_model_selection_training,
+                                  kwargs={'p': log_path, 'b': post_batch_size, 'params': args.params, 'j': args.jms})
+        run_as_sequential_process(f=run_last_training, args=(log_path, post_batch_size, args.jlt))
 
 
 def run_search_experiment(log_path: str, customized_config: dict):
@@ -124,7 +115,7 @@ def run_search_experiment(log_path: str, customized_config: dict):
     with open(log_service.build_path('restore', 'run.json'), 'w') as f:
         json.dump(customized_config, f, indent=4)
 
-    # Handle uncaught exception in a special log file, leave it before validating JSON so the exception is logged
+    # Handle uncaught exception in a special log file, leave it before validating JSON so that the exception is logged
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
     # check that the config is correct
     validate_config_json(customized_config)
@@ -135,10 +126,6 @@ def run_search_experiment(log_path: str, customized_config: dict):
     popnas.start()
 
     scripts.generate_plot_slides(log_path, save=True)
-
-
-def run_model_selection(run_folder_path: str, batch_size: int, params_range: str, json_path: str):
-    scripts.execute_model_selection_training(run_folder_path, b=batch_size, params=params_range, j=json_path)
 
 
 def run_last_training(run_folder_path: str, batch_size: int, json_path: str):

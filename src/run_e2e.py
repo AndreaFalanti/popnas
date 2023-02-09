@@ -8,6 +8,7 @@ import log_service
 import scripts
 from popnas import Popnas
 from utils.config_utils import validate_config_json, initialize_search_config_and_logs
+from utils.func_utils import run_as_sequential_process
 from utils.nn_utils import initialize_train_strategy
 
 
@@ -31,24 +32,31 @@ def main():
     # check that the config is correct
     validate_config_json(run_config)
 
-    train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
-
-    popnas = Popnas(run_config, train_strategy)
-    popnas.start()
-
-    run_folder_path = log_service.log_path
+    log_path = log_service.log_path
     post_batch_size = run_config['dataset']['batch_size'] if args.b is None else args.b
-    scripts.generate_plot_slides(run_folder_path, save=True)
-    scripts.execute_model_selection_training(run_folder_path, b=post_batch_size, params=args.params, j=args.jms, k=args.k)
+
+    run_as_sequential_process(f=run_search, args=(log_path, run_config))
+    run_as_sequential_process(f=scripts.execute_model_selection_training,
+                              kwargs={'p': log_path, 'b': post_batch_size, 'params': args.params, 'j': args.jms, 'k': args.k})
 
     # get model selection best result
-    model_selection_results_csv_path = os.path.join(run_folder_path, f'best_model_training_top{args.k}', 'training_results.csv')
+    model_selection_results_csv_path = os.path.join(log_path, f'best_model_training_top{args.k}', 'training_results.csv')
     ms_df = pd.read_csv(model_selection_results_csv_path)
     best_ms = ms_df[ms_df['val_score'] == ms_df['val_score'].max()].to_dict('records')[0]
     print(f'Best model found during model selection: {best_ms}')
 
-    scripts.execute_last_training(run_folder_path, b=post_batch_size, f=best_ms['f'], m=best_ms['m'], n=best_ms['n'], spec=best_ms['cell_spec'],
-                                  j=args.jlt)
+    run_as_sequential_process(f=scripts.execute_last_training,
+                              kwargs={'p': log_path, 'b': post_batch_size, 'f': best_ms['f'], 'm': best_ms['m'], 'n': best_ms['n'],
+                                      'spec': best_ms['cell_spec'], 'j': args.jlt})
+
+
+def run_search(log_path: str, run_config: dict):
+    log_service.set_log_path(log_path)
+    train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
+
+    popnas = Popnas(run_config, train_strategy)
+    popnas.start()
+    scripts.generate_plot_slides(log_path, save=True)
 
 
 if __name__ == '__main__':
