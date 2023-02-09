@@ -38,3 +38,25 @@ It also introduces a new operator and some other structural refactors.
   instead of using lists of tuples.
 - Fix legacy Keras imports, updating them to the "standard" ones.
 - Replace MeanIoU with OneHotMeanIoU in the segmentation models prototype.
+
+### v3.3.0
+
+Finalize the implementation of dataset and model generators for the semantic segmentation task. Include also some minor improvements.
+- Introduce the WrappedTensor class, used to keep track of important tensors for POPNAS architectures along with their shape.
+  The shape is computed a priori, and often it is expressed as a ratio of the original input dimension, making it possible to verify
+  shape incompatibilities even when the input shape is not completely defined
+  (some dimensions are None, working as fully convolutional neural networks).
+- Update ModelGenerators to use the WrappedTensor class, making it possible to not specify the spatial resolution of the input, and therefore using inputs
+  of different sizes. Of course, the macro-architecture must be fully convolutional to exploit this behavior.
+- Update SegmentationModelGenerator macro-structure to use upsample cells, incorporating the previously defined upsample units.
+  This change makes the structure more compatible with skip lookbacks.
+  Also, add support for multi-outputs for segmentation.
+- Change the preprocessing script for segmentation datasets, merging the two previous scripts and adding the possibility of resizing
+  the images and masks so that the smallest axis has the specified size (keeping the original aspect ratio).
+- Improve and fix the ImageSegmentationDatasetGenerator, correctly handling the preprocessing and data augmentation on ragged tensors and applying
+  the same transformations to both images and masks, which were bugged in the previous minor versions.
+- Move top_k_categorical_accuracy to classification models search metrics, instead of inserting it in post-search procedures.
+- Add support for "mean_iou" as score metric.
+- Disable graph saving in tensorboard callback, saving a lot of storage space per experiment.
+- Make run_e2e execute the various scripts as processes, as done in TSC archives script.
+
