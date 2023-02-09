@@ -119,10 +119,7 @@ class BaseDatasetGenerator(ABC):
         if self.cache:
             ds = ds.cache()
 
-        # if data augmentation is performed on CPU, map it before prefetch
-        if keras_data_augmentation is not None and not self.augment_on_gpu:
-            ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
-
+        # TF augmentations could not work on batches, perform them before the batching
         if tf_data_augmentation is not None:
             ds = ds.map(tf_data_augmentation, num_parallel_calls=AUTOTUNE)
 
@@ -130,6 +127,11 @@ class BaseDatasetGenerator(ABC):
         #  but not all operators can be applied on batches.
         if batch_size is not None:
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
+
+        # if data augmentation is performed on CPU, map it before prefetch
+        # keras augmentations should always work on batches
+        if keras_data_augmentation is not None and not self.augment_on_gpu:
+            ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
         # shuffle batches at each epoch
         if shuffle:
