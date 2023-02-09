@@ -8,7 +8,7 @@ from sklearn.utils import shuffle
 from sktime import datasets as sktdata
 from tensorflow.keras import Sequential
 
-from dataset.generators.base import BaseDatasetGenerator, SEED, load_npz
+from dataset.generators.base import BaseDatasetGenerator, SEED, load_npz, DatasetsFold
 from dataset.preprocessing import TimeSeriesPreprocessor
 
 
@@ -91,7 +91,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
         return x, y
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
+    def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
         preprocessing_model = None
@@ -127,7 +127,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor)
-            dataset_folds.append((train_ds, val_ds))
+            dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = preprocessor.preprocessor_model
 

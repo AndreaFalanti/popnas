@@ -8,7 +8,7 @@ from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
 from dataset.augmentation import get_image_segmentation_tf_data_aug
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset, DatasetsFold
 from dataset.preprocessing import ImagePreprocessor
 
 # make sure the spatial dimensions of any image are multiples of this value.
@@ -23,7 +23,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         resize_config = dataset_config['resize']
         self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
+    def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
         # TODO: currently not supported
@@ -70,7 +70,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
             # since images can have different sizes, it's not possible to batch multiple images together (batch_size = 1)
             val_ds, val_batches = self._finalize_dataset(val_ds, 1, data_preprocessor, shard_policy=shard_policy)
-            dataset_folds.append((train_ds, val_ds))
+            dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = data_preprocessor.preprocessor_model
 

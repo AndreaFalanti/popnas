@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Optional, Callable, NamedTuple
 
 import numpy as np
 import tensorflow as tf
@@ -11,6 +11,12 @@ from dataset.preprocessing import DataPreprocessor
 AUTOTUNE = tf.data.AUTOTUNE
 AutoShardPolicy = tf.data.experimental.AutoShardPolicy
 SEED = 1234
+
+
+class DatasetsFold(NamedTuple):
+    ''' Container for a fold of datasets used during training (training and validation datasets). '''
+    train: tf.data.Dataset
+    validation: tf.data.Dataset
 
 
 def load_npz(file_path: str, possibly_ragged: bool = False) -> 'tuple[np.ndarray, np.ndarray]':
@@ -140,7 +146,7 @@ class BaseDatasetGenerator(ABC):
         return ds.prefetch(AUTOTUNE), len(ds)
 
     @abstractmethod
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
+    def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         '''
             Generates training and validation tensorflow datasets for each fold to perform, based on the provided configuration parameters.
 

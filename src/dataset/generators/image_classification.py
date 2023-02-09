@@ -10,7 +10,7 @@ from tensorflow.keras import datasets, Sequential
 from tensorflow.keras.utils import image_dataset_from_directory
 
 from dataset.augmentation import get_image_data_augmentation_model, get_image_classification_tf_data_aug
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, DatasetsFold
 from dataset.preprocessing import ImagePreprocessor
 
 
@@ -78,7 +78,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         return train_ds, val_ds, info
 
-    def generate_train_val_datasets(self) -> 'tuple[list[tuple[tf.data.Dataset, tf.data.Dataset]], int, tuple[int, ...], int, int, Optional[Sequential]]':
+    def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
         keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
         tf_aug = get_image_classification_tf_data_aug() if self.use_data_augmentation and self.use_cutout else None
@@ -174,7 +174,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
             val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
-            dataset_folds.append((train_ds, val_ds))
+            dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = data_preprocessor.preprocessor_model
 
