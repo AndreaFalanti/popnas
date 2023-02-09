@@ -119,7 +119,7 @@ class KerasPredictor(Predictor, ABC):
 
     def _get_callbacks(self, log_folder: str) -> 'list[callbacks.Callback]':
         return [
-            callbacks.TensorBoard(log_dir=log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
+            callbacks.TensorBoard(log_dir=log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch', write_graph=False),
             callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
         ]
 
