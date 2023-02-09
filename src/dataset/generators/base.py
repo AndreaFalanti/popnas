@@ -80,6 +80,12 @@ class BaseDatasetGenerator(ABC):
 
         self.enable_tpu_tricks = enable_tpu_tricks
 
+    @abstractmethod
+    def supports_early_batching(self) -> bool:
+        ''' Return a bool, indicating if the dataset can be batched immediately after preprocessing,
+         otherwise batching will be performed after TF data augmentations. '''
+        raise NotImplementedError()
+
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
                           keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation: 'Optional[Callable]' = None,
                           shuffle: bool = False, fit_preprocessing_layers: bool = False,
@@ -121,6 +127,10 @@ class BaseDatasetGenerator(ABC):
                 duplicate_ds = ds.take(duplicated_samples_count)
                 ds = ds.concatenate(duplicate_ds)
 
+            # batch before caching and augmentation when the rest of the pipeline can work on batches. Vectorization improves performance.
+            if self.supports_early_batching():
+                ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
+
         # after preprocessing, cache in memory for better performance, if enabled. Should be disabled only for large datasets.
         if self.cache:
             ds = ds.cache()
@@ -129,9 +139,8 @@ class BaseDatasetGenerator(ABC):
         if tf_data_augmentation is not None:
             ds = ds.map(tf_data_augmentation, num_parallel_calls=AUTOTUNE)
 
-        # TODO: should be better to batch before applying preprocessing/augmentation to improve performance by vectorizing the operations,
-        #  but not all operators can be applied on batches.
-        if batch_size is not None:
+        # Apply batching after TF augmentation, when batched augmentations are not supported
+        if batch_size is not None and not self.supports_early_batching():
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
         # if data augmentation is performed on CPU, map it before prefetch

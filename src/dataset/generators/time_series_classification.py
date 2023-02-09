@@ -71,6 +71,9 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         self.rescale = dataset_config['rescale']
         self.normalize = dataset_config['normalize']
 
+    def supports_early_batching(self) -> bool:
+        return True
+
     def _get_numpy_split(self, split_name: str):
         # numpy case
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):

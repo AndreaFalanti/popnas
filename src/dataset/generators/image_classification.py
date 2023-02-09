@@ -22,6 +22,9 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
         self.use_cutout = dataset_config['data_augmentation'].get('use_cutout', False)
 
+    def supports_early_batching(self) -> bool:
+        return True
+
     def __load_keras_dataset_images(self):
         '''
         Load images of a Keras dataset. In this case the data is in form of Numpy arrays.

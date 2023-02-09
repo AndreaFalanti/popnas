@@ -23,6 +23,9 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         resize_config = dataset_config['resize']
         self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
 
+    def supports_early_batching(self) -> bool:
+        return False
+
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
