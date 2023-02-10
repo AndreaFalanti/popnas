@@ -2,6 +2,7 @@ from typing import Optional, Collection, Sequence, NamedTuple
 
 import numpy as np
 from matplotlib import pyplot as plt, cm as cm
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 import log_service
 
@@ -204,7 +205,9 @@ def plot_squared_scatter_chart(x: Sequence, y: Sequence, x_label: str, y_label: 
 def plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[list], labels: 'list[str]', title: str, save_name: str):
     ''' Plot Pareto front in 3D plot. If only 2 objectives are used in the Pareto optimization, rank is added as x-axis. '''
     fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')   # type: plt.Axes
+    ax = fig.add_subplot(projection='3d')   # type: Axes3D
+    # TODO: z-axis label is cropped in .png format, but correctly inserted in .pdf. Matplotlib bug with tight layout?
+    # ax.set_proj_type('ortho')
 
     if len(real_coords) != len(pred_coords):
         raise ValueError(f'Inconsistent coordinates, real are {len(real_coords)}D while pred are {len(pred_coords)}D')
@@ -223,12 +226,12 @@ def plot_pareto_front(real_coords: Collection[list], pred_coords: Collection[lis
         ax.set_zlabel(labels[2])
     # For 2 metrics only, adding another axis for displaying the rank, resulting in a 3D plot.
     elif len(real_coords) == 2:
-        # reverse them for nicer plots (rank 0 is the worst score, so it creates an incremental plot)
-        # since they are reversed, metric1 is extracted before metric0
-        metric1_real, metric0_real = real_coords[::-1]
-        metric1_pred, metric0_pred = pred_coords[::-1]
+        # reverse the metrics for nicer plots (rank 0 becomes the worst score, so it creates an incremental plot)
+        metric0_real, metric1_real = [coord[::-1] for coord in real_coords]
+        metric0_pred, metric1_pred = [coord[::-1] for coord in pred_coords]
 
         ranks = np.arange(len(metric1_real))
+        # swap metrics order, the score metric (0) should be the z axis
         ax.plot(ranks, metric1_real, metric0_real, '--.b', alpha=0.6)
         ax.plot(ranks, metric1_pred, metric0_pred, '--.g', alpha=0.6)
 
