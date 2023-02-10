@@ -128,7 +128,7 @@ class Popnas:
 
         return train_res
 
-    def perform_initial_thrust(self, acc_features_len: int):
+    def perform_initial_thrust(self, score_features_len: int):
         '''
         Build a starting point model with 0 blocks to evaluate the offset (initial thrust).
         '''
@@ -138,10 +138,11 @@ class Popnas:
 
         # last fields are exploration and data augmentation
         time_data = [train_res.training_time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
-        acc_data = [train_res.accuracy] + [0] * (acc_features_len - 3) + [False, False]
+        score = getattr(train_res, self.score_metric_name)
+        score_data = [score] + [0] * (score_features_len - 3) + [False, False]
 
         fw.append_to_time_features_csv(time_data)
-        fw.append_to_score_features_csv(acc_data)
+        fw.append_to_score_features_csv(score_data)
         fw.write_training_results_into_csv(train_res)
 
         return train_res.training_time
