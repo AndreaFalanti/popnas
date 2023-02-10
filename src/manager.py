@@ -147,7 +147,7 @@ class NetworkManager:
 
     def perform_proxy_training(self, cell_spec: CellSpecification, save_best_model: bool = False):
         '''
-        Generate a neural network from the cell specification and trains it for a short amount of epochs to get an estimate
+        Generate a neural network from the cell specification and trains it for a short number of epochs to get an estimate
         of its quality. Other relevant metrics of the NN architecture, like the params and flops, are returned together with the training results.
 
         Args:

@@ -15,6 +15,7 @@ from models.results import BaseTrainingResults
 from models.results.base import get_pareto_targeted_metrics
 from predictors.initializer import PredictorsHandler
 from search_space import SearchSpace, CellSpecification, BlockSpecification
+from utils.experiments_summary import get_sampled_networks_count, get_dataset_name, SearchInfo, get_top_scores, write_search_infos_csv
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
 from utils.func_utils import from_seconds_to_hms
@@ -27,7 +28,7 @@ remove_annoying_tensorflow_messages()
 
 class Popnas:
     def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy, benchmarking: bool = False):
-        ''' Configure and set up POPNASv2 algorithm for execution. Use start() function to start the NAS procedure. '''
+        ''' Configure and set up POPNAS algorithm for execution. Use start() function to start the NAS procedure. '''
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
@@ -116,7 +117,7 @@ class Popnas:
     def _compute_total_time(self):
         return self.time_delta + (timer() - self._start_time)
 
-    def generate_and_train_model_from_spec(self, cell_spec: CellSpecification):
+    def generate_and_train_model_from_spec(self, cell_spec: CellSpecification) -> BaseTrainingResults:
         """ Generate a model from the cell specification and train it to get an estimate of its quality and characteristics. """
         cell_spec.pretty_logging(self._logger)
 
@@ -191,14 +192,16 @@ class Popnas:
         return {op1: train_res.training_time for train_res in monoblocks_train_info
                 for in1, op1, in2, op2 in train_res.cell_spec if is_a_specular_monoblock(in1, op1, in2, op2)}
 
-    def log_run_final_results(self):
+    def log_and_save_run_final_results(self):
         self._logger.info('Finished!')
         total_time = self._compute_total_time()
 
-        training_results_path = log_service.build_path('csv', 'training_results.csv')
-        # the number of lines in csv is equivalent to the number of networks trained during the run (-1 for headers line)
-        with open(training_results_path) as f:
-            trained_cnn_count = len(f.readlines()) - 1
+        dataset_name = get_dataset_name(log_service.log_path)
+        trained_cnn_count = get_sampled_networks_count(log_service.log_path)
+        top_score, mean5_top_score = get_top_scores(log_service.log_path, self.score_metric)
+
+        info = SearchInfo(dataset_name, trained_cnn_count, top_score, mean5_top_score, total_time, self.score_metric.name)
+        write_search_infos_csv(log_service.build_path('csv', 'search_results.csv'), [info])
 
         self._logger.info('%s', '*' * 40 + ' RUN RESULTS ' + '*' * 40)
         self._logger.info('Trained networks: %d', trained_cnn_count)
@@ -247,7 +250,7 @@ class Popnas:
 
     def start(self):
         '''
-        Start a neural architecture search run, using POPNASv3 algorithm customized with provided configuration.
+        Start a neural architecture search run, using POPNAS algorithm customized with provided configuration.
         '''
         time_headers, time_feature_types = build_time_feature_names()
         score_headers, score_feature_types = build_score_feature_names(self.blocks, self.input_lookback_depth)
@@ -311,4 +314,4 @@ class Popnas:
                 self.restore_exploration_train_index = 0
 
         self.generate_final_plots()
-        self.log_run_final_results()
+        self.log_and_save_run_final_results()

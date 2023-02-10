@@ -12,6 +12,7 @@ from dataset.utils import dataset_generator_factory, generate_balanced_weights_f
 from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from search_space import CellSpecification
+from utils.experiments_summary import FinalTrainingInfo, write_final_training_infos_csv
 from utils.network_graph import save_cell_dag_image
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
@@ -89,8 +90,8 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     logger.info('Generating Keras model from cell specification...')
     # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
-    with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as f:
-        f.write(str(cell_spec))
+    with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as fp:
+        fp.write(str(cell_spec))
 
     save_trimmed_json_config(config, save_path)
 
@@ -139,6 +140,9 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                                               save_path=os.path.join(save_path, 'test_confusion_matrix'))
     except:
         logger.info('Could not build the test dataset, or test dataset is not provided')
+
+    info = FinalTrainingInfo(ds_config['name'], cell_spec, model.count_params(), m, n, f, best_training_score, training_time, score_metric_name)
+    write_final_training_infos_csv(os.path.join(save_path, 'results.csv'), [info])
 
     perform_global_memory_clear()
     save_cell_dag_image(cell_spec, save_path)
