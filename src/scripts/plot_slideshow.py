@@ -2,6 +2,7 @@ import argparse
 import math
 import os
 import shutil
+from operator import attrgetter
 from sys import platform
 
 import matplotlib.pyplot as plt
@@ -29,11 +30,8 @@ def generate_slide_save_path(log_folder):
         shutil.rmtree(save_folder)
         os.makedirs(save_folder)
 
-    def gen_save_name():
-        for i in range(1, 1000):
-            yield os.path.join(save_folder, f'slide_{i}.png')
-
-    return gen_save_name()
+    for i in range(1, 1000):
+        yield os.path.join(save_folder, f'slide_{i}.png')
 
 
 def display_plot_overview(plot_paths: 'list[str]', columns: int, rows: int, title: str = None, save: bool = False, save_name: str = None):
@@ -110,6 +108,15 @@ def display_predictors_test_slide(test_folder_path: str, reference_plot_path: st
         display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
 
 
+def display_dynamic_layout_slide(plots: list[os.DirEntry], title: str, save: bool, save_path: str):
+    if len(plots) > 1:
+        cols, rows = compute_dynamic_size_layout(len(plots))
+        plot_paths = [f.path for f in plots]
+        display_plot_overview(plot_paths, cols, rows, title, save=save, save_name=save_path)
+    else:
+        print('Slide skipped, since composed by a single (or zero) plot')
+
+
 def execute(p: str, save: bool = False):
     ''' Refer to argparse help for more information about these arguments. '''
     if not save:
@@ -123,11 +130,18 @@ def execute(p: str, save: bool = False):
     sstr_config = run_config['search_strategy']
     score_metric = sstr_config['score_metric']
 
-    display_plot_overview(gen_paths(['SMB_acc.png', 'SMB_time.png', 'SMB_params.png', 'SMB_flops.png']),
-                          2, 2, title='Specular mono blocks (input -1) overview', save=save, save_name=next(gen_save_path, None))
-    display_plot_overview(gen_paths([f'{score_metric}_pred_overview.png', f'pred_{score_metric}_errors_boxplot.png',
-                                     'time_pred_overview.png', 'pred_time_errors_boxplot.png']),
-                          2, 2, title='Prediction errors overview', save=save, save_name=next(gen_save_path, None))
+    # get info about all plots belonging to the apposite folder
+    plot_files = [f for f in os.scandir(os.path.join(p, 'plots')) if f.is_file()]  # type: list[os.DirEntry]
+    # make sure it is ordered by filename (depends on OS, on Windows it seems already done by scandir, but not on Linux)
+    plot_files.sort(key=attrgetter('name'))
+
+    smb_plots = [f for f in plot_files if f.name.startswith('SMB_')]
+    display_dynamic_layout_slide(smb_plots, title='Specular mono blocks (input -1) overview', save=save, save_path=next(gen_save_path, None))
+
+    exp_pred_plots = [f for f in plot_files if f.name.endswith('pred_overview.png')]
+    exp_pred_errors_plots = [f for f in plot_files if f.name.endswith('errors_boxplot.png')]
+    display_dynamic_layout_slide(exp_pred_plots + exp_pred_errors_plots, title='Prediction errors overview',
+                                 save=save, save_path=next(gen_save_path, None))
 
     b = 2
     while os.path.isfile(os.path.join(p, 'plots', f'children_op_usage_B{b}.png')):
@@ -136,32 +150,20 @@ def execute(p: str, save: bool = False):
                               3, 2, title=f'Cell structures overview (B={b})', save=save, save_name=next(gen_save_path, None))
         b += 1
 
-    pred_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('predictions_with_pareto_B')]
-    if len(pred_pareto_plot_paths) > 1:
-        cols, rows = compute_dynamic_size_layout(len(pred_pareto_plot_paths))
-        display_plot_overview(gen_paths(pred_pareto_plot_paths), cols, rows, title='Predictions with Pareto overview', save=save,
-                              save_name=next(gen_save_path, None))
+    pred_pareto_plots = [f for f in plot_files if f.name.startswith('predictions_with_pareto_B')]
+    display_dynamic_layout_slide(pred_pareto_plots, title='Predictions with Pareto overview', save=save, save_path=next(gen_save_path, None))
 
-    real_pareto_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('pareto_plot_B')]
-    if len(real_pareto_plot_paths) > 1:
-        cols, rows = compute_dynamic_size_layout(len(real_pareto_plot_paths))
-        display_plot_overview(gen_paths(real_pareto_plot_paths), cols, rows, title='Pareto fronts overview', save=save,
-                              save_name=next(gen_save_path, None))
+    real_pareto_plots = [f for f in plot_files if f.name.startswith('pareto_plot_B')]
+    display_dynamic_layout_slide(real_pareto_plots, title='Pareto fronts overview', save=save, save_path=next(gen_save_path, None))
 
-    multi_output_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.startswith('multi_output_boxplot')]
-    if len(multi_output_plot_paths) > 1:
-        cols, rows = compute_dynamic_size_layout(len(multi_output_plot_paths))
-        display_plot_overview(gen_paths(multi_output_plot_paths), cols, rows, title='Val accuracy overview per output', save=save,
-                              save_name=next(gen_save_path, None))
+    multi_output_plots = [f for f in plot_files if f.name.startswith('multi_output_')]
+    display_dynamic_layout_slide(multi_output_plots, title='Metrics overview per output', save=save, save_path=next(gen_save_path, None))
 
-    display_plot_overview(gen_paths(['val_acc_boxplot.png', 'val_f1_score_boxplot.png', 'train_time_boxplot.png']),
-                          2, 2, title='CNN training per block overview', save=save, save_name=next(gen_save_path, None))
+    metrics_block_boxplots = [f for f in plot_files if f.name.endswith('boxplot.png') and 'errors' not in f.name]
+    display_dynamic_layout_slide(metrics_block_boxplots, title='CNN training per block overview', save=save, save_path=next(gen_save_path, None))
 
-    time_corr_plot_paths = [filename for filename in os.listdir(os.path.join(p, 'plots')) if filename.endswith('_time_corr.png')]
-    if len(time_corr_plot_paths) > 1:
-        cols, rows = compute_dynamic_size_layout(len(time_corr_plot_paths))
-        display_plot_overview(gen_paths(time_corr_plot_paths), cols, rows, title='Correlation with training time overview', save=save,
-                              save_name=next(gen_save_path, None))
+    time_corr_plots = [f for f in plot_files if f.name.endswith('_time_corr.png')]
+    display_dynamic_layout_slide(time_corr_plots, title='Correlation with training time overview', save=save, save_path=next(gen_save_path, None))
 
     # check if predictors time test folder is present (predictors_time_testing.py output)
     time_test_path = os.path.join(p, 'pred_time_test')
