@@ -179,18 +179,12 @@ class Popnas:
         '''
         Extract the training time required to train the specular cells composed of single block.
         These times are required to compute the dynamic reindex map.
-        Args:
-            monoblocks_train_info:
 
         Returns:
             a dictionary, with the operator used in the specular mono block as key, and the training time as value.
         '''
-        def is_a_specular_monoblock(in1, op1, in2, op2) -> bool:
-            ''' Same inputs, same operators, considers only the ones with input = -1. '''
-            return in1 == in2 and op1 == op2 and in1 == -1
-
-        return {op1: train_res.training_time for train_res in monoblocks_train_info
-                for in1, op1, in2, op2 in train_res.cell_spec if is_a_specular_monoblock(in1, op1, in2, op2)}
+        return {train_res.cell_spec.operators()[0]: train_res.training_time for train_res in monoblocks_train_info
+                if train_res.cell_spec.is_specular_monoblock()}
 
     def log_and_save_run_final_results(self):
         self._logger.info('Finished!')
