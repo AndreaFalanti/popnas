@@ -327,6 +327,9 @@
                         "TPU",
                         "multi-GPU"
                     ]
+                },
+                "enable_XLA_compilation": {
+                    "type": "boolean"
                 }
             },
             "required": [

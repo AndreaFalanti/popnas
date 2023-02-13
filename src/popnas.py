@@ -91,8 +91,7 @@ class Popnas:
 
         # create the Network Manager
         self.nn_manager = NetworkBenchManager(ds_config) if benchmarking else \
-            NetworkManager(ds_config, cnn_config, arc_config, self.score_metric_name, train_strategy,
-                           others_config['save_children_weights'], others_config['save_children_as_onnx'])
+            NetworkManager(ds_config, cnn_config, arc_config, others_config, self.score_metric_name, train_strategy)
 
         # extract targeted network metrics for plot purposes
         results_processor = self.nn_manager.model_gen.get_results_processor_class()

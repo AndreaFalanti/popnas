@@ -26,8 +26,8 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, score_objective: str, train_strategy: tf.distribute.Strategy,
-                 save_network_weights: bool, save_as_onnx: bool):
+    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, others_config: dict,
+                 score_objective: str, train_strategy: tf.distribute.Strategy):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -67,14 +67,15 @@ class NetworkManager:
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
                                                  data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
-                                                 save_weights=save_network_weights)
+                                                 save_weights=others_config['save_children_weights'])
         self.TrainingResults = self.model_gen.get_results_processor_class()
 
         self.multi_output_model = arc_config['multi_output']
         self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.keras_metrics_considered()
                                          for i in range(self.model_gen.get_maximum_cells())] + ['cell_spec']
 
-        self.save_onnx = save_as_onnx
+        self.save_onnx = others_config['save_children_as_onnx']
+        self.XLA_compile = others_config['enable_XLA_compilation']
 
         # take 6 batches of size provided in config, used to test the inference time.
         # when using multiple steps per execution, multiply the number of batches by the steps executed.
@@ -103,7 +104,8 @@ class NetworkManager:
             model, _ = self.model_gen.build_model(cell_spec)
 
             loss, loss_weights, optimizer, metrics = self.model_gen.define_training_hyperparams_and_metrics()
-            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics, steps_per_execution=self.execution_steps)
+            model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics,
+                          steps_per_execution=self.execution_steps, jit_compile=self.XLA_compile)
 
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True

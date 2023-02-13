@@ -75,6 +75,7 @@
         "save_children_weights": false,
         "save_children_as_onnx": false,
         "pnas_mode": false,
-        "train_strategy": "GPU"
+        "train_strategy": "GPU",
+        "enable_XLA_compilation": false
     }
 }

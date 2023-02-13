@@ -23,5 +23,8 @@
             "use_cutout": true,
             "perform_on_gpu": false
         }
+    },
+    "others": {
+        "enable_XLA_compilation": true
     }
 }
