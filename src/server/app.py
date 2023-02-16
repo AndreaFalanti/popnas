@@ -1,33 +1,23 @@
-import shlex
+from multiprocessing import Process
 from subprocess import Popen, PIPE
 from time import time
 
 from flask import Flask
 from flask_restful import Resource, Api, reqparse
 
+import server.utils as U
+from server.subprocesses import launch_popnas_subprocess
 from server.tensorboard_p import TensorboardProcess, available_tb_ports, purge_inactive_tensorboard_processes
 
 app = Flask(__name__)
 api = Api(app)
 
-popnas_processes = {}   # type: 'dict[str, Popen]'
-tensorboard_processes = {}  # type: 'dict[str, TensorboardProcess]'
+popnas_processes = {}   # type: dict[str, Process]
+tensorboard_processes = {}  # type: dict[str, TensorboardProcess]
 
 run_start_parser = reqparse.RequestParser()
 run_start_parser.add_argument('name', type=str, required=True)
 run_start_parser.add_argument('config_uri', type=str, required=True)
-
-
-def build_popnas_run_command(run_name: str, config_uri: str):
-    return shlex.split(f'python run.py -j {config_uri} -name {run_name}')
-
-
-def build_popnas_restore_command(run_name: str):
-    return shlex.split(f'python run.py -r logs/{run_name}')
-
-
-def build_tensorboard_command(run_name: str, port: int):
-    return shlex.split(f'tensorboard --logdir logs/{run_name}/tensorboard_cnn --port {port} --bind_all')
 
 
 class HelloWorld(Resource):
@@ -38,12 +28,12 @@ class HelloWorld(Resource):
 class Runs(Resource):
     def post(self):
         args = run_start_parser.parse_args(strict=True)
+        run_name = args['name']
 
-        command = build_popnas_run_command(args['name'], args['config_uri'])
-        # popnas_processes[args['name']] = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
-        #
-        # return {'name': args['name']}, 201
-        return {'command': command}, 201
+        command = U.build_popnas_run_command(run_name, args['config_uri'])
+        popnas_processes[run_name] = launch_popnas_subprocess(command, run_name)
+
+        return {'name': run_name}, 201
 
 
 class RunsTensorboard(Resource):
@@ -59,7 +49,7 @@ class RunsTensorboard(Resource):
             tensorboard_processes = purge_inactive_tensorboard_processes(tensorboard_processes)
 
             port = available_tb_ports.pop()
-            command = build_tensorboard_command(run_name, port)
+            command = U.build_tensorboard_command(run_name, port)
             proc = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
             tensorboard_processes[run_name] = TensorboardProcess(proc, port, time())
 
@@ -84,8 +74,8 @@ class RunsResume(Resource):
         if popnas_proc:
             return {'error': f'Run {run_name} is already in progress!'}, 400
         else:
-            command = build_popnas_restore_command(run_name)
-            popnas_processes[run_name] = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
+            command = U.build_popnas_restore_command(run_name)
+            popnas_processes[run_name] = launch_popnas_subprocess(command, run_name)
             return {}, 204
 
 
