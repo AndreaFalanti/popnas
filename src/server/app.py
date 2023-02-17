@@ -8,7 +8,7 @@ from flask_restful import Resource, Api, reqparse
 import server.utils as U
 from server.custom_logger import get_logger
 from server.subprocesses import launch_popnas_subprocess
-from server.tensorboard_p import TensorboardProcess, available_tb_ports, purge_inactive_tensorboard_processes
+from server.tensorboard_p import TensorboardProcess, available_tb_ports, purge_inactive_tensorboard_processes, free_tensorboard_process
 
 app = Flask(__name__)
 api = Api(app)
@@ -59,6 +59,17 @@ class RunsTensorboard(Resource):
             logger.info('Tensorboard instance created with port %d', port)
 
             return {'port': port}, 200
+
+    def delete(self, run_name: str):
+        # TODO: avoid global
+        global tensorboard_processes
+
+        tb_proc = tensorboard_processes.get(run_name, None)
+        if tb_proc:
+            free_tensorboard_process(tb_proc, run_name)
+            return {}, 204
+        else:
+            return {'error': f'No tensorboard instance of run "{run_name}" is currently executing'}, 404
 
 
 class RunsStop(Resource):
