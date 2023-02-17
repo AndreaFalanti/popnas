@@ -1,6 +1,6 @@
 import multiprocessing
 import os
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, DEVNULL
 
 from server.custom_logger import get_logger
 
@@ -8,7 +8,7 @@ from server.custom_logger import get_logger
 def _run_popnas_experiment(command: str, run_name: str):
     logger = get_logger('app')
 
-    p = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
+    p = Popen(command, stdout=DEVNULL, stderr=PIPE, shell=True)
     stdout, stderr = p.communicate()
     rcode = p.wait()
 
