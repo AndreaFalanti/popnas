@@ -5,9 +5,9 @@ ENV POETRY_VERSION=1.3.2
 WORKDIR /poetry
 COPY poetry.lock pyproject.toml /poetry/
 
-# install poetry and generate the requirements.txt from the lock file
+# install poetry and generate the requirements.txt from the lock file (include also optional server dependencies)
 RUN pip install poetry==${POETRY_VERSION}
-RUN poetry export --without-hashes --no-interaction --no-ansi -o requirements.txt
+RUN poetry export --without-hashes --no-interaction --no-ansi --with server -o requirements.txt
 
 
 FROM tensorflow/tensorflow:2.8.4-gpu
