@@ -15,11 +15,13 @@ def _run_popnas_experiment(command: str, run_name: str):
     if rcode == 0:
         logger.info('Run "%s" terminated successfully!', run_name)
     else:
-        # use a different decoding on windows
-        stderr = stderr.decode('cp437') if os.name == 'nt' else stderr.decode()
+        try:
+            stderr = stderr.decode()
+        except UnicodeDecodeError:
+            logger.info('Could not decode correctly the stderr stream, using the byte representation')
 
         logger.info('Run "%s" went wrong. Error code: %d', run_name, rcode)
-        logger.error('Error: %s', stderr)
+        logger.warning('Run "%s" error: %s', run_name, str(stderr))
 
 
 def launch_popnas_subprocess(command: str, run_name: str):
