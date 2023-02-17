@@ -1,8 +1,8 @@
 import multiprocessing
-import os
 from subprocess import Popen, PIPE, DEVNULL
 
 from server.custom_logger import get_logger
+from server.requester import set_run_status
 
 
 def _run_popnas_experiment(command: str, run_name: str):
@@ -14,6 +14,7 @@ def _run_popnas_experiment(command: str, run_name: str):
 
     if rcode == 0:
         logger.info('Run "%s" terminated successfully!', run_name)
+        set_run_status(run_name, 'complete')
     else:
         try:
             stderr = stderr.decode()
@@ -22,6 +23,8 @@ def _run_popnas_experiment(command: str, run_name: str):
 
         logger.info('Run "%s" went wrong. Error code: %d', run_name, rcode)
         logger.warning('Run "%s" error: %s', run_name, str(stderr))
+
+        set_run_status(run_name, 'error')
 
 
 def launch_popnas_subprocess(command: str, run_name: str):
