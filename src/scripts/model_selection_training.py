@@ -3,7 +3,7 @@ import csv
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Iterator
+from typing import Iterator
 
 import tensorflow as tf
 from tensorflow.keras import callbacks
@@ -30,7 +30,7 @@ remove_annoying_tensorflow_messages()
 
 
 def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: TargetMetric, macro: MacroConfig,
-                            logger: logging.Logger) -> Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]']:
+                            logger: logging.Logger) -> Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]']:
     '''
     Return an iterator of all cells to train during model selection process.
 
@@ -49,22 +49,27 @@ def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metr
         logger.info('Getting best cell specifications found during POPNAS run...')
 
         cell_specs, best_scores = get_best_cell_specs(run_path, top_cells, score_metric)
-        return enumerate(zip(cell_specs, best_scores, [macro] * len(cell_specs))).__iter__()
+        logger.info('Top %d cells found:', top_cells)
+        for i, (cell_spec, score) in enumerate(zip(cell_specs, best_scores)):
+            logger.info('\t(%d) %s: %0.4f, cell spec: %s', i, score_metric.name, score, str(cell_spec))
+
+        return enumerate(zip(cell_specs, [macro] * len(cell_specs))).__iter__()
     # single cell specification given by the user
     else:
-        return enumerate(zip([CellSpecification.from_str(spec)], [None], [macro])).__iter__()
+        return enumerate(zip([CellSpecification.from_str(spec)], [macro])).__iter__()
 
 
-def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]'],
+def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]'],
                                                  original_macro: MacroConfig, min_params: int, max_params: int,
-                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[CellSpecification, Optional[float], MacroConfig]]']:
+                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]']:
     m_modifiers = [0, 1]
     n_modifiers = [0, 1, 2]
     f_modifiers = [0.85, 1, 1.5, 1.75, 2]
 
-    for i, (cell_spec, best_score, macro) in cells_iter:
+    for i, (cell_spec, macro) in cells_iter:
         # always generate the original architecture
-        yield i, (cell_spec, best_score, macro)
+        print(i)
+        yield i, (cell_spec, macro)
 
         # return the max number of filters for each (M, N) combination that fits parameter constraints
         for m_mod in m_modifiers:
@@ -78,9 +83,10 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
                     if min_params < graph_gen.generate_network_graph(cell_spec).get_total_params() < max_params:
                         max_f_macro = new_macro
 
-                # check also that it is different from original macro
+                # check also that it is different from the original macro
                 if max_f_macro is not None and str(max_f_macro) != str(macro):
-                    yield i, (cell_spec, None, max_f_macro)
+                    print(max_f_macro)
+                    yield i, (cell_spec, max_f_macro)
 
 
 def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, params: str = None, ts: str = None,
@@ -162,15 +168,13 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
         cell_score_iter = add_macro_architecture_changes_to_cells_iter(cell_score_iter, macro_config, min_params, max_params, graph_gen)
 
-    for i, (cell_spec, best_score, macro) in cell_score_iter:
+    for i, (cell_spec, macro) in cell_score_iter:
         model_folder = os.path.join(save_path, f'{i}-{macro}')
         create_model_log_folder(model_folder)
         model_logger = log_service.get_logger(f'model_{i}_{macro}')
 
         model_logger.info('CELL INFO (%d)', i)
-        # if the macro-structure is modified, the best score is not present since that network has not been trained during the search
-        if best_score is not None:
-            model_logger.info('Best score (%s) reached during training: %0.4f', score_metric_name, best_score)
+        cell_spec.pretty_logging(logger)
 
         logger.info('Executing model %d-%s training', i, macro)
         # write cell spec to external file, stored together with results (usable by other scripts and to remember what cell has been trained)
