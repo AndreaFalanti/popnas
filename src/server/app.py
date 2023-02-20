@@ -22,9 +22,9 @@ run_start_parser.add_argument('name', type=str, required=True)
 run_start_parser.add_argument('config_uri', type=str, required=True)
 
 
-class HelloWorld(Resource):
+class ServerRoot(Resource):
     def get(self):
-        return {'hello': 'world'}
+        return {'message': 'POPNAS Flask server is running'}
 
 
 class Runs(Resource):
@@ -99,8 +99,12 @@ class RunsResume(Resource):
             return {}, 204
 
 
-api.add_resource(HelloWorld, '/')
+api.add_resource(ServerRoot, '/')
 api.add_resource(Runs, '/runs')
 api.add_resource(RunsTensorboard, '/runs/<string:run_name>/tensorboard')
 api.add_resource(RunsStop, '/runs/<string:run_name>/stop')
 api.add_resource(RunsResume, '/runs/<string:run_name>/resume')
+
+
+if __name__ == '__main__':
+    app.run(debug=False)
