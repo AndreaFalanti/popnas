@@ -113,4 +113,4 @@ api.add_resource(RunsResume, '/runs/<string:run_name>/resume')
 
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(host='0.0.0.0', debug=False)
