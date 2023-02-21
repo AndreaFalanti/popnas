@@ -1,5 +1,5 @@
 def build_popnas_run_command(run_name: str, config_uri: str):
-    return f'python run.py -j {config_uri} --name {run_name}'
+    return f'python run.py -j {config_uri}.json --name {run_name}'
 
 
 def build_popnas_restore_command(run_name: str):
