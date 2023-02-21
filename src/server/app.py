@@ -2,7 +2,7 @@ from multiprocessing import Process
 from subprocess import Popen, PIPE
 from time import time
 
-from flask import Flask
+from flask import Flask, request
 from flask_restful import Resource, Api, reqparse
 
 import server.utils as U
@@ -20,6 +20,12 @@ tensorboard_processes = {}  # type: dict[str, TensorboardProcess]
 run_start_parser = reqparse.RequestParser()
 run_start_parser.add_argument('name', type=str, required=True)
 run_start_parser.add_argument('config_uri', type=str, required=True)
+
+
+@app.after_request
+def log_request(response):
+    logger.info('Request (%s - %s) handled with status code: %d', request.method, request.path, response.status_code)
+    return response
 
 
 class ServerRoot(Resource):
