@@ -379,3 +379,12 @@ The experiment can be run with command:
 ```
 python ./run_bench.py -p {path_to_folder_with_NATS_bench_files}
 ```
+
+### Flask server
+A flask server is provided to execute POPNAS processes from external remote interfaces.
+The server is mainly used for the web deployment, for architectures using a single POPNAS docker container.
+
+The Flask server can be run with the command:
+```
+flask --app "server/app.py:app" run
+```
