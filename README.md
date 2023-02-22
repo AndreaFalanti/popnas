@@ -148,7 +148,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
 
 **Search strategy**:
 - **max_children**: defines the maximum number of cells the algorithm can train in each iteration
-  (except the first step, which trains all possible cells).
+  (except the first step, which trains all possible cells composed by a single block).
 - **max_exploration_children**: defines the maximum number of cells the algorithm can train in the exploration step.
 - **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
   Currently supported: [accuracy, f1_score].
@@ -188,6 +188,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - **residual_cells**: if _true_, each cell output will be followed by a sum with the nearest lookback input used, to make the output residual
   (see ResNet paper). If lookback and cell output shapes diverge, pointwise convolution and/or max pooling are performed to adapt 
   the spatial dimension and the filters.
+- **se_cell_output**: if _true_, squeeze and excitation is performed on the cell output (before residual, if used together).
 - **multi_output**: if _true_, CNNs will have an output exit (GAP + Softmax) at the end of each cell.
 
 [//]: # (**RNN hyperparameters &#40;controller, optional&#41;**: \\)
@@ -261,6 +262,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
 - **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
   Currently, it supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
+- **enable_XLA_compilation**: enable XLA compilation when compiling Keras models. Could be incompatible with some operators,
+  it needs more testing.
 
 
 ## Output folder structure
