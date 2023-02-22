@@ -60,3 +60,12 @@ Finalize the implementation of dataset and model generators for the semantic seg
 - Disable graph saving in tensorboard callback, saving a lot of storage space per experiment.
 - Make run_e2e execute the various scripts as processes, as done in TSC archives script.
 
+### v3.3.3
+
+Add Flask server to execute and manage POPNAS processes in remote deployments. Include also bug fixes and adjustments.
+- The new Flask server is provided in src/server folder. The API is pretty simple, and it is designed to support the main backend in the web deployment.
+- Fix wrong rank ordering in Pareto front plots.
+- Improve plot slides generation in the plot_slideshow script.
+- Fix empty cell always using "accuracy" as the score metric, even if a different one was provided in the configuration.
+- Add automatic summary info extraction from both search and post-processing procedures (see experiments_summary module).
+- Add a configuration option for XLA compilation (experimental, need more testing).
