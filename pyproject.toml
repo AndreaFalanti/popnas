@@ -45,7 +45,7 @@ eli5 = "0.13.0"
 py4j = "0.10.9.5"
 future = "0.18.2"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 autopep8 = "2.0.0"
 pylint = "2.15.10"
 flake8 = "5.0.4"
