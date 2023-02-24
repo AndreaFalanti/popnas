@@ -1,10 +1,13 @@
 import logging
 import os
+import shutil
 import sys
+import tempfile
 import time
 
 # Must be set using initialize_log_folders, check_log_folder or set_log_path
-log_path = None  # type: str
+log_path = tempfile.mkdtemp()  # type: str
+using_temp = True
 
 
 def set_log_path(path):
@@ -13,6 +16,12 @@ def set_log_path(path):
     extra folders creation is handled externally.
     '''
     global log_path
+    global using_temp
+
+    if using_temp:
+        shutil.rmtree(log_path)
+        using_temp = False
+
     log_path = path
 
     # NOTE: solves issue with Keras model.save duplicating logs. See also: https://github.com/keras-team/keras/issues/16732
