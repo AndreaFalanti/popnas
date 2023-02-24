@@ -27,7 +27,7 @@ class WrappedTensor(NamedTuple):
     In this way, fully convolutional NN can set the input spatial dimensions to None, but still keep track of when the tensor shapes are altered.
     '''
     tensor: tf.Tensor
-    shape: 'list[int, ...]'
+    shape: 'list[float, ...]'
 
 
 @dataclass
