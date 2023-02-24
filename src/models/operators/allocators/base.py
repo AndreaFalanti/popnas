@@ -1,12 +1,11 @@
-from abc import abstractmethod
 import re
+from abc import abstractmethod
 from typing import Optional
 
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.regularizers import Regularizer
 
 from utils.func_utils import to_int_tuple
-
 
 # common regex groups for parameters and utilities. They can be imported by Allocator concrete implementations.
 opt_dilation_rate = rf'(:(?P<dilation_rate>\d+)dr)?'
@@ -53,7 +52,7 @@ class BaseOpAllocator:
         Checks if the operator name matches the allocator regex structure.
 
         Args:
-            op_name: operator name provided in POPNAS configuration operator set
+            op_name: operator name provided in the POPNAS configuration operator set
 
         Returns:
             the regex Match object, None if not matching
@@ -62,7 +61,11 @@ class BaseOpAllocator:
 
     @abstractmethod
     def compile_op_regex(self) -> re.Pattern:
-        ''' Compile regex that match the operators. If the operator can be parametrized, regex groups must be defined accordingly. '''
+        ''' Compile the regex that matches the operator. If the operator can be parametrized, regex groups must be defined accordingly. '''
+        raise NotImplementedError()
+
+    @abstractmethod
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
         raise NotImplementedError()
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer],

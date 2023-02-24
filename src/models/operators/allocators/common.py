@@ -4,13 +4,18 @@ from typing import Optional
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.regularizers import Regularizer
 
-from .base import BaseOpAllocator, generate_kernel_group, opt_dilation_rate, regex_group_to_int_tuple, is_dilating_while_striding
 from models.operators.layers import *
+from models.operators.params_utils import compute_conv_params, compute_dconv_params
+from .base import BaseOpAllocator, generate_kernel_group, opt_dilation_rate, regex_group_to_int_tuple, is_dilating_while_striding
 
 
 class IdentityOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(r'identity')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        # if identity needs to change shape, then it becomes a pointwise convolution
+        return 0 if input_filters == output_filters else compute_conv_params((1, 1), input_filters, output_filters)
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], name_prefix: str = '',
                               name_suffix: str = '') -> Layer:
@@ -27,6 +32,9 @@ class IdentityOpAllocator(BaseOpAllocator):
 class ConvolutionOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'{generate_kernel_group(self.op_dims)}{opt_dilation_rate} conv')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        return compute_conv_params(match.group('kernel'), input_filters, output_filters)
 
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:
@@ -46,6 +54,9 @@ class SeparableConvolutionOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'{generate_kernel_group(self.op_dims)}{opt_dilation_rate} dconv')
 
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        return compute_dconv_params(match.group('kernel'), input_filters, output_filters)
+
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:
         kernel_group = match.group('kernel')
@@ -63,6 +74,10 @@ class SeparableConvolutionOpAllocator(BaseOpAllocator):
 class StackedConvolutionOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'{generate_kernel_group(self.op_dims, "_1")}-{generate_kernel_group(self.op_dims, "_2")} conv')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        return compute_conv_params(match.group('kernel_1'), input_filters, output_filters) + \
+            compute_conv_params(match.group('kernel_2'), output_filters, output_filters)
 
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> StackedConvolution:
@@ -85,6 +100,10 @@ class TransposeConvolutionOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'{generate_kernel_group(self.op_dims)} tconv')
 
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        return compute_conv_params(match.group('kernel'), input_filters, output_filters) + \
+            compute_conv_params(match.group('kernel'), output_filters, output_filters)
+
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> TransposeConvolutionStack:
         kernel_group = match.group('kernel')
@@ -97,6 +116,10 @@ class TransposeConvolutionOpAllocator(BaseOpAllocator):
 class PoolOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'{generate_kernel_group(self.op_dims)} (?P<type>max|avg)pool')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        # if pooling needs to adapt the filters, then it is followed by a pointwise convolution
+        return 0 if input_filters == output_filters else compute_conv_params((1, 1), input_filters, output_filters)
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], name_prefix: str = '',
                               name_suffix: str = '') -> Layer:

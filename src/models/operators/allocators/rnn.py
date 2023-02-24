@@ -4,13 +4,18 @@ from typing import Optional
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.regularizers import Regularizer
 
-from .base import BaseOpAllocator
 from models.operators.layers import *
+from models.operators.params_utils import compute_batch_norm_params
+from .base import BaseOpAllocator
 
 
 class LSTMOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(r'lstm')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        # lstm params + batch normalization that follows the rnn
+        return 4 * (output_filters * input_filters + output_filters ** 2 + output_filters) + compute_batch_norm_params(output_filters)
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], name_prefix: str = '',
                               name_suffix: str = '') -> Layer:
@@ -30,6 +35,10 @@ class LSTMOpAllocator(BaseOpAllocator):
 class GRUOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(r'gru')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        # gru params + batch normalization that follows the rnn
+        return 3 * (output_filters * input_filters + output_filters ** 2 + 2 * output_filters) + compute_batch_norm_params(output_filters)
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], name_prefix: str = '',
                               name_suffix: str = '') -> Layer:

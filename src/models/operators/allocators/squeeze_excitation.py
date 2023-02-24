@@ -5,12 +5,24 @@ from tensorflow.keras.layers import Layer
 from tensorflow.keras.regularizers import Regularizer
 
 from models.operators.layers import *
+from models.operators.params_utils import compute_conv_params
 from .base import BaseOpAllocator
 
 
 class SqueezeExcitationOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(rf'(?P<ratio>\d+)r SE')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        resize_params = 0 if input_filters == output_filters else compute_conv_params((1, 1), input_filters, output_filters)
+
+        # Squeeze and excitation parameters
+        ratio = int(match.group('ratio'))
+        bottleneck_filters = input_filters // ratio
+        se_params = compute_conv_params((1, 1), output_filters, bottleneck_filters, bn=False) + \
+                    compute_conv_params((1, 1), bottleneck_filters, output_filters, bn=False)
+
+        return resize_params + se_params
 
     def generate_normal_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], name_prefix: str = '',
                               name_suffix: str = '') -> Layer:

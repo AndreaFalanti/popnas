@@ -4,13 +4,18 @@ from typing import Optional
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.regularizers import Regularizer
 
-from .base import BaseOpAllocator
 from models.operators.layers import *
+from models.operators.params_utils import compute_cvt_params
+from .base import BaseOpAllocator
 
 
 class CVTOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(r'(?P<kernel>\d+)k-(?P<heads>\d+)h-(?P<cvt_blocks>\d+)b cvt')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        k, heads, blocks = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return compute_cvt_params((k, k), heads, blocks, input_filters, output_filters, use_mlp=True)
 
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:
@@ -26,6 +31,10 @@ class CVTOpAllocator(BaseOpAllocator):
 class SimplifiedCVTOpAllocator(BaseOpAllocator):
     def compile_op_regex(self) -> re.Pattern:
         return re.compile(r'(?P<kernel>\d+)k-(?P<heads>\d+)h scvt')
+
+    def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
+        k, heads = int(match.group(1)), int(match.group(2))
+        return compute_cvt_params((k, k), heads, 1, input_filters, output_filters, use_mlp=False)
 
     def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:

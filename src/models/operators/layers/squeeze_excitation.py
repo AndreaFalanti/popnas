@@ -27,7 +27,8 @@ class SqueezeExcitation(Layer):
         gap = op_dim_selector['gap'][dims]
 
         self.gap = gap(keepdims=True)
-        # use pointwise convolutions for densely connected, they are equivalent since the volume is in shape (1, 1, C)
+        # use pointwise convolutions for densely connected; they are equivalent since the volume is in shape (1, 1, C)
+        # use directly the Keras conv layers, since we don't want batch normalization here
         self.first_dc = conv(bottleneck_filters, kernel_size=1, activation=activations.swish, use_bias=use_bias,
                              kernel_initializer='VarianceScaling', kernel_regularizer=weight_reg)
         self.second_dc = conv(filters, kernel_size=1, activation=activations.sigmoid, use_bias=use_bias,
@@ -52,7 +53,7 @@ class SqueezeExcitation(Layer):
 
 
 class ResizableSqueezeExcitation(Layer):
-    ''' Layer which allow to resize tensor shape inside a *Squeeze-and-Excitation* block,
+    ''' Layer which allows to resize the tensor shape inside a *Squeeze-and-Excitation* block,
      thanks to a preliminary layer (e.g. pooling) executed before the SE block. '''
 
     def __init__(self, se_layer: SqueezeExcitation, resize_layer: Layer, name='resized_squeeze_excitation', **kwargs):
