@@ -116,3 +116,20 @@ class OpInstantiator:
 
         # raised only if no allocator matches the operator string
         raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')
+
+    def get_op_params(self, op_name: str, input_shape: 'list[float]', output_shape: 'list[float]'):
+        input_filters = int(input_shape[-1])
+        output_filters = int(output_shape[-1])
+
+        # these operators can't have parameters in any case and are not covered in allocators
+        no_params_operators = ['add', 'concat', 'input', 'gap']
+        if op_name in no_params_operators:
+            return 0
+
+        for allocator in self.op_allocators.values():
+            match = allocator.is_match(op_name)
+            if match:
+                return allocator.compute_params(match, input_filters, output_filters)
+
+        # raised only if no allocator matches the operator string
+        raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')
