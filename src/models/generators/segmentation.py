@@ -1,9 +1,11 @@
 from typing import Type
 
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
+from models.graphs.network_graph import NetworkGraph
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
 from utils.func_utils import elementwise_mult
@@ -38,7 +40,8 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
         encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         reduction_cell_indexes = list(range(self.normal_cells_per_motif, encoder_cells, self.normal_cells_per_motif + 1))
-        need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
+        need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
+                else []
 
         return NetworkBuildInfo(cell_spec, blocks, used_lookbacks, unused_block_outputs, use_skip, used_cell_indexes,
                                 reduction_cell_indexes, need_input_norm_indexes)
@@ -100,6 +103,47 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output
+
+    def build_model_graph(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> NetworkGraph:
+        net_info = self._generate_network_info(cell_spec, use_stem=False)
+        net = NetworkGraph(list(self.input_shape), self.op_instantiator, cell_spec, self.cell_output_shapes,
+                           net_info.used_cell_indexes, net_info.need_input_norm_indexes, self.residual_cells)
+
+        M, N = self._get_macro_params(cell_spec)
+        # encoder
+        for m in range(M):
+            for _ in range(N):
+                net.build_cell()
+
+            # add reduction cell, except for the last motif
+            if m + 1 < M:
+                net.build_cell()
+        # decoder
+        for _ in range(M - 1):
+            # add upsample cell + N normal cells
+            for _ in range(N + 1):
+                net.build_cell()
+
+        # add output layers
+        final_cell_out = net.lookback_nodes[-1]
+        output_shape = final_cell_out.shape[:-1] + [self.output_classes_count]
+        v_attributes = {
+            'name': ['out_pointwise_conv'],
+            'op': ['1x1 conv'],
+            'cell_index': [-1],
+            'block_index': [-1],
+            'params': [self.op_instantiator.get_op_params('1x1 conv', final_cell_out.shape, output_shape)]
+        }
+        net.g.add_vertices(1, v_attributes)
+
+        # add edges from inputs to operator layers, plus from operator layers to add
+        edges = [(final_cell_out.name, 'out_pointwise_conv')]
+        edge_attributes = {
+            'tensor_shape': [str(final_cell_out.shape)]
+        }
+        net.g.add_edges(edges, edge_attributes)
+
+        return net
 
     def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         # stores the final cell's output of each U-net structure "level", the ones used in the skip connections.
@@ -168,9 +212,9 @@ class SegmentationModelGenerator(BaseModelGenerator):
         NOTE: the last level output is popped from the list, so this function contains a side effect, but it simplifies the logic and return.
 
         Args:
-            lookback_inputs: original lookback inputs.
-            level_outputs: U-net encoder outputs.
-            filters: target number of filters for the next cell.
+            lookback_inputs: original lookback inputs
+            level_outputs: U-net encoder outputs
+            filters: target number of filters for the next cell
 
         Returns:
             the new lookback inputs, used in the upsample cell.

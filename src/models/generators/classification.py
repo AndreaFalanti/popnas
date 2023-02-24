@@ -5,6 +5,7 @@ import tensorflow_addons as tfa
 from tensorflow.keras import layers, Model, losses, metrics
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
+from models.graphs.network_graph import NetworkGraph
 from models.results import BaseTrainingResults, ClassificationTrainingResults
 from search_space import CellSpecification
 from utils.func_utils import elementwise_mult
@@ -33,11 +34,13 @@ class ClassificationModelGenerator(BaseModelGenerator):
             total_cells = total_cells + 2
             used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
             reduction_cell_indexes = [0, 1] + list(range(2 + self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
-            need_input_norm_indexes = [0] + [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
+            need_input_norm_indexes = [0] + [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
+                else []
         else:
             used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
             reduction_cell_indexes = list(range(self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
-            need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip else []
+            need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
+                else []
 
         return NetworkBuildInfo(cell_spec, blocks, used_lookbacks, unused_block_outputs, use_skip, used_cell_indexes,
                                 reduction_cell_indexes, need_input_norm_indexes)
@@ -76,6 +79,42 @@ class ClassificationModelGenerator(BaseModelGenerator):
 
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output
+
+    def build_model_graph(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> NetworkGraph:
+        net_info = self._generate_network_info(cell_spec, use_stem=False)
+        net = NetworkGraph(list(self.input_shape), self.op_instantiator, cell_spec, self.cell_output_shapes,
+                           net_info.used_cell_indexes, net_info.need_input_norm_indexes, self.residual_cells)
+
+        M, N = self._get_macro_params(cell_spec)
+        for m in range(M):
+            # add N normal cell per motif
+            for _ in range(N):
+                net.build_cell()
+
+            # add reduction cell, except for the last motif
+            if m + 1 < M:
+                net.build_cell()
+
+        # add output layers
+        final_cell_out = net.lookback_nodes[-1]
+        output_filters = final_cell_out.shape[-1]
+        v_attributes = {
+            'name': ['GAP', 'dense_softmax'],
+            'op': ['gap', 'dense'],
+            'cell_index': [-1] * 2,
+            'block_index': [-1] * 2,
+            'params': [0, self.output_classes_count * (output_filters + 1)]
+        }
+        net.g.add_vertices(2, v_attributes)
+
+        # add edges from inputs to operator layers, plus from operator layers to add
+        edges = [(final_cell_out.name, 'GAP'), ('GAP', 'dense_softmax')]
+        edge_attributes = {
+            'tensor_shape': [str(final_cell_out.shape), str([output_filters])]
+        }
+        net.g.add_edges(edges, edge_attributes)
+
+        return net
 
     def build_model(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> 'tuple[Model, list[str]]':
         self.network_build_info = self._generate_network_info(cell_spec, add_imagenet_stem)

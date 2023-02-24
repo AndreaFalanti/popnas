@@ -11,11 +11,11 @@ from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, 
 import log_service
 import models.operators.layers as ops
 import utils.tensor_utils as tu
+from models.graphs.network_graph import NetworkGraph
 from models.operators.op_instantiator import OpInstantiator
 from models.results.base import BaseTrainingResults
 from search_space import CellSpecification
 from utils.func_utils import elementwise_mult
-from utils.graph_generator import GraphGenerator
 
 
 class WrappedTensor(NamedTuple):
@@ -99,11 +99,6 @@ class BaseModelGenerator(ABC):
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
         self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
 
-        # graph generator used to create the DAG of the network without creating it in TF, good for analyzing networks and extracting features
-        # for the predictors without the Keras model large overhead (instantiation of the tensors is very costly).
-        # TODO: should be modified based on the model generator (also graph generator should become an abstract class hierarchy...)
-        self.graph_gen = GraphGenerator(cnn_hp, arc_params, input_shape, output_classes_count)
-
         # attributes defined below this comment are manipulated and used during model building.
         # defined in class to avoid having lots of parameter passing in each function.
 
@@ -152,9 +147,6 @@ class BaseModelGenerator(ABC):
 
         # recompute properties associated to the macro-structure parameters
         self.cell_output_shapes = self._compute_cell_output_shapes()
-
-        # update also the graph generator with the new macro-structure
-        self.graph_gen.alter_macro_structure(m, n, f)
 
     @abstractmethod
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
@@ -309,11 +301,29 @@ class BaseModelGenerator(ABC):
         The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
 
         Args:
-            cell_spec: the cell specification defining the model motifs.
-            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS.
+            cell_spec: the cell specification defining the model motifs
+            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS
 
         Returns:
             Keras model, and the name of the output layers.
+        '''
+        raise NotImplementedError()
+
+    @abstractmethod
+    def build_model_graph(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> NetworkGraph:
+        '''
+        Generate the graph representation of the architecture which would be built from the given cell specification.
+        The macro-structure varies between the generators concrete implementations, defining different macro-architectures based on the problem.
+
+        The graph can be generated multiple orders of magnitude faster than an actual implementation in TF or Keras, making it possible to analyze
+        and compute some metrics in a fast way (i.e., the number of parameters).
+
+        Args:
+            cell_spec: the cell specification defining the model motifs
+            add_imagenet_stem: prepend to the network the "ImageNet stem" used in NASNet and PNAS
+
+        Returns:
+            the NetworkGraph object representing the entire network.
         '''
         raise NotImplementedError()
 
@@ -375,7 +385,7 @@ class BaseModelGenerator(ABC):
 
         Args:
             filters: Number of filters to use
-            reduction: if it's a reduction cell or not
+            reduction: if it is a reduction cell or not
             inputs: Tensors that can be used as input (lookback inputs, inputs from previous cells or dataset samples)
 
         Returns:
