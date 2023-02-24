@@ -1,6 +1,6 @@
 import argparse
 
-from utils.network_graph import save_cell_dag_image
+from models.graphs.utils import save_cell_dag_image
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")

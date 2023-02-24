@@ -13,11 +13,11 @@ import log_service
 from dataset.augmentation import get_image_data_augmentation_model
 from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
 from models.custom_callbacks.training_time import TrainingTimeCallback
+from models.generators import BaseModelGenerator
 from models.generators.factory import model_generator_factory
 from models.results.base import TargetMetric
 from search_space import CellSpecification
 from utils.func_utils import create_empty_folder
-from utils.graph_generator import GraphGenerator
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, define_callbacks, \
@@ -61,7 +61,7 @@ def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metr
 
 def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]'],
                                                  original_macro: MacroConfig, min_params: int, max_params: int,
-                                                 graph_gen: GraphGenerator) -> Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]']:
+                                                 model_gen: BaseModelGenerator) -> Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]']:
     m_modifiers = [0, 1]
     n_modifiers = [0, 1, 2]
     f_modifiers = [0.85, 1, 1.5, 1.75, 2]
@@ -77,10 +77,10 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
                 max_f_macro = None
                 for f_mod in f_modifiers:
                     new_macro = original_macro.modify(m_mod, n_mod, f_mod)
-                    graph_gen.alter_macro_structure(*new_macro)
+                    model_gen.alter_macro_structure(*new_macro)
 
                     # f_mods are ordered, so the last one to satisfy the condition is the max f
-                    if min_params < graph_gen.generate_network_graph(cell_spec).get_total_params() < max_params:
+                    if min_params < model_gen.build_model_graph(cell_spec).get_total_params() < max_params:
                         max_f_macro = new_macro
 
                 # check also that it is different from the original macro
@@ -164,9 +164,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     if params is not None:
         # get params ranges. float conversion is used to support exponential notation (e.g. 2e6 for 2 millions).
         min_params, max_params = map(int, map(float, params.split(';')))
-        graph_gen = GraphGenerator(cnn_config, arc_config, input_shape, classes_count)
 
-        cell_score_iter = add_macro_architecture_changes_to_cells_iter(cell_score_iter, macro_config, min_params, max_params, graph_gen)
+        cell_score_iter = add_macro_architecture_changes_to_cells_iter(cell_score_iter, macro_config, min_params, max_params, model_gen)
 
     for i, (cell_spec, macro) in cell_score_iter:
         model_folder = os.path.join(save_path, f'{i}-{macro}')

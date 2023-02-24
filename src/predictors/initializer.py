@@ -65,4 +65,4 @@ class PredictorsHandler:
     # since it has the reference to the model generator, it's nice to expose the graph generation for agents
     # that need to consider extra constraints, like the params.
     def get_architecture_dag(self, cell_spec: CellSpecification):
-        return self._model_gen.graph_gen.generate_network_graph(cell_spec)
+        return self._model_gen.build_model_graph(cell_spec)
