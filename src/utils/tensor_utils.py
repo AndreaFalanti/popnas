@@ -38,3 +38,7 @@ def have_tensors_same_depth(first_shape: Sequence[float], second_shape: Sequence
 
 def alter_tensor_shape(shape: Sequence[float], spatial_mult: float = 1, depth_mult: float = 1):
     return [el * spatial_mult for el in shape[:-1]] + [shape[-1] * depth_mult]
+
+
+def get_tensors_spatial_ratio(first_shape: Sequence[float], second_shape: Sequence[float]):
+    return first_shape[0] / second_shape[0]

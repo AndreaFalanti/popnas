@@ -390,6 +390,12 @@ class BaseModelGenerator(ABC):
         '''
 
         out_shape = self._current_target_shape()
+
+        # upsample when necessary (the spatial ratio between target and input is >= 2),
+        # since there is no way for the 99% of operators to upsample in a native way
+        inputs = [self._upsample_tensor_if_necessary(lb, out_shape, filters, name=f'transpose_conv_lb{len(inputs) - i}_upsample_c{self.cell_index}')
+                  for i, lb in enumerate(inputs)]
+
         # normalize inputs if necessary (different spatial dimension of at least one input, from the one expected by the actual cell)
         if self.lookback_reshape and self.cell_index in self.network_build_info.need_input_norm_indexes:
             inputs = self._normalize_inputs(inputs, filters)
@@ -495,7 +501,37 @@ class BaseModelGenerator(ABC):
 
         return inputs
 
-    def _build_branch(self, input_t: WrappedTensor, op: str, target_output_shape: 'list[int, ...]', filters: int, layer_name_suffix: str):
+    def _upsample_tensor_if_necessary(self, t: Optional[WrappedTensor], target_shape: 'list[float]', filters: int,
+                                      name: str) -> Optional[WrappedTensor]:
+        '''
+        Upsample a tensor if its spatial dimensions are lower that the target shape, otherwise it returns the original tensor without modifications.
+        The upsample is performed through transpose convolution.
+
+        Args:
+            t: the tensor to consider (note: None tensors are also fine)
+            target_shape: the target shape for the cell output
+            filters: the number of filters used in the cell
+            name: name of the eventually created upsample layer
+
+        Returns:
+            the upsampled tensor, or simply the original one if the upsample is not required.
+        '''
+        # in case the tensor is None, just return it immediately
+        if t is None:
+            return t
+
+        # get the spatial ratio as int, if >= 2 it would mean that an upsample is needed...
+        spatial_ratio = round(tu.get_tensors_spatial_ratio(target_shape, t.shape))
+        if spatial_ratio > 1:
+            self._logger.debug('Generating upsample layer %s (target shape: %s, input_shape: %s)', name, target_shape, t.shape)
+            tensor_val = self.op_instantiator.generate_transpose_conv(filters, spatial_ratio, name=name)(t.tensor)
+            return WrappedTensor(tensor_val, target_shape)
+        # ...otherwise return the tensor as it is, without modifications
+        else:
+            return t
+
+    def _build_branch(self, input_t: WrappedTensor, op: str, target_output_shape: 'list[int, ...]', filters: int,
+                      layer_name_suffix: str) -> tf.Tensor:
         input_tensor, input_shape = input_t
 
         adapt_spatial = not tu.have_tensors_same_spatial(input_shape, target_output_shape)

@@ -1,7 +1,6 @@
 from typing import Type
 
 import tensorflow as tf
-import tensorflow_addons as tfa
 from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
@@ -234,27 +233,21 @@ class SegmentationModelGenerator(BaseModelGenerator):
                                                                       name=f'up_pointwise_filter_compressor_c{self.cell_index}')(unet_concat)
             lb1 = WrappedTensor(lb1_tensor, target_shape)
 
-        # build -2 lookback input as an upsample of the original -2 lookback, with the use of a transpose convolution
-        if lb2 is not None:
-            lb2_tensor = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_conv_upsample_unit_c{self.cell_index}')(lb2.tensor)
-            lb2 = WrappedTensor(lb2_tensor, target_shape)
-
         return [lb2, lb1]
 
     def _build_upsample_cell(self, lookback_inputs: 'list[WrappedTensor]', level_outputs: 'list[WrappedTensor]',
                              filters: int) -> 'list[WrappedTensor]':
-        target_output_shape = self._current_target_shape()
-        upsampled_lookbacks = self._build_upsample_unit(lookback_inputs, level_outputs, filters)
-        new_lookbacks = self._build_cell_util(filters, upsampled_lookbacks)
+        lookbacks = lookback_inputs
+        # avoid building the upsample unit if not necessary
+        # _build_cell_util already does the check, but handles it differently, so keep it outside this condition
+        if self.cell_index in self.network_build_info.used_cell_indexes:
+            lookbacks = self._build_upsample_unit(lookback_inputs, level_outputs, filters)
 
-        # as -2 lookback, keep the original -1 lookback upsampled through transpose convolution, instead of the "concat with encoder level" tensor
-        _, lb1 = lookback_inputs
-        if lb1 is not None:
-            lb2 = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'transpose_lb2_upsample_c{self.cell_index}')(lb1.tensor)
-        else:
-            lb2 = None
+        new_lookbacks = self._build_cell_util(filters, lookbacks)
 
-        return [WrappedTensor(lb2, target_output_shape), new_lookbacks[-1]]
+        # as -2 lookback, always keep the original -1 lookback,
+        # instead of the "concat with encoder level" tensor eventually produced by the upsample unit
+        return [lookback_inputs[-1], new_lookbacks[-1]]
 
     def _get_loss_function(self) -> losses.Loss:
         return losses.CategoricalCrossentropy()
