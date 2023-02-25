@@ -26,7 +26,8 @@ class TargetMetric(NamedTuple):
     optimal: MaxMinCallable
     results_csv_column: str
     units: Optional[str] = None
-    prediction_csv_column: str = ''
+    pareto_predict_csv_column: str = ''
+    need_predictor: bool = False
 
     def plot_label(self):
         return self.name + ('' if self.units is None else f' ({self.units})')
@@ -147,9 +148,10 @@ class BaseTrainingResults(ABC):
     def custom_metrics_considered() -> 'list[TargetMetric]':
         ''' Return all TargetMetric objects related to metrics not included in Keras and computed with custom functions. '''
         return [
-            TargetMetric('time', min, results_csv_column='training time(seconds)', units='seconds', prediction_csv_column='time'),
+            TargetMetric('time', min, results_csv_column='training time(seconds)', units='seconds',
+                         pareto_predict_csv_column='time', need_predictor=True),
             TargetMetric('inference_time', min, results_csv_column='inference time(seconds)', units='seconds'),
-            TargetMetric('params', min, results_csv_column='total params'),
+            TargetMetric('params', min, results_csv_column='total params', pareto_predict_csv_column='params'),
             TargetMetric('flops', min, results_csv_column='flops')
         ]
 
@@ -167,7 +169,7 @@ class BaseTrainingResults(ABC):
     def predictable_metrics_considered(cls) -> 'list[TargetMetric]':
         ''' Return the TargetMetric objects which can be targeted by predictors
          (metrics not directly computable and potential Pareto optimization targets). '''
-        return [m for m in cls.all_metrics_considered() if m.prediction_csv_column]
+        return [m for m in cls.all_metrics_considered() if m.need_predictor]
 
     @classmethod
     def get_csv_headers(cls) -> 'list[str]':

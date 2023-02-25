@@ -27,9 +27,10 @@ class ClassificationTrainingResults(BaseTrainingResults):
     @staticmethod
     def keras_metrics_considered() -> 'list[TargetMetric]':
         return [
-            TargetMetric('accuracy', max, results_csv_column='best val accuracy', prediction_csv_column='val score'),
-            TargetMetric('f1_score', max, results_csv_column='val F1 score', prediction_csv_column='val score'),
-            TargetMetric('top_k_categorical_accuracy', max, results_csv_column='val top k accuracy', prediction_csv_column='val score')
+            TargetMetric('accuracy', max, results_csv_column='best val accuracy', pareto_predict_csv_column='val score', need_predictor=True),
+            TargetMetric('f1_score', max, results_csv_column='val F1 score', pareto_predict_csv_column='val score', need_predictor=True),
+            TargetMetric('top_k_categorical_accuracy', max, results_csv_column='val top k accuracy',
+                         pareto_predict_csv_column='val score', need_predictor=True)
         ]
 
     def to_csv_list(self) -> list:

@@ -200,7 +200,7 @@ def plot_predictions_error(B: int, K: int, pnas_mode: bool, pareto_predictable_m
         for i, df in enumerate(merged_dfs):
             __logger.info("Comparing predicted values of %s with actual values retrieved after CNN training (b=%d)", metric.name, i + 2)
 
-            pred_b = df[metric.prediction_csv_column]
+            pred_b = df[metric.pareto_predict_csv_column]
             real_b = df[metric.results_csv_column]
             errors_b = real_b - pred_b
 
@@ -252,7 +252,7 @@ def plot_pareto_front_curves(B: int, pareto_metrics: 'list[TargetMetric]'):
 
         for m in pareto_metrics:
             real_coords.append(training_df_b[m.results_csv_column])
-            pred_coords.append(pareto_df[m.prediction_csv_column])
+            pred_coords.append(pareto_df[m.pareto_predict_csv_column])
 
         pareto_objective_names = [m.name for m in pareto_metrics]
         plot_pareto_front(real_coords, pred_coords, pareto_objective_names,
@@ -269,8 +269,8 @@ def plot_predictions_with_pareto_analysis(B: int, pareto_metrics: 'list[TargetMe
         pred_coords, pareto_coords = [], []
 
         for m in pareto_metrics:
-            pred_coords.append(predictions_df[m.prediction_csv_column].to_list())
-            pareto_coords.append(pareto_df[m.prediction_csv_column].to_list())
+            pred_coords.append(predictions_df[m.pareto_predict_csv_column].to_list())
+            pareto_coords.append(pareto_df[m.pareto_predict_csv_column].to_list())
 
         pareto_objective_names = [m.name for m in pareto_metrics]
         plot_predictions_pareto_scatter_chart(pred_coords, pareto_coords, pareto_objective_names,
