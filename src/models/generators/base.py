@@ -105,7 +105,6 @@ class BaseModelGenerator(ABC):
         # used for layers naming and partition dictionary
         self.cell_index = 0
         self.block_index = 0
-        self.prev_cell_index = 0
 
         # info about the actual cell processed and current model outputs
         # noinspection PyTypeChecker
@@ -245,7 +244,6 @@ class BaseModelGenerator(ABC):
         ''' Reset metadata indexes associated to cells and blocks. '''
         self.cell_index = 0
         self.block_index = 0
-        self.prev_cell_index = 0
 
     def _apply_preprocessing_and_augmentation(self, model_input: tf.Tensor) -> tf.Tensor:
         '''
@@ -364,7 +362,6 @@ class BaseModelGenerator(ABC):
         # which is not the desired behavior.
         if self.cell_index in self.network_build_info.used_cell_indexes:
             cell_output = self._build_cell(filters, reduction, inputs)
-            self.prev_cell_index = self.cell_index
 
             if self.multi_output:
                 # use a dropout rate which is proportional to the cell index
@@ -513,7 +510,7 @@ class BaseModelGenerator(ABC):
 
         Args:
             block_spec: block specification (in1, op1, in2, op2)
-            filters: amount of filters to use in layers
+            filters: number of filters to use in layers
             reduction: if the block belongs to a reduction cell
             inputs: tensors that can be used as inputs for this block
 
