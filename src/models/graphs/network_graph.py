@@ -60,6 +60,10 @@ class NetworkGraph:
     def get_params_per_cell(self):
         return [sum(self.g.vs.select(cell_index=i)['params']) for i in range(0, self.last_cell_index)]
 
+    def get_params_per_layer(self):
+        ''' Grouped by cell for more readability. '''
+        return [list(zip(self.g.vs.select(cell_index=i)['name'], self.g.vs.select(cell_index=i)['params'])) for i in range(0, self.last_cell_index)]
+
     def get_params_up_through_cell_index(self, c_index: int):
         ''' Cell index is inclusive. '''
         return sum(self.g.vs.select(cell_index_lt=c_index)['params'])
