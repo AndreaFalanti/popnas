@@ -1,11 +1,11 @@
 import unittest
 
-from models.generators import ClassificationModelGenerator
+from models.generators import *
 from search_space import CellSpecification, BlockSpecification
 
 
 class TestNetworkGraphs(unittest.TestCase):
-    def build_cnn_hp(self, f):
+    def build_cnn_hp(self, f: int):
         return {
             "epochs": 21,
             "learning_rate": 0.01,
@@ -23,29 +23,30 @@ class TestNetworkGraphs(unittest.TestCase):
             "softmax_dropout": 0.0
         }
 
-    def build_architecture_parameters(self, m, n, use_lb_reshape):
+    def build_architecture_parameters(self, m: int, n: int, use_lb_reshape: bool, use_residuals: bool):
         return {
             "motifs": m,
             "normal_cells_per_motif": n,
             "block_join_operator": "add",
             "lookback_reshape": use_lb_reshape,
             "concat_only_unused_blocks": True,
-            "residual_cells": False,
+            "residual_cells": use_residuals,
             "se_cell_output": False,
             "multi_output": False
         }
 
-    def initialize_model_gen(self, input_shape: tuple, classes: int, m: int, n: int, f: int, lb_reshape: bool):
+    def initialize_model_gen(self, model_gen_class: type[BaseModelGenerator], input_shape: tuple, classes: int,
+                             m: int, n: int, f: int, lb_reshape: bool, residuals: bool):
         cnn_hp = self.build_cnn_hp(f)
-        arc_params = self.build_architecture_parameters(m, n, lb_reshape)
+        arc_params = self.build_architecture_parameters(m, n, lb_reshape, residuals)
 
-        return ClassificationModelGenerator(cnn_hp, arc_params, training_steps_per_epoch=100,
-                                            output_classes_count=classes, input_shape=input_shape)
+        return model_gen_class(cnn_hp, arc_params, training_steps_per_epoch=100,
+                               output_classes_count=classes, input_shape=input_shape)
 
     def test_simple_block_network(self):
         input_shape = (32, 32, 3)
         classes = 10
-        model_gen = self.initialize_model_gen(input_shape, classes, 3, 2, 24, lb_reshape=False)
+        model_gen = self.initialize_model_gen(ClassificationModelGenerator, input_shape, classes, 3, 2, 24, lb_reshape=False, residuals=False)
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -2, '3x3 conv')])
         g = model_gen.build_model_graph(cell_spec)
@@ -55,7 +56,7 @@ class TestNetworkGraphs(unittest.TestCase):
     def test_simple_block_lb_reshape_network(self):
         input_shape = (32, 32, 3)
         classes = 10
-        model_gen = self.initialize_model_gen(input_shape, classes, 3, 2, 24, lb_reshape=True)
+        model_gen = self.initialize_model_gen(ClassificationModelGenerator, input_shape, classes, 3, 2, 24, lb_reshape=True, residuals=False)
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -2, '3x3 conv')])
         g = model_gen.build_model_graph(cell_spec)
@@ -65,7 +66,7 @@ class TestNetworkGraphs(unittest.TestCase):
     def test_cvt_block(self):
         input_shape = (32, 32, 3)
         classes = 10
-        model_gen = self.initialize_model_gen(input_shape, classes, 2, 2, 24, lb_reshape=True)
+        model_gen = self.initialize_model_gen(ClassificationModelGenerator, input_shape, classes, 2, 2, 24, lb_reshape=True, residuals=False)
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3k-1h-1b cvt', -2, '3k-1h-1b cvt')])
         g = model_gen.build_model_graph(cell_spec)
@@ -78,7 +79,7 @@ class TestNetworkGraphs(unittest.TestCase):
     def test_multi_block_cell(self):
         input_shape = (64, 64, 3)
         classes = 10
-        model_gen = self.initialize_model_gen(input_shape, classes, 3, 2, 24, lb_reshape=True)
+        model_gen = self.initialize_model_gen(ClassificationModelGenerator, input_shape, classes, 3, 2, 24, lb_reshape=True, residuals=False)
 
         cell_spec = CellSpecification([BlockSpecification(-2, '2x2 maxpool', -1, '3x3 conv'),
                                        BlockSpecification(-2, '3x3 conv', -1, '3x3 conv'),
