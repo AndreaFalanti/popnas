@@ -36,6 +36,8 @@ class NetworkGraph:
         }
         self.g = Graph(n=1, directed=True, vertex_attrs=v_attributes)
 
+        # make spatial dimension ratios, so that they always work as expected, the filters are kept as a number instead.
+        input_shape = [1.0] * (len(input_shape) - 1) + [input_filters]
         input_node = TensorNode('input', input_shape)
         self.lookback_nodes = [input_node, input_node]  # type: list[TensorNode]
 

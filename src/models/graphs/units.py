@@ -3,7 +3,9 @@ from typing import NamedTuple, Callable
 
 from igraph import *
 
+from models.operators.params_utils import compute_conv_params
 from search_space import BlockSpecification, CellSpecification
+from utils.tensor_utils import get_tensors_spatial_ratio
 
 
 class TensorNode(NamedTuple):
@@ -55,6 +57,9 @@ def build_cell_dag(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: '
     used_blocks = set(inp for inp in cell_spec.inputs() if inp >= 0)
     unused_blocks = [b for b in range(len(cell_spec)) if b not in used_blocks]
     nearest_used_lookback = max(inp for inp in cell_spec.inputs() if inp < 0)
+
+    # automatic lookback upsample, if target shape spatial resolution is higher than the inputs
+    lookback_nodes = perform_lookback_upsample_when_necessary(g, lookback_nodes, target_shape, cell_index)
 
     if cell_index in lookback_reshape_cell_indexes:
         lookback_nodes = perform_lookback_reshape(g, lookback_nodes, target_shape, cell_index, compute_layer_params)
@@ -180,3 +185,36 @@ def perform_lookback_reshape(g: Graph, lookback_nodes: 'list[TensorNode]', targe
 
     # replace lb2 with the reshaped one, having now the same shape of lb1
     return [TensorNode(reshape_name, new_shape), lb1]
+
+
+def perform_lookback_upsample_when_necessary(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: 'list[float, ...]', cell_index: int):
+    new_lookbacks = []
+    for i, lb in enumerate(lookback_nodes):
+        if lb is None:
+            new_lookbacks.append(lb)
+        else:
+            spatial_ratio = round(get_tensors_spatial_ratio(target_shape, lb.shape))
+            if spatial_ratio > 1:
+                upsample_name = f'c{cell_index}_lb{len(lookback_nodes) - i}_transpose_conv_upsample'
+                # TODO: adapt kernel for time series (1D)
+                v_attributes = {
+                    'name': [upsample_name],
+                    'op': [f'{spatial_ratio}x{spatial_ratio} tconv'],
+                    'cell_index': [cell_index],
+                    'block_index': [-1],
+                    # do not use tconv allocator formula, since it stacks two convolutions to keep the same size, while here it is used properly!
+                    'params': [compute_conv_params((spatial_ratio, spatial_ratio), int(lb.shape[-1]), int(target_shape[-1]))]
+                }
+                g.add_vertices(1, attributes=v_attributes)
+
+                edges = [(lb.name, upsample_name)]
+                edge_attributes = {
+                    'tensor_shape': [str(lb.shape)]
+                }
+                g.add_edges(edges, attributes=edge_attributes)
+
+                new_lookbacks.append(TensorNode(upsample_name, target_shape))
+            else:
+                new_lookbacks.append(lb)
+
+    return new_lookbacks
