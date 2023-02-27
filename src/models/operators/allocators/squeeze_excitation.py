@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Optional
 
@@ -16,9 +17,9 @@ class SqueezeExcitationOpAllocator(BaseOpAllocator):
     def compute_params(self, match: re.Match, input_filters: int, output_filters: int) -> int:
         resize_params = 0 if input_filters == output_filters else compute_conv_params((1, 1), input_filters, output_filters)
 
-        # Squeeze and excitation parameters
         ratio = int(match.group('ratio'))
-        bottleneck_filters = input_filters // ratio
+        # after the resize, SE starting filters are equal to the output filters
+        bottleneck_filters = math.ceil(output_filters / ratio)
         se_params = compute_conv_params((1, 1), output_filters, bottleneck_filters, bn=False) + \
                     compute_conv_params((1, 1), bottleneck_filters, output_filters, bn=False)
 
