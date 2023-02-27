@@ -108,7 +108,7 @@ def get_optimized_steps_per_execution(train_strategy: tf.distribute.Strategy):
 
 
 def save_keras_model_to_onnx(model: Model, save_path: str):
-    tf2onnx.convert.from_keras(model, opset=10, output_path=save_path)
+    tf2onnx.convert.from_keras(model, opset=13, output_path=save_path)
 
 
 def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int, normalize: bool):
