@@ -104,7 +104,7 @@ class TestNetworkGraphs(unittest.TestCase):
         g = model_gen.build_model_graph(cell_spec)
         self.assertEqual(g.get_total_params(), 1156858, 'Residual multiple blocks wrong params count')
 
-    def test_simple_segmentation_network_graphs(self):
+    def test_segmentation_network_graphs(self):
         input_shape = (None, None, 3)
         classes = 22
         model_gen = self.initialize_model_gen(SegmentationModelGenerator, input_shape, classes, 4, 1, 28, lb_reshape=False, residuals=True)
@@ -116,6 +116,12 @@ class TestNetworkGraphs(unittest.TestCase):
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5:4dr conv')])
         g = model_gen.build_model_graph(cell_spec)
         self.assertEqual(g.get_total_params(), 4535746, 'Segmentation mixed lookbacks wrong params count')
+
+        cell_spec = CellSpecification([BlockSpecification(-1, '1x7-7x1 conv', -1, '8r SE'),
+                                       BlockSpecification(-1, '2x2 maxpool', 0, '5x5:2dr conv'),
+                                       BlockSpecification(-1, '2x2 avgpool', 0, '5x5:2dr conv')])
+        g = model_gen.build_model_graph(cell_spec)
+        self.assertEqual(g.get_total_params(), 10947030, 'Segmentation multi-block wrong params count')
 
 
 if __name__ == '__main__':
