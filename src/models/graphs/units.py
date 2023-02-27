@@ -56,10 +56,11 @@ def build_cell_dag(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: '
                    compute_layer_params: 'Callable[[str, list[float], list[float]], int]'):
     used_blocks = set(inp for inp in cell_spec.inputs() if inp >= 0)
     unused_blocks = [b for b in range(len(cell_spec)) if b not in used_blocks]
-    nearest_used_lookback = max(inp for inp in cell_spec.inputs() if inp < 0)
+    used_lookbacks = set([inp for inp in cell_spec.inputs() if inp < 0])
+    nearest_used_lookback = max(used_lookbacks)
 
     # automatic lookback upsample, if target shape spatial resolution is higher than the inputs
-    lookback_nodes = perform_lookback_upsample_when_necessary(g, lookback_nodes, target_shape, cell_index)
+    lookback_nodes = perform_lookback_upsample_when_necessary(g, lookback_nodes, target_shape, used_lookbacks, cell_index)
 
     if cell_index in lookback_reshape_cell_indexes:
         lookback_nodes = perform_lookback_reshape(g, lookback_nodes, target_shape, cell_index, compute_layer_params)
@@ -187,15 +188,18 @@ def perform_lookback_reshape(g: Graph, lookback_nodes: 'list[TensorNode]', targe
     return [TensorNode(reshape_name, new_shape), lb1]
 
 
-def perform_lookback_upsample_when_necessary(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: 'list[float, ...]', cell_index: int):
+def perform_lookback_upsample_when_necessary(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: 'list[float, ...]',
+                                             used_lookbacks: 'set[int]', cell_index: int):
     new_lookbacks = []
     for i, lb in enumerate(lookback_nodes):
-        if lb is None:
+        lb_pos = len(lookback_nodes) - i
+        # avoid upsampling unused lookbacks (for example, -2 when only -1 is used)
+        if lb is None or -lb_pos not in used_lookbacks:
             new_lookbacks.append(lb)
         else:
             spatial_ratio = round(get_tensors_spatial_ratio(target_shape, lb.shape))
             if spatial_ratio > 1:
-                upsample_name = f'c{cell_index}_lb{len(lookback_nodes) - i}_transpose_conv_upsample'
+                upsample_name = f'c{cell_index}_lb{lb_pos}_transpose_conv_upsample'
                 # TODO: adapt kernel for time series (1D)
                 v_attributes = {
                     'name': [upsample_name],
