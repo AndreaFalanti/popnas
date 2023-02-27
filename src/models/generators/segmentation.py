@@ -5,6 +5,7 @@ from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.graphs.network_graph import NetworkGraph
+from models.graphs.units import TensorNode
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
 from utils.func_utils import elementwise_mult
@@ -103,12 +104,42 @@ class SegmentationModelGenerator(BaseModelGenerator):
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output
 
+    def add_upsample_unit_encoder_concat_to_graph(self, net_graph: NetworkGraph, encoder_nodes: 'list[TensorNode]'):
+        _, lb1 = net_graph.lookback_nodes
+        encoder_node = encoder_nodes.pop()
+        target_shape = net_graph.target_shapes[net_graph.cell_index]
+        upsample_shape = target_shape[:-1] + [lb1.shape[-1]]
+        concat_shape = encoder_node.shape[:-1] + [encoder_node.shape[-1] + lb1.shape[-1]]
+
+        prefix = f'c{net_graph.cell_index}'
+        upsample_name = f'{prefix}_lb1_linear_upsample'
+        concat_name = f'{prefix}_u_net_concat'
+        compressor_name = f'{prefix}_pointwise_compressor'
+        v_attributes = {
+            'name': [upsample_name, concat_name, compressor_name],
+            'op': ['upsample', 'concat', '1x1 conv'],
+            'cell_index': [net_graph.cell_index] * 3,
+            'block_index': [-1] * 3,
+            'params': [0, 0, self.op_instantiator.get_op_params('1x1 conv', concat_shape, target_shape)]
+        }
+        net_graph.g.add_vertices(3, v_attributes)
+
+        # add edges from inputs to operator layers, plus from operator layers to add
+        edges = [(lb1.name, upsample_name), (upsample_name, concat_name), (encoder_node.name, concat_name), (concat_name, compressor_name)]
+        edge_attributes = {
+            'tensor_shape': [str(lb1.shape), str(upsample_shape), str(encoder_node.shape), str(concat_shape)]
+        }
+        net_graph.g.add_edges(edges, edge_attributes)
+
+        return TensorNode(compressor_name, target_shape)
+
     def build_model_graph(self, cell_spec: CellSpecification, add_imagenet_stem: bool = False) -> NetworkGraph:
         net_info = self._generate_network_info(cell_spec, use_stem=False)
         net = NetworkGraph(list(self.input_shape), self.op_instantiator, cell_spec, self.cell_output_shapes,
                            net_info.used_cell_indexes, net_info.need_input_norm_indexes, self.residual_cells)
 
         M, N = self._get_macro_params(cell_spec)
+        encoder_concat_nodes = []
         # encoder
         for m in range(M):
             for _ in range(N):
@@ -116,11 +147,25 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
             # add reduction cell, except for the last motif
             if m + 1 < M:
+                encoder_concat_nodes.append(net.lookback_nodes[-1])
                 net.build_cell()
+
         # decoder
         for _ in range(M - 1):
-            # add upsample cell + N normal cells
-            for _ in range(N + 1):
+            # if the upsample unit is actually built, then perform the concat with encoder
+            if net.cell_index in net_info.used_cell_indexes:
+                # perform concat + pointwise, use it as the -1 lookback, then set the -2 lookback back to the original -1
+                ensemble_concat_node = self.add_upsample_unit_encoder_concat_to_graph(net, encoder_concat_nodes)
+                original_lb1 = net.lookback_nodes[-1]
+                net.lookback_nodes[-1] = ensemble_concat_node
+                net.build_cell()
+                net.lookback_nodes[-2] = original_lb1
+            # otherwise, call the build_cell function, which will skip it without side effects
+            else:
+                net.build_cell()
+
+            # add N normal cells
+            for _ in range(N):
                 net.build_cell()
 
         # add output layers
