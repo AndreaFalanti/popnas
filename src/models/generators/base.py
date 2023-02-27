@@ -471,9 +471,9 @@ class BaseModelGenerator(ABC):
 
                 sdp = ops.ScheduledDropPath(self.drop_path_keep_prob, cell_ratio, total_train_steps, dims=len(self.input_shape),
                                             name=f'sdp_c{self.cell_index}_concat')(block_tensors)
-                concat_layer = layers.Concatenate(axis=-1)(sdp)
+                concat_layer = layers.Concatenate(axis=-1, name=f'concat_c{self.cell_index}')(sdp)
             else:
-                concat_layer = layers.Concatenate(axis=-1)(block_tensors)
+                concat_layer = layers.Concatenate(axis=-1, name=f'concat_c{self.cell_index}')(block_tensors)
             x = self.op_instantiator.generate_pointwise_conv(filters, strided=False, name=f'concat_pointwise_conv_c{self.cell_index}')
             return x(concat_layer)
         # avoids concatenation of a single block, since it is unnecessary
