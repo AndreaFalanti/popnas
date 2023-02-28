@@ -76,6 +76,20 @@ class CellSpecification:
     def operators(self) -> list:
         return self._flat_data[1::2]
 
+    @cached_property
+    def used_lookbacks(self) -> 'set[int]':
+        return set(filter(lambda el: el < 0, self.inputs))
+
+    @cached_property
+    def used_blocks(self) -> 'set[int]':
+        ''' Indexes of blocks which are used as input of at least another block inside the cell specification. '''
+        return set(filter(lambda el: el >= 0, self.inputs))
+
+    @cached_property
+    def unused_blocks(self) -> 'set[int]':
+        ''' Indexes of blocks which must be concatenated in the final cell output, since not used internally by other blocks. '''
+        return set(range(len(self))) - self.used_blocks
+
     @staticmethod
     def from_str(cell_str: str) -> 'CellSpecification':
         # empty cell case

@@ -26,25 +26,19 @@ class SegmentationModelGenerator(BaseModelGenerator):
 
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         blocks = len(cell_spec)
-
-        cell_inputs = cell_spec.inputs
-        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
-        used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))
-        unused_block_outputs = [x for x in range(0, blocks) if x not in used_block_outputs]
-        use_skip = used_lookbacks.issuperset({-2})
+        use_skip = -2 in cell_spec.used_lookbacks
 
         # additional info regarding the cell stack
-        max_lookback = max(used_lookbacks, default=1)
-        used_cell_indexes = [index for index in list(range(self.get_maximum_cells()))[::max_lookback]]
+        nearest_lookback = max(cell_spec.used_lookbacks, default=1)
+        # "nearest_lookback" is negative, so the slice correctly starts from the last cell (which is the one connected to the output)
+        used_cell_indexes = list(range(self.get_maximum_cells()))[::nearest_lookback]
 
         encoder_cells = self.motifs * (self.normal_cells_per_motif + 1) - 1
         reduction_cell_indexes = list(range(self.normal_cells_per_motif, encoder_cells, self.normal_cells_per_motif + 1))
-        need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
+        need_input_norm_indexes = [el - min(cell_spec.used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
                 else []
 
-        return NetworkBuildInfo(cell_spec, blocks, used_lookbacks, unused_block_outputs, use_skip, used_cell_indexes,
-                                reduction_cell_indexes, need_input_norm_indexes)
+        return NetworkBuildInfo(cell_spec, blocks, used_cell_indexes, reduction_cell_indexes, need_input_norm_indexes)
 
     def _compute_cell_output_shapes(self) -> 'list[list[int, ...]]':
         output_shapes = []

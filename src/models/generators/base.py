@@ -35,11 +35,8 @@ class NetworkBuildInfo:
     '''
     Helper class storing relevant info extracted from the cell specification, used for building the actual neural network model.
     '''
-    cell_specification: CellSpecification
+    cell_spec: CellSpecification
     blocks: int
-    used_lookbacks: 'set[int]'
-    unused_block_outputs: 'list[int]'
-    use_skip: bool
     used_cell_indexes: 'list[int]'
     reduction_cell_indexes: 'list[int]'
     need_input_norm_indexes: 'list[int]'
@@ -185,8 +182,8 @@ class BaseModelGenerator(ABC):
             return {}
 
         network_info = self._generate_network_info(cell_spec, use_stem=False)
-        max_lookback = max(abs(lb) for lb in network_info.used_lookbacks)
-        output_shapes = ([list(self.input_shape)] * max_lookback) + self.cell_output_shapes
+        abs_furthest_lookback = abs(min(network_info.cell_spec.used_lookbacks))
+        output_shapes = ([list(self.input_shape)] * abs_furthest_lookback) + self.cell_output_shapes
 
         dtype_sizes = {
             tf.float16: 2,
@@ -202,8 +199,8 @@ class BaseModelGenerator(ABC):
         for cell_index in sorted(network_info.used_cell_indexes):
             current_name = f'cell_{cell_index}'
             partitions_dict[f'{previous_name} -> {current_name}'] = \
-                sum(tu.compute_bytes_from_tensor_shape(output_shapes[lb + max_lookback + cell_index], dtype_size)
-                    for lb in network_info.used_lookbacks)
+                sum(tu.compute_bytes_from_tensor_shape(output_shapes[lb + abs_furthest_lookback + cell_index], dtype_size)
+                    for lb in network_info.cell_spec.used_lookbacks)
             previous_name = current_name
 
         return partitions_dict
@@ -403,7 +400,7 @@ class BaseModelGenerator(ABC):
         block_outputs = []
         # initialized with provided lookback inputs (-1 and -2), but will contain also the block outputs of this cell
         total_inputs = inputs
-        for i, block in enumerate(self.network_build_info.cell_specification):
+        for i, block in enumerate(self.network_build_info.cell_spec):
             self.block_index = i
             block_out = self._build_block(block, filters, reduction, total_inputs)
             block_outputs.append(block_out)
@@ -412,7 +409,7 @@ class BaseModelGenerator(ABC):
             total_inputs = block_outputs + inputs
 
         if self.concat_only_unused:
-            block_outputs = [block_outputs[i] for i in self.network_build_info.unused_block_outputs]
+            block_outputs = [block_outputs[i] for i in self.network_build_info.cell_spec.unused_blocks]
 
         # concatenate and reduce depth to the number of filters, otherwise cell output would be a (b * filters) tensor depth
         cell_out = self._concatenate_blocks_into_cell_output(block_outputs, filters)
@@ -435,7 +432,7 @@ class BaseModelGenerator(ABC):
         Sum the nearest used lookback input to the cell output, making a residual connection.
         If the shaped differ, a "linear projection" is applied to the input to reshape it.
         '''
-        nearest_lookback = max(self.network_build_info.used_lookbacks)
+        nearest_lookback = max(self.network_build_info.cell_spec.used_lookbacks)
         lb_tensor, lb_shape = lookback_inputs[nearest_lookback]
 
         # check if a linear projection must be performed (case where input shape and output have different sizes, see Resnet paper)

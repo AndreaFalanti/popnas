@@ -19,31 +19,25 @@ class ClassificationModelGenerator(BaseModelGenerator):
 
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         blocks = len(cell_spec)
-        total_cells = self.get_maximum_cells()
+        total_cells = self.get_maximum_cells() + 2 if use_stem else self.get_maximum_cells()
 
-        cell_inputs = cell_spec.inputs
-        # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
-        used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
-        used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))
-        unused_block_outputs = [x for x in range(0, blocks) if x not in used_block_outputs]
-        use_skip = used_lookbacks.issuperset({-2})
+        use_skip = -2 in cell_spec.used_lookbacks
+        nearest_lookback = max(cell_spec.used_lookbacks, default=1)
+        # "nearest_lookback" is negative, so the slice correctly starts from the last cell (which is the one connected to the output)
+        used_cell_indexes = list(range(self.get_maximum_cells()))[::nearest_lookback]
 
         # additional info regarding the cell stack, with stem the logic is similar but dividing the two cases make the code more clear
         # TODO: actually, this is a mess, refactor this if stem is kept in the future
         if use_stem:
-            total_cells = total_cells + 2
-            used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
             reduction_cell_indexes = [0, 1] + list(range(2 + self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
-            need_input_norm_indexes = [0] + [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
-                else []
+            need_input_norm_indexes = [0] + [el - min(cell_spec.used_lookbacks) - 1 for el in reduction_cell_indexes] \
+                if use_skip and self.lookback_reshape else []
         else:
-            used_cell_indexes = list(range(total_cells - 1, -1, max(used_lookbacks, default=total_cells)))
             reduction_cell_indexes = list(range(self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
-            need_input_norm_indexes = [el - min(used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
-                else []
+            need_input_norm_indexes = [el - min(cell_spec.used_lookbacks) - 1 for el in reduction_cell_indexes] \
+                if use_skip and self.lookback_reshape else []
 
-        return NetworkBuildInfo(cell_spec, blocks, used_lookbacks, unused_block_outputs, use_skip, used_cell_indexes,
-                                reduction_cell_indexes, need_input_norm_indexes)
+        return NetworkBuildInfo(cell_spec, blocks, used_cell_indexes, reduction_cell_indexes, need_input_norm_indexes)
 
     def _compute_cell_output_shapes(self) -> 'list[list[int, ...]]':
         output_shapes = []

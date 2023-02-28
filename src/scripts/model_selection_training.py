@@ -106,10 +106,9 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
     if debug:
-        tf.debugging.experimental.enable_dump_debug_info(
-            os.path.join(save_path, 'debug'),
-            tensor_debug_mode="FULL_HEALTH",
-            circular_buffer_size=-1)
+        tf.debugging.experimental.enable_dump_debug_info(os.path.join(save_path, 'debug'),
+                                                         tensor_debug_mode="FULL_HEALTH",
+                                                         circular_buffer_size=-1)
 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
