@@ -22,11 +22,6 @@ class NetworkGraph:
         input_filters = input_shape[-1]
         self.target_shapes = [s[:-1] + [input_filters * s[-1]] for s in target_shapes]
 
-        # extract info from cell specification
-        self.used_blocks = set(inp for inp in self.cell_spec.inputs if inp >= 0)
-        self.unused_blocks = [b for b in range(len(self.cell_spec)) if b not in self.used_blocks]
-        self.nearest_used_lookback = max(inp for inp in self.cell_spec.inputs if inp < 0)
-
         v_attributes = {
             'name': ['input'],
             'op': ['input'],

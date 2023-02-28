@@ -54,13 +54,11 @@ def build_block_dag(g: Graph, input_nodes: 'list[TensorNode]', target_shape: 'li
 def build_cell_dag(g: Graph, lookback_nodes: 'list[TensorNode]', target_shape: 'list[float, ...]',
                    cell_spec: CellSpecification, cell_index: int, residual_output: bool, lookback_reshape_cell_indexes: 'list[int]',
                    compute_layer_params: 'Callable[[str, list[float], list[float]], int]'):
-    used_blocks = set(inp for inp in cell_spec.inputs if inp >= 0)
-    unused_blocks = [b for b in range(len(cell_spec)) if b not in used_blocks]
-    used_lookbacks = set([inp for inp in cell_spec.inputs if inp < 0])
-    nearest_used_lookback = max(used_lookbacks)
+    nearest_used_lookback = max(cell_spec.used_lookbacks)
+    unused_blocks = list(cell_spec.unused_blocks)   # kept as a list for backwards compatibility
 
     # automatic lookback upsample, if target shape spatial resolution is higher than the inputs
-    lookback_nodes = perform_lookback_upsample_when_necessary(g, lookback_nodes, target_shape, used_lookbacks, cell_index)
+    lookback_nodes = perform_lookback_upsample_when_necessary(g, lookback_nodes, target_shape, cell_spec.used_lookbacks, cell_index)
 
     if cell_index in lookback_reshape_cell_indexes:
         lookback_nodes = perform_lookback_reshape(g, lookback_nodes, target_shape, cell_index, compute_layer_params)
