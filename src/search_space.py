@@ -215,7 +215,6 @@ class SearchSpace:
             cell_spec: plain cell specification
             input_enc_name: name of input encoder
             op_enc_name: name of operator encoder
-            flatten: if True, a flat list is returned instead of a list of tuples
 
         Returns:
             encoded cell

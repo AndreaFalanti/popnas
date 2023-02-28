@@ -37,57 +37,54 @@ def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: CellSpecif
 
     cell_inputs = cell_spec.inputs
     encoded_flat_cell = search_space.encode_cell_spec(cell_spec)
-    encoded_cell_ops = [x - 1 for x in encoded_flat_cell[1::2]]  # change it to 0-indexed
+    encoded_cell_ops = [x - 1 for x in encoded_flat_cell.operators]  # change operators to 0-indexed categorical
 
-    used_lookbacks = set(inp for inp in cell_inputs if inp < 0)
-    used_blocks = set(inp for inp in cell_inputs if inp >= 0)
     num_blocks = len(cell_spec)
-    unused_blocks = set(b for b in range(num_blocks) if b not in used_blocks)
-    num_unused_blocks = len(unused_blocks)
+    num_unused_blocks = len(cell_spec.unused_blocks)
+    num_used_lookbacks = len(cell_spec.used_lookbacks)
     num_operators = len(search_space.operator_values)
     max_lookback_abs = abs(search_space.input_lookback_depth)
 
     # node features are (in order): operators as one-hot categorical, lookbacks, block_add and (cell_concat + pointwise conv)
     # features are a one-hot vector, which should work well for GCN.
     num_features = num_operators + max_lookback_abs + 2
-    num_nodes = len(used_lookbacks) + num_blocks * 3 + (1 if num_unused_blocks > 1 else 0)
+    num_nodes = num_used_lookbacks + num_blocks * 3 + (1 if num_unused_blocks > 1 else 0)
     num_edges = num_blocks * 4 + (num_unused_blocks if num_unused_blocks > 1 else 0)
 
-    # nodes are 0-indexed, 0 is the further lookback input and so on.
-    # After accommodating all lookback inputs, a triplet of nodes is created for each block.
+    # nodes are 0-indexed, 0 is the further lookback input, and so on
+    # after accommodating all lookback inputs, a triplet of nodes is created for each block
     lookback_node_ids = []
     curr_lb_node = 0
     for i in range(max_lookback_abs):
-        lookback_node_ids.append(curr_lb_node if curr_lb_node - max_lookback_abs in used_lookbacks else None)
+        lookback_node_ids.append(curr_lb_node if curr_lb_node - max_lookback_abs in cell_spec.used_lookbacks else None)
         curr_lb_node += 1
 
-    block_join_node_ids = [(i + 1) * 3 + len(used_lookbacks) - 1 for i in range(num_blocks)]
+    block_join_node_ids = [(i + 1) * 3 + num_used_lookbacks - 1 for i in range(num_blocks)]
     input_node_ids = block_join_node_ids + lookback_node_ids
     cell_concat_node_id = num_nodes - 1
 
-    lb_node_id_offset = len(used_lookbacks)
     op_node_ids = []
     for i in range(num_blocks):
-        op_node_ids.extend([lb_node_id_offset + 3 * i, lb_node_id_offset + 3 * i + 1])
+        op_node_ids.extend([num_used_lookbacks + 3 * i, num_used_lookbacks + 3 * i + 1])
 
     # edges from inputs to op nodes
     edges_out = [input_node_ids[inp] for inp in cell_inputs]
     edges_in = op_node_ids.copy()
 
-    # edges from op nodes to block join operator (the two block operators are connected to block join)
+    # edges from op nodes to the block join operator (the two operators are connected to the join layer)
     edges_out.extend(op_node_ids)
     edges_in.extend(n for n_id in block_join_node_ids for n in [n_id] * 2)  # double for to duplicate values
 
     # add edges to cell concat, if necessary
     if num_unused_blocks > 1:
-        edges_out.extend(block_join_node_ids[b] for b in unused_blocks)
+        edges_out.extend(block_join_node_ids[b] for b in cell_spec.unused_blocks)
         edges_in += [cell_concat_node_id] * num_unused_blocks
 
     # assign a number to each node, which will be converted layer to one-hot encoding.
     # for operator nodes, the categorical value is already available (transposed to 0-index)
     # op categorical values are followed by values for lookbacks, block join operator and cell concat.
     # node ids start with lookback nodes, process them in order. lb_value is negative.
-    features_categorical = [num_operators + max_lookback_abs + lb_value for lb_value in sorted(used_lookbacks)]
+    features_categorical = [num_operators + max_lookback_abs + lb_value for lb_value in sorted(cell_spec.used_lookbacks)]
     # add feature for block triplets
     block_features = list_flatten([(op1, op2, num_features - 2) for op1, op2 in chunks(encoded_cell_ops, 2)])
     features_categorical.extend(block_features)
