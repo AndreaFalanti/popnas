@@ -51,9 +51,9 @@ class CellCounter:
     def update_from_cell_spec(self, cell_spec: CellSpecification):
         # avoid updating if not interested in counters for either inputs or operators (more efficient)
         if self.input_keys is None or len(self.input_keys) > 0:
-            self.input_counter.update(cell_spec.inputs())
+            self.input_counter.update(cell_spec.inputs)
         if self.op_keys is None or len(self.op_keys) > 0:
-            self.op_counter.update(cell_spec.operators())
+            self.op_counter.update(cell_spec.operators)
 
         # removing undesired keys guarantees that total and key_count are the values truly expected
         if self.input_keys is not None:

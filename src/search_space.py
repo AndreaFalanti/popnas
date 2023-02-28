@@ -1,6 +1,7 @@
 import itertools
 import logging
 import re
+from functools import cached_property
 from typing import Any, Callable, Generator, Sequence, NamedTuple, Iterable
 
 import log_service
@@ -67,9 +68,11 @@ class CellSpecification:
         for i, block in enumerate(self._data):
             logger.info("\tBlock %d: %s", i + 1, block)
 
+    @cached_property
     def inputs(self) -> list:
         return self._flat_data[::2]
 
+    @cached_property
     def operators(self) -> list:
         return self._flat_data[1::2]
 
@@ -302,7 +305,7 @@ class SearchSpace:
 
     def generate_eqv_cells(self, cell_spec: CellSpecification, size: int = None):
         # that is basically the 'fixed blocks' index list
-        used_block_outputs = set(filter(lambda el: el >= 0, cell_spec.inputs()))
+        used_block_outputs = set(filter(lambda el: el >= 0, cell_spec.inputs))
 
         # a block is swappable (can change position inside the cell) if its output is not used by other blocks
         swappable_blocks_mask = [(i not in used_block_outputs) for i in range(len(cell_spec))]

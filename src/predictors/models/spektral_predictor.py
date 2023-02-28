@@ -35,7 +35,7 @@ def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: CellSpecif
     # if len(cell_spec) == 0:
     #     return Graph(x=[], a=[], y=y_label)
 
-    cell_inputs = cell_spec.inputs()
+    cell_inputs = cell_spec.inputs
     encoded_flat_cell = search_space.encode_cell_spec(cell_spec)
     encoded_cell_ops = [x - 1 for x in encoded_flat_cell[1::2]]  # change it to 0-indexed
 

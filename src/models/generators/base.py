@@ -132,7 +132,7 @@ class BaseModelGenerator(ABC):
         Returns:
             the number of cells stacked in the architecture
         '''
-        lookback_inputs = [inp for inp in cell_spec.inputs() if inp is not None and inp < 0]
+        lookback_inputs = [inp for inp in cell_spec.inputs if inp is not None and inp < 0]
         nearest_lookback = max(lookback_inputs)
         cell_indexes = list(range(self.get_maximum_cells()))
 

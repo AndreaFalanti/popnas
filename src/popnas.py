@@ -182,7 +182,7 @@ class Popnas:
         Returns:
             a dictionary, with the operator used in the specular mono block as key, and the training time as value.
         '''
-        return {train_res.cell_spec.operators()[0]: train_res.training_time for train_res in monoblocks_train_info
+        return {train_res.cell_spec.operators[0]: train_res.training_time for train_res in monoblocks_train_info
                 if train_res.cell_spec.is_specular_monoblock()}
 
     def log_and_save_run_final_results(self):

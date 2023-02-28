@@ -27,7 +27,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         blocks = len(cell_spec)
 
-        cell_inputs = cell_spec.inputs()
+        cell_inputs = cell_spec.inputs
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
         used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
         used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))

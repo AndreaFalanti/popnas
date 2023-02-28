@@ -21,7 +21,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         blocks = len(cell_spec)
         total_cells = self.get_maximum_cells()
 
-        cell_inputs = cell_spec.inputs()
+        cell_inputs = cell_spec.inputs
         # take only BLOCK input indexes (list even indices, discard -1 and -2), eliminating duplicates
         used_block_outputs = set(filter(lambda el: el >= 0, cell_inputs))
         used_lookbacks = set(filter(lambda el: el < 0, cell_inputs))

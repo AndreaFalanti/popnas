@@ -12,8 +12,8 @@ def save_cell_dag_image(cell_spec: Union[str, CellSpecification], save_path: str
         cell_spec = CellSpecification.from_str(cell_spec)
 
     block_count = len(cell_spec)
-    ops = cell_spec.operators()
-    inputs = cell_spec.inputs()
+    ops = cell_spec.operators
+    inputs = cell_spec.inputs
     unused_blocks = [i for i in range(block_count) if i not in inputs]
     used_lookbacks = [i for i in range(-max_lookback, 0) if i in inputs]
 

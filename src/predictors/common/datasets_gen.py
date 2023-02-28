@@ -24,8 +24,8 @@ def __prepare_rnn_inputs_2i(search_space: SearchSpace, cell_spec: CellSpecificat
 
     # add sequence dimension (final shape is (B, 2)),
     # to process blocks one at a time by the LSTM (2 inputs, 2 operators)
-    inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(cell_encoding.inputs(), 2)]
-    operators = [[op1, op2] for op1, op2 in to_list_of_tuples(cell_encoding.operators(), 2)]
+    inputs = [[in1, in2] for in1, in2 in to_list_of_tuples(cell_encoding.inputs, 2)]
+    operators = [[op1, op2] for op1, op2 in to_list_of_tuples(cell_encoding.operators, 2)]
 
     return [inputs, operators]
 

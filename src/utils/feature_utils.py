@@ -130,11 +130,11 @@ def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int,
 
 
 def generate_time_features(cell_spec: CellSpecification, search_space: SearchSpace, compute_real_cell_depth: Callable[[CellSpecification], int]):
-    inputs = cell_spec.inputs()
+    inputs = cell_spec.inputs
     blocks = len(cell_spec)
     total_cells = compute_real_cell_depth(cell_spec)
 
-    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex').operators()
+    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex').operators
     op_time_features = to_list_of_tuples(op_time_features_flat, 2)
 
     total_op_score = sum(op_time_features_flat)
@@ -192,7 +192,7 @@ def compute_lookback_usage_features(cell_spec: CellSpecification, max_lookback: 
         (list[int]): list of boolean (0 or 1) features about lookback usage
     '''
     # remove inputs = None
-    cell_inputs = [inp for inp in cell_spec.inputs() if inp is not None]
+    cell_inputs = [inp for inp in cell_spec.inputs if inp is not None]
 
     return [(1 if -i - 1 in cell_inputs else 0) for i in range(max_lookback)]
 
@@ -221,7 +221,7 @@ def compute_blocks_lookback_incidence_matrix(cell_spec: CellSpecification, max_b
 def generate_acc_features(cell_spec: CellSpecification, search_space: SearchSpace, compute_real_cell_depth: Callable[[CellSpecification], int]):
     blocks = len(cell_spec)
 
-    op_features = search_space.encode_cell_spec(cell_spec).operators()
+    op_features = search_space.encode_cell_spec(cell_spec).operators
     max_blocks = search_space.B
     max_lookback_depth = abs(search_space.input_lookback_depth)
 

@@ -38,8 +38,8 @@ class NATSbench:
             return f'|skip_connect~0|+|none~0|none~1|+|none~0|skip_connect~1|none~2|'
 
         cell_blocks = len(cell_spec)
-        cell_inputs = cell_spec.inputs()
-        nas_bench_ops = [self.op_conversion_map[op] for op in cell_spec.operators()]
+        cell_inputs = cell_spec.inputs
+        nas_bench_ops = [self.op_conversion_map[op] for op in cell_spec.operators]
 
         # node 0 is -1 input lookback. No need to check inputs for first block, since it is fixed.
         # node 2 is the output of the first block
