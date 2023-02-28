@@ -68,7 +68,6 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
 
     for i, (cell_spec, macro) in cells_iter:
         # always generate the original architecture
-        print(i)
         yield i, (cell_spec, macro)
 
         # return the max number of filters for each (M, N) combination that fits parameter constraints
@@ -85,7 +84,6 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
 
                 # check also that it is different from the original macro
                 if max_f_macro is not None and str(max_f_macro) != str(macro):
-                    print(max_f_macro)
                     yield i, (cell_spec, max_f_macro)
 
 
@@ -94,7 +92,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     ''' Refer to argparse help for more information about these arguments. '''
     custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if j is None else j
 
-    # create appropriate model structure (different between single model and multi-model)
+    # create appropriate model structure (different between single model and multi-models)
     if k <= 1:
         save_path = os.path.join(p, name)
         create_model_log_folder(save_path)
