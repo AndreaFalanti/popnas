@@ -47,11 +47,11 @@ def main():
     log_path = setup_folders(args.p)
     logger = create_logger(__name__, log_path)
 
-    search_space = SearchSpace(run_config['search_space'])
+    search_space = SearchSpace(run_config.search_space)
 
-    metric = run_config['search_strategy']['score_metric']
+    metric = run_config.search_strategy.score_metric
     logger.info('The score metric targeted is: %s', metric)
-    model_gen_class = get_model_generator_class_for_task(run_config['dataset']['type'])
+    model_gen_class = get_model_generator_class_for_task(run_config.dataset.type)
     keras_metrics = model_gen_class.get_results_processor_class().keras_metrics_considered()
     score_metric = next(m for m in keras_metrics if m.name == metric)
 

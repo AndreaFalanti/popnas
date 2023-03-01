@@ -3,13 +3,16 @@ Stores common function used in post search scripts, which could be executed afte
 All the functions stored inside this file are not used in the search algorithm.
 '''
 import copy
+import dataclasses
 import json
 import logging
 import os
-from typing import NamedTuple, Any
+from typing import NamedTuple
 
 import pandas as pd
 import tensorflow as tf
+from dacite import from_dict
+from mergedeep import merge
 from tensorflow.keras import callbacks, Model, losses
 
 import log_service
@@ -17,7 +20,7 @@ from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
 from models.results.base import TargetMetric, get_best_metric_and_epoch_index
 from search_space import CellSpecification, parse_cell_strings
-from utils.config_utils import retrieve_search_config
+from utils.config_dataclasses import RunConfig
 from utils.func_utils import create_empty_folder, from_seconds_to_hms
 from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution
 
@@ -34,10 +37,10 @@ class MacroConfig(NamedTuple):
         return MacroConfig(self.m + m_mod, self.n + n_mod, int(self.f * f_mod))
 
     @staticmethod
-    def from_config(config: 'dict[str, Any]'):
-        return MacroConfig(config['architecture_parameters']['motifs'],
-                           config['architecture_parameters']['normal_cells_per_motif'],
-                           config['cnn_hp']['filters'])
+    def from_config(config: RunConfig):
+        return MacroConfig(config.architecture_parameters.motifs,
+                           config.architecture_parameters.normal_cells_per_motif,
+                           config.cnn_hp.filters)
 
 
 def define_callbacks(score_metric: str, multi_output: bool, output_names: 'list[str]') -> 'list[callbacks.Callback]':
@@ -62,16 +65,17 @@ def create_model_log_folder(log_path: str):
     log_service.set_log_path(log_path)
 
 
-def save_trimmed_json_config(config: dict, save_path: str):
-    # remove useless keys (config is a subset of search algorithm config)
+def save_complete_and_trimmed_json_config(config: RunConfig, save_path: str):
+    ''' Save the config subsection related to the network training, without search only parameters. '''
     keep_keys = ['cnn_hp', 'architecture_parameters', 'dataset', 'search_strategy']
-    deletable_keys = [k for k in config.keys() if k not in keep_keys]
-
-    for key in deletable_keys:
-        del config[key]
+    full_config = dataclasses.asdict(config)
+    minimal_config = {k: v for k, v in full_config.items() for k in keep_keys}
 
     with open(os.path.join(save_path, 'run.json'), 'w') as f:
-        json.dump(config, f, indent=4)
+        json.dump(full_config, f, indent=4)
+
+    with open(os.path.join(save_path, 'run_trimmed.json'), 'w') as f:
+        json.dump(minimal_config, f, indent=4)
 
 
 def extract_final_training_results(hist: callbacks.History, score_metric_name: str, keras_metrics: 'list[TargetMetric]',
@@ -119,39 +123,32 @@ def log_training_results_dict(logger: logging.Logger, results_dict: 'dict[str, d
     logger.info('*' * 80)
 
 
-def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str):
-    # run configuration used during search. Dataset config is extracted from this.
-    search_config = retrieve_search_config(run_path)
-    # read hyperparameters to use for model selection
+def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str) -> tuple[RunConfig, tf.distribute.Strategy]:
+    # run configuration used during search
+    with open(os.path.join(run_path, 'restore', 'run.json'), 'r') as f:
+        search_config = json.load(f)
+
+    # read hyperparameters to use for model selection, overriding search ones
     with open(custom_json_path, 'r') as f:
-        config = json.load(f)  # type: dict
-
-    def merge_config_section(section_name: str):
-        ''' Override search config parameters with defined script config parameters, the ones not defined are taken from search config. '''
-        return dict(search_config[section_name], **config[section_name])
-
-    # override defined dataset parameters with script config, the ones not defined are taken from search config
-    for key in config.keys():
-        config[key] = merge_config_section(key)
+        ms_partial_config = json.load(f)  # type: dict
+        
+    ms_config_dict = merge(search_config, ms_partial_config)
+    ms_config = from_dict(data_class=RunConfig, data=ms_config_dict)
 
     # set custom batch size, if present
     if batch_size is not None:
-        config['dataset']['batch_size'] = batch_size
-        config['cnn_hp']['learning_rate'] = search_config['cnn_hp']['learning_rate'] * (batch_size / search_config['dataset']['batch_size'])
-
-    # set score metric (to select the best architecture if "-spec" argument is not provided)
-    config['search_strategy'] = {
-        'score_metric': search_config['search_strategy'].get('score_metric', 'accuracy')
-    }
+        ms_config.cnn_hp.learning_rate = ms_config.cnn_hp.learning_rate * (batch_size / ms_config.dataset.batch_size)
+        ms_config.dataset.batch_size = batch_size
 
     # initialize train strategy (try-except to be retrocompatible with the previous config format)
     try:
-        ts_device = train_strategy if train_strategy is not None else search_config['others']['train_strategy']
-        train_strategy = initialize_train_strategy(ts_device)
+        if train_strategy is not None:
+            ms_config.others.train_strategy = train_strategy
+        train_strategy = initialize_train_strategy(ms_config.others.train_strategy)
     except AttributeError:
         train_strategy = initialize_train_strategy(None)
 
-    return config, train_strategy
+    return ms_config, train_strategy
 
 
 def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'):
@@ -208,11 +205,11 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     return model, output_names
 
 
-def build_macro_customized_config(config: dict, macro: MacroConfig):
+def build_macro_customized_config(config: RunConfig, macro: MacroConfig):
     model_config = copy.deepcopy(config)
-    model_config['architecture_parameters']['motifs'] = macro.m
-    model_config['architecture_parameters']['normal_cells_per_motif'] = macro.n
-    model_config['cnn_hp']['filters'] = macro.f
+    model_config.architecture_parameters.motifs = macro.m
+    model_config.architecture_parameters.normal_cells_per_motif = macro.n
+    model_config.cnn_hp.filters = macro.f
 
     return model_config
 
@@ -226,8 +223,8 @@ def save_evaluation_results(model: Model, ds: tf.data.Dataset, model_path: str):
 def get_best_cell_specs(log_folder_path: str, n: int, metric: TargetMetric) -> 'tuple[list[CellSpecification], list[float]]':
     training_results_csv_path = os.path.join(log_folder_path, 'csv', 'training_results.csv')
     df = pd.read_csv(training_results_csv_path)
-    # exclude empty cell, which gives exceptions in macro-structure tuning.
-    # Could happen to choose the empty cell in debug runs with about 10 networks, in real cases it never happens.
+    # exclude empty cell, which gives exceptions in macro-structure tuning
+    # could happen to choose the empty cell in debug runs with about 10 networks; in real cases it never happens
     df = df[df['cell structure'] != '[]']
     best_acc_rows = df.nlargest(n, columns=[metric.results_csv_column])
 

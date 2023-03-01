@@ -20,7 +20,7 @@ from search_space import CellSpecification
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
-from utils.post_search_training_utils import create_model_log_folder, save_trimmed_json_config, define_callbacks, \
+from utils.post_search_training_utils import create_model_log_folder, save_complete_and_trimmed_json_config, define_callbacks, \
     build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config, \
     get_best_cell_specs, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict
@@ -113,16 +113,16 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
 
-    cnn_config = config['cnn_hp']
-    arc_config = config['architecture_parameters']
-    ds_config = config['dataset']
+    cnn_config = config.cnn_hp
+    arc_config = config.architecture_parameters
+    ds_config = config.dataset
 
-    multi_output = arc_config['multi_output']
-    augment_on_gpu = ds_config['data_augmentation']['perform_on_gpu']
-    score_metric_name = config['search_strategy']['score_metric']
+    multi_output = arc_config.multi_output
+    augment_on_gpu = ds_config.data_augmentation.perform_on_gpu
+    score_metric_name = config.search_strategy.score_metric
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
-    save_trimmed_json_config(config, save_path)
+    save_complete_and_trimmed_json_config(config, save_path)
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -130,9 +130,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     dataset_folds, classes_count, input_shape, train_batches, val_batches, preprocessing_model = dataset_generator.generate_train_val_datasets()
 
     # produce weights for balanced loss if option is enabled in database config
-    balance_class_losses = ds_config.get('balance_class_losses', False)
     balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in dataset_folds] \
-        if balance_class_losses else None
+        if ds_config.balance_class_losses else None
     logger.info('Datasets generated successfully')
 
     # DEBUG ONLY
@@ -140,7 +139,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # create a model generator instance
     with train_strategy.scope():
-        model_gen = model_generator_factory(ds_config['type'], cnn_config, arc_config, train_batches,
+        model_gen = model_generator_factory(ds_config.type, cnn_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
@@ -149,9 +148,9 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     extended_keras_metrics = extend_keras_metrics(keras_metrics)
     target_metric = next(m for m in keras_metrics if m.name == score_metric_name)
 
-    m = arc_config['motifs']
-    n = arc_config['normal_cells_per_motif']
-    f = cnn_config['filters']
+    m = arc_config.motifs
+    n = arc_config.normal_cells_per_motif
+    f = cnn_config.filters
     macro_config = MacroConfig(m, n, f)
 
     cell_score_iter = get_cells_to_train_iter(p, spec, k, target_metric, macro_config, logger)
@@ -178,7 +177,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             f.write(str(cell_spec))
 
         model_config = build_macro_customized_config(config, macro)
-        save_trimmed_json_config(model_config, model_folder)
+        save_complete_and_trimmed_json_config(model_config, model_folder)
 
         model_logger.info('Generating Keras model from cell specification...')
         with train_strategy.scope():
@@ -206,24 +205,24 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         plot_model(model, to_file=os.path.join(model_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
         hist = model.fit(x=train_dataset,
-                         epochs=cnn_config['epochs'],
+                         epochs=cnn_config.epochs,
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
-                         class_weight=balanced_class_weights[0] if balance_class_losses else None,
+                         class_weight=balanced_class_weights[0] if ds_config.balance_class_losses else None,
                          callbacks=train_callbacks)  # type: callbacks.History
 
         training_time = time_cb.get_total_time()
         results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
                                                                                        output_names, using_val=True)
-        log_training_results_summary(logger, best_epoch, cnn_config['epochs'], training_time, best_training_score, score_metric_name)
+        log_training_results_summary(logger, best_epoch, cnn_config.epochs, training_time, best_training_score, score_metric_name)
         log_training_results_dict(logger, results_dict)
 
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))
 
         # create confusion matrix only in classification tasks
-        if ds_config['type'] in ['image_classification', 'time_series_classification']:
+        if ds_config.type in ['image_classification', 'time_series_classification']:
             logger.info('Saving confusion matrix')
             predict_and_save_confusion_matrix(model, validation_dataset, multi_output, n_classes=classes_count,
                                               save_path=os.path.join(model_folder, 'val_confusion_matrix'))

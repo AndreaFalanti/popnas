@@ -58,7 +58,7 @@ def main():
     generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
-    search_space = SearchSpace(run_config['search_space'])
+    search_space = SearchSpace(run_config.search_space)
 
     predictors_to_test = [
         AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),

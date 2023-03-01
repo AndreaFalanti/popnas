@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-from utils.config_utils import retrieve_search_config
 from utils.func_utils import clamp, chunks
 
 
@@ -125,10 +124,6 @@ def execute(p: str, save: bool = False):
 
     gen_paths = path_closure(p)
     gen_save_path = generate_slide_save_path(p) if save else iter(())
-
-    run_config = retrieve_search_config(p)
-    sstr_config = run_config['search_strategy']
-    score_metric = sstr_config['score_metric']
 
     # get info about all plots belonging to the apposite folder
     plot_files = [f for f in os.scandir(os.path.join(p, 'plots')) if f.is_file()]  # type: list[os.DirEntry]

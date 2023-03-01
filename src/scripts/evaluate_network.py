@@ -9,6 +9,7 @@ import log_service
 from dataset.utils import dataset_generator_factory
 from models.generators.factory import model_generator_factory
 from search_space import CellSpecification
+from utils.config_utils import read_json_config
 from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import MacroConfig, compile_post_search_model, save_evaluation_results
@@ -29,7 +30,7 @@ def get_model_cell_spec(log_folder_path: str):
 # This script can be used to evaluate the final model trained on a test set.
 # It needs a saved model, which could be the one found during search or the one produced by final_training script (spec + checkpoint)
 def main():
-    # if search_model flag is not specified, script will assume that the final_training script have been executed to train extensively a model
+    # if "search_model" flag is not specified, the script will assume that the final_training script has been executed to train extensively a model
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to log folder", required=True)
     parser.add_argument('-j', metavar='JSON_PATH', type=str,
@@ -50,18 +51,17 @@ def main():
         custom_json_path = os.path.join(args.p, 'restore', 'run.json') if args.search_model \
             else os.path.join(model_path, 'run.json')
     print('Reading configuration...')
-    with open(custom_json_path, 'r') as f:
-        config = json.load(f)
+    config = read_json_config(custom_json_path)
 
-    cnn_config = config['cnn_hp']
-    arc_config = config['architecture_parameters']
-    multi_output = arc_config['multi_output']
+    cnn_config = config.cnn_hp
+    arc_config = config.architecture_parameters
+    multi_output = arc_config.multi_output
 
     train_strategy = initialize_train_strategy(args.ts)
 
     # Load and prepare the dataset
     print('Preparing datasets...')
-    dataset_generator = dataset_generator_factory(config['dataset'], isinstance(train_strategy, tf.distribute.TPUStrategy))
+    dataset_generator = dataset_generator_factory(config.dataset, isinstance(train_strategy, tf.distribute.TPUStrategy))
     test_ds, classes_count, image_shape, test_batches = dataset_generator.generate_test_dataset()
     print('Datasets generated successfully')
 
@@ -73,12 +73,12 @@ def main():
         save_evaluation_results(model, test_ds, model_path)
 
         # create confusion matrix only in classification tasks
-        if config['dataset']['type'] in ['image_classification', 'time_series_classification']:
+        if config.dataset.type in ['image_classification', 'time_series_classification']:
             predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
                                               save_path=os.path.join(model_path, 'test_confusion_matrix'))
     else:
         with train_strategy.scope():
-            model_gen = model_generator_factory(config['dataset']['type'], cnn_config, arc_config, test_batches,
+            model_gen = model_generator_factory(config.dataset.type, cnn_config, arc_config, test_batches,
                                                 output_classes_count=classes_count, input_shape=image_shape, data_augmentation_model=None)
 
         model_paths = [f.path for f in os.scandir(model_path) if f.is_dir()] if args.top else [model_path]
@@ -111,7 +111,7 @@ def main():
 
             save_evaluation_results(model, test_ds, m_path)
             # create confusion matrix only in classification tasks
-            if config['dataset']['type'] in ['image_classification', 'time_series_classification']:
+            if config.dataset.type in ['image_classification', 'time_series_classification']:
                 predict_and_save_confusion_matrix(model, test_ds, multi_output, n_classes=classes_count,
                                                   save_path=os.path.join(m_path, 'test_confusion_matrix'))
 
