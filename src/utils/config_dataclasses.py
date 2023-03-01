@@ -36,8 +36,8 @@ class SearchSpaceConfig:
 class SearchStrategyConfig:
     max_children: int
     max_exploration_children: int
-    score_metric: str
-    additional_pareto_objectives: 'list[str]'
+    score_metric: str = 'accuracy'
+    additional_pareto_objectives: 'list[str]' = field(default_factory=lambda: ['time'])
 
 
 @dataclass
@@ -61,7 +61,7 @@ class ArchitectureParametersConfig:
     concat_only_unused_blocks: bool
     residual_cells: bool
     multi_output: bool
-    se_cell_output: bool = field(default=False)
+    se_cell_output: bool = False
 
 
 @dataclass
@@ -76,11 +76,11 @@ class DatasetConfig:
     cache: bool
     folds: int
     samples: Optional[int]
-    balance_class_losses: bool
     rescale: Optional[bool]
     normalize: Optional[bool]
     resize: Optional[ResizeDict]
     data_augmentation: DataAugmentationDict
+    balance_class_losses: bool = False
 
 
 @dataclass
