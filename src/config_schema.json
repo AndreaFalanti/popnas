@@ -245,24 +245,31 @@
                     "type": "boolean"
                 },
                 "resize": {
-                    "type": "object",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean"
+                    "oneOf": [
+                        {
+                            "type": "null"
                         },
-                        "width": {
-                            "type": "integer",
-                            "minimum": 8
-                        },
-                        "height": {
-                            "type": "integer",
-                            "minimum": 8
+                        {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "width": {
+                                    "type": "integer",
+                                    "minimum": 8
+                                },
+                                "height": {
+                                    "type": "integer",
+                                    "minimum": 8
+                                }
+                            },
+                            "required": [
+                                "enabled",
+                                "width",
+                                "height"
+                            ]
                         }
-                    },
-                    "required": [
-                        "enabled",
-                        "width",
-                        "height"
                     ]
                 },
                 "data_augmentation": {
