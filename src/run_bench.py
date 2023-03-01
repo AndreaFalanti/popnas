@@ -5,11 +5,13 @@ import sys
 
 import numpy as np
 import pandas as pd
+from dacite import from_dict
 
 import log_service
 from benchmarking import NATSbench
 from popnas import Popnas
 from search_space import CellSpecification
+from utils.config_dataclasses import RunConfig
 from utils.config_utils import validate_config_json
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import initialize_train_strategy
@@ -101,14 +103,12 @@ def get_best_cell_spec(log_folder_path: str, metric: str = 'best val accuracy'):
     return cell_spec, best_acc_row[metric]
 
 
-def evaluate_best_cell_on_test(config: dict, run_folder: str):
+def evaluate_best_cell_on_test(config: RunConfig, run_folder: str):
     # Create the API instance for the topology search space in NATS
-    bench = NATSbench(config['dataset']['path'])
+    bench = NATSbench(config.dataset.path)
 
     best_cell_spec, best_val = get_best_cell_spec(run_folder)
-    dataset = config['dataset']['name']
-
-    test_acc = bench.simulate_testing_on_nas_bench_201(best_cell_spec, dataset)
+    test_acc = bench.simulate_testing_on_nas_bench_201(best_cell_spec, config.dataset.name)
 
     with open(os.path.join(run_folder, 'bench-test.txt'), 'w') as f:
         f.write(f'Cell: {rstr(best_cell_spec)}\n')
@@ -130,11 +130,12 @@ def main():
 
     supported_datasets = ('cifar10', 'cifar100', 'ImageNet16-120')
     for dataset in supported_datasets:
-        run_config = generate_popnas_bench_config(dataset, args.p)
+        run_config_dict = generate_popnas_bench_config(dataset, args.p)
+        run_config = from_dict(data_class=RunConfig, data=run_config_dict)
         # check that the config is correct
         validate_config_json(run_config)
 
-        train_strategy = initialize_train_strategy(run_config['others']['train_strategy'])
+        train_strategy = initialize_train_strategy(run_config.others.train_strategy)
 
         val_accuracies, test_accuracies = [], []
 
@@ -146,7 +147,7 @@ def main():
             with open(log_service.build_path('restore', 'run.json'), 'w') as f:
                 json.dump(run_config, f, indent=4)
 
-            # Handle uncaught exception in a special log file
+            # handle uncaught exception in a special log file
             sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
 
             popnas = Popnas(run_config, train_strategy, benchmarking=True)

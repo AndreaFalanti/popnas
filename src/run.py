@@ -16,7 +16,7 @@ def main():
 
     # create folder structure for log files or reuse a previous log folder to continue a stopped/crashed execution
     run_config = initialize_search_config_and_logs(args.name, args.j, args.r)
-    # Handle uncaught exception in a special log file
+    # handle uncaught exception in a special log file
     # leave it before validating JSON so that the config exception is logged correctly when triggered
     sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
     # check that the config is correct
