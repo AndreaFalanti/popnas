@@ -16,6 +16,7 @@ from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallbac
 from models.generators.factory import model_generator_factory
 from models.results.base import write_multi_output_results_to_csv
 from search_space import CellSpecification
+from utils.config_dataclasses import *
 from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
 
 AUTOTUNE = tf.data.AUTOTUNE
@@ -26,7 +27,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: dict, cnn_config: dict, arc_config: dict, others_config: dict,
+    def __init__(self, dataset_config: DatasetConfig, cnn_config: CnnHpConfig, arc_config: ArchitectureParametersConfig, others_config: OthersConfig,
                  score_objective: str, train_strategy: tf.distribute.Strategy):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
@@ -35,12 +36,12 @@ class NetworkManager:
         '''
         self._logger = log_service.get_logger(__name__)
 
-        self.dataset_folds_count = dataset_config['folds']
-        self.dataset_classes_count = dataset_config['classes_count']
-        self.balance_class_losses = dataset_config['balance_class_losses']
-        self.augment_on_gpu = dataset_config['data_augmentation']['enabled'] and dataset_config['data_augmentation']['perform_on_gpu']
+        self.dataset_folds_count = dataset_config.folds
+        self.dataset_classes_count = dataset_config.classes_count
+        self.balance_class_losses = dataset_config.balance_class_losses
+        self.augment_on_gpu = dataset_config.data_augmentation.enabled and dataset_config.data_augmentation.perform_on_gpu
 
-        self.epochs = cnn_config['epochs']
+        self.epochs = cnn_config.epochs
         self.train_strategy = train_strategy
         self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
@@ -55,7 +56,7 @@ class NetworkManager:
         self.best_score = 0.0
         self.score_objective = score_objective
 
-        # setup dataset. Batches variables are used for displaying progress during training
+        # setup dataset; batches variables are used for displaying progress during training
         dataset_generator = dataset_generator_factory(dataset_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
         self.dataset_folds, ds_classes, input_shape, self.train_batches, self.validation_batches, preprocessing_model \
             = dataset_generator.generate_train_val_datasets()
@@ -63,24 +64,24 @@ class NetworkManager:
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if self.balance_class_losses else None
 
-        self.model_gen = model_generator_factory(dataset_config['type'], cnn_config, arc_config, self.train_batches,
+        self.model_gen = model_generator_factory(dataset_config.type, cnn_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
                                                  data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
-                                                 save_weights=others_config['save_children_weights'])
+                                                 save_weights=others_config.save_children_weights)
         self.TrainingResults = self.model_gen.get_results_processor_class()
 
-        self.multi_output_model = arc_config['multi_output']
+        self.multi_output_model = arc_config.multi_output
         self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.keras_metrics_considered()
                                          for i in range(self.model_gen.get_maximum_cells())] + ['cell_spec']
 
-        self.save_onnx = others_config['save_children_as_onnx']
-        self.XLA_compile = others_config['enable_XLA_compilation']
+        self.save_onnx = others_config.save_children_as_onnx
+        self.XLA_compile = others_config.enable_XLA_compilation
 
         # take 6 batches of size provided in config, used to test the inference time.
         # when using multiple steps per execution, multiply the number of batches by the steps executed.
         # NOTE: since images can have different sizes in image_segmentation, it's not possible to batch multiple images together (batch_size = 1)
-        self.inference_batch_size = dataset_config['inference_batch_size'] if dataset_config['type'] != 'image_segmentation' else 1
+        self.inference_batch_size = dataset_config.inference_batch_size if dataset_config.type != 'image_segmentation' else 1
         self.inference_batches_count = 6 * self.execution_steps
         self.inference_batch = self.dataset_folds[0][0].unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)

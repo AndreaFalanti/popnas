@@ -3,10 +3,11 @@ from typing import Optional, Type
 from tensorflow.keras import Sequential
 
 from models.generators import *
+from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
 
 
-def model_generator_factory(task: str, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int,
-                            input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
+def model_generator_factory(task: str, cnn_hp: CnnHpConfig, arc_params: ArchitectureParametersConfig, training_steps_per_epoch: int,
+                            output_classes_count: int, input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
                             preprocessing_model: Optional[Sequential] = None, save_weights: bool = False) -> BaseModelGenerator:
     ''' Return the right model generator, based on the task type. '''
     if task == 'image_classification' or task == 'time_series_classification':

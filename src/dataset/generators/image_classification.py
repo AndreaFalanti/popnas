@@ -12,22 +12,23 @@ from tensorflow.keras.utils import image_dataset_from_directory
 from dataset.augmentation import get_image_data_augmentation_model, get_image_classification_tf_data_aug
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, DatasetsFold
 from dataset.preprocessing import ImagePreprocessor
+from utils.config_dataclasses import DatasetConfig
 
 
 class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
+    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
         super().__init__(dataset_config, enable_tpu_tricks)
 
-        resize_config = dataset_config['resize']
-        self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
-        self.use_cutout = dataset_config['data_augmentation'].get('use_cutout', False)
+        resize_config = dataset_config.resize
+        self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None
+        self.use_cutout = dataset_config.data_augmentation.use_cutout
 
     def supports_early_batching(self) -> bool:
         return True
 
     def __load_keras_dataset_images(self):
         '''
-        Load images of a Keras dataset. In this case the data is in form of Numpy arrays.
+        Load images of a Keras dataset. In this case, the data are in the form of Numpy arrays.
 
         Returns:
             train images, test images and the classes contained in the dataset
@@ -55,7 +56,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         return (x_train, y_train), (x_test, y_test), classes_count, image_shape, channels
 
     def __generate_datasets_from_tfds(self):
-        # EuroSAT have only train split, but conventionally the last 20% of samples is used as test set
+        # EuroSAT have only the train split, but conventionally the last 20% of samples is used as the test set
         # (27000 total, 21600 for train, last 5400 for test)
         if self.dataset_name == 'eurosat/rgb':
             split_spec = 'train[:21600]' if self.samples_limit is None else f'train[:{min(21600, self.samples_limit)}]'

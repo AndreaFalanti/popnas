@@ -7,6 +7,7 @@ from tensorflow.keras import Sequential
 
 import log_service
 from dataset.preprocessing import DataPreprocessor
+from utils.config_dataclasses import DatasetConfig
 
 AUTOTUNE = tf.data.AUTOTUNE
 AutoShardPolicy = tf.data.experimental.AutoShardPolicy
@@ -62,21 +63,20 @@ class BaseDatasetGenerator(ABC):
     The right subclass should be instantiated from the task type given in configuration (e.g. image classification).
     '''
 
-    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
+    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
         self._logger = log_service.get_logger(__name__)
 
-        self.dataset_name = dataset_config['name']  # type: str
-        self.dataset_path = dataset_config['path']
-        self.dataset_folds_count = dataset_config['folds'] if dataset_config['folds'] > 0 else 1
-        self.samples_limit = dataset_config['samples']
-        self.dataset_classes_count = dataset_config['classes_count']
-        self.batch_size = dataset_config['batch_size']
-        self.val_size = dataset_config['validation_size']
-        self.cache = dataset_config['cache']
+        self.dataset_name = dataset_config.name
+        self.dataset_path = dataset_config.path
+        self.dataset_folds_count = dataset_config.folds if dataset_config.folds > 0 else 1
+        self.samples_limit = dataset_config.samples
+        self.dataset_classes_count = dataset_config.classes_count
+        self.batch_size = dataset_config.batch_size
+        self.val_size = dataset_config.validation_size
+        self.cache = dataset_config.cache
 
-        data_augmentation_config = dataset_config['data_augmentation']
-        self.use_data_augmentation = data_augmentation_config['enabled']
-        self.augment_on_gpu = data_augmentation_config['perform_on_gpu']
+        self.use_data_augmentation = dataset_config.data_augmentation.enabled
+        self.augment_on_gpu = dataset_config.data_augmentation.perform_on_gpu
 
         self.enable_tpu_tricks = enable_tpu_tricks
 
@@ -92,7 +92,7 @@ class BaseDatasetGenerator(ABC):
                           shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
-        Basically apply batch, preprocessing, cache, data augmentation (only to training set) and prefetch.
+        Basically apply batch, preprocessing, cache, data augmentation (only to the training set) and prefetch.
 
         Args:
             ds: dataset to finalize
@@ -104,7 +104,7 @@ class BaseDatasetGenerator(ABC):
             shard_policy: AutoShardPolicy for distributing the dataset in multi-device environments
 
         Returns:
-            finalized dataset, batches count and the eventual preprocessing Keras model to apply in the architectures
+            finalized dataset, batches count and the eventual Keras model to apply in the architectures for preprocessing
         '''
         # set sharding options to DATA. This improves performances on distributed environments.
         options = tf.data.Options()
@@ -121,7 +121,7 @@ class BaseDatasetGenerator(ABC):
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
-            # make all batches of the same size, avoids drop remainder to not loss data, instead duplicates some samples
+            # make all batches of the same size, avoids "drop_remainder" to not loss data, instead duplicates some samples
             if self.enable_tpu_tricks:
                 duplicated_samples_count = batch_size - (len(ds) % batch_size)
                 duplicate_ds = ds.take(duplicated_samples_count)
@@ -178,9 +178,9 @@ class BaseDatasetGenerator(ABC):
     def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int, Optional[Sequential]]':
         '''
         Generate a full training (or union of training and validation if split a priori) tensorflow dataset, used in training to convergence
-        done for best model selected after the search procedure.
+        done for the best model selected after the search procedure.
 
-        If val_size is set to None, the function expect to find a separate validation set, which will be merged to
+        If val_size is set to None, the function expects to find a separate validation set, which will be merged to
         the training one.
 
         Sample limit is not applied here.

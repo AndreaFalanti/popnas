@@ -1,6 +1,7 @@
 import benchmarking
 import log_service
 from search_space import CellSpecification
+from utils.config_dataclasses import DatasetConfig
 
 
 class GraphProxy:
@@ -28,22 +29,20 @@ class GraphGeneratorProxy:
 class NetworkBenchManager:
     '''
     Proxy class to get training results of an architecture by querying NAS-bench-201.
-    It keeps the same public interface of NetworkManager.
+    It keeps the same public interface as NetworkManager.
     '''
 
-    def __init__(self, dataset_config: dict):
+    def __init__(self, dataset_config: DatasetConfig):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
-        It also preprocess the dataset, based on the run configuration.
+        It also preprocesses the dataset, based on the run configuration.
         '''
         self._logger = log_service.get_logger(__name__)
 
-        # self.epochs = cnn_config['epochs']
-        self.dataset_name = dataset_config['name']
-
-        bench_path = dataset_config['path']
-        self.nas_bench = benchmarking.NATSbench(bench_path)
+        # self.epochs = cnn_config.epochs
+        self.dataset_name = dataset_config.name
+        self.nas_bench = benchmarking.NATSbench(dataset_config.path)
 
         # make possible for the controller to retrieve params
         self.graph_gen = GraphGeneratorProxy(self.nas_bench)

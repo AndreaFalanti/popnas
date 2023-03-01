@@ -1,5 +1,4 @@
 import sys
-from typing import Any
 
 import numpy as np
 from tqdm import tqdm
@@ -13,6 +12,7 @@ from search_space import SearchSpace
 from utils import cell_pruning
 from utils.cell_counter import CellCounter
 from utils.cell_pruning import CellEncoding
+from utils.config_dataclasses import SearchStrategyConfig, OthersConfig
 from utils.func_utils import to_list_of_tuples
 from utils.model_estimate import ModelEstimate
 from utils.nn_utils import perform_global_memory_clear
@@ -27,7 +27,7 @@ class ControllerManager:
     cull non-optimal children model configurations and resume training.
     '''
 
-    def __init__(self, search_space: SearchSpace, sstr_config: 'dict[str, Any]', others_config: 'dict[str, Any]',
+    def __init__(self, search_space: SearchSpace, sstr_config: SearchStrategyConfig, others_config: OthersConfig,
                  predictor_handler: PredictorsHandler, current_b: int = 1):
         '''
         Manages the Controller network training and prediction process.
@@ -37,17 +37,17 @@ class ControllerManager:
         self.predictor_handler = predictor_handler
 
         self.B = search_space.B
-        self.K = sstr_config['max_children']
-        self.ex = sstr_config['max_exploration_children']
+        self.K = sstr_config.max_children
+        self.ex = sstr_config.max_exploration_children
         self.current_b = current_b
 
         self.T = np.inf     # TODO: add it to sstr_config if actually necessary, for now we have never used the time constraint
 
-        self.pareto_objectives = sstr_config['additional_pareto_objectives']
-        self.predictions_batch_size = others_config['predictions_batch_size']
-        self.acc_ensemble_units = others_config['accuracy_predictor_ensemble_units']
+        self.pareto_objectives = sstr_config.additional_pareto_objectives
+        self.predictions_batch_size = others_config.predictions_batch_size
+        self.acc_ensemble_units = others_config.accuracy_predictor_ensemble_units
 
-        self.pnas_mode = others_config['pnas_mode']
+        self.pnas_mode = others_config.pnas_mode
 
     def train_step(self):
         '''
@@ -174,13 +174,13 @@ class ControllerManager:
             return [], curr_model_reprs
 
         for i, model_est in enumerate(model_estimations):
-            # less time than last pareto element
+            # less expected training time than the last pareto element
             if not any(model_est.is_dominated_by(epf_elem) for epf_elem in exploration_pareto_front) and \
                     exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front):
                 cell_repr = cell_pruning.CellEncoding(model_est.cell_spec)
 
                 # existing_model_reprs contains the pareto front and exploration cells will be progressively added to it
-                # add model to exploration front only if not equivalent to any model in both standard pareto front and exploration front
+                # add model to the exploration front only if not equivalent to any model in both the standard pareto front and exploration front
                 if not cell_pruning.is_model_equivalent_to_another(cell_repr, curr_model_reprs):
                     exploration_pareto_front.append(model_est)
                     curr_model_reprs.append(cell_repr)
@@ -209,7 +209,7 @@ class ControllerManager:
         acc_predictor = self.predictor_handler.get_score_predictor(self.current_b)
 
         self.current_b += 1
-        # closure that returns a function that returns the model generator for current generation step
+        # closure that returns the model generator for the current generation step
         generate_models = self.search_space.perform_children_expansion(self.current_b)
 
         # TODO: leave eqv models in estimation and prune them when extrapolating pareto front, so that it prunes only the
@@ -229,8 +229,8 @@ class ControllerManager:
 
         self._logger.info('Models performance estimation completed')
 
-        # Pareto front is built only in POPNAS, while it is skipped in PNAS mode
-        # Same for exploration Pareto front, if it is needed
+        # The Pareto front is built only in POPNAS, while it is skipped in PNAS mode
+        # Same for exploration Pareto front, if needed
         if not self.pnas_mode:
             pareto_front, existing_model_reprs = self.__build_pareto_front(model_estimations)
             fw.save_predictions_to_csv(pareto_front, f'pareto_front_B{self.current_b}.csv')
@@ -260,13 +260,13 @@ class ControllerManager:
             # take the cell specifications of Pareto elements, since they must be saved in the search space class
             children = [child.cell_spec for child in pareto_front]
         else:
-            # just a rename to integrate with existent code below, it's not a pareto front in this case!
+            # just a renaming to integrate with existent code below, it's not a pareto front in this case!
             pareto_front = model_estimations
 
             # limit the Pareto front to K elements if necessary
             children_limit = len(pareto_front) if self.K is None else min(self.K, len(pareto_front))
 
-            # remove equivalent models, not done already if running in pnas mode (children must be saved in the search space class)
+            # remove equivalent models, it is not done yet if running in pnas mode (children must be saved in the search space class)
             models = [est.cell_spec for est in pareto_front]
             children, pruned_count = cell_pruning.prune_equivalent_cell_models(models, children_limit)
             self._logger.info('Pruned %d equivalent models while selecting CNN children', pruned_count)

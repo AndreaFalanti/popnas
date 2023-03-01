@@ -10,15 +10,16 @@ from tensorflow.keras import Sequential
 
 from dataset.generators.base import BaseDatasetGenerator, SEED, load_npz, DatasetsFold
 from dataset.preprocessing import TimeSeriesPreprocessor
+from utils.config_dataclasses import DatasetConfig
 
 
 def _load_ts(file_path: str) -> 'tuple[np.ndarray, np.ndarray]':
-    ''' Load .ts file into numpy array, modifying the format for TF operators. '''
+    ''' Load .ts file into a numpy array, modifying the format for TF operators. '''
     x_train, y_train = sktdata.load_from_tsfile(file_path, return_data_type='numpy3d')
-    # ts use array format (num_series, ts_length), instead of TF 1D ops required format (ts_length, num_series). Swap the axis.
+    # ts uses the array format (num_series, ts_length), instead of TF 1D ops required format (ts_length, num_series). Swap the axis.
     x_train = np.swapaxes(x_train, -2, -1)
     # in .ts format, labels are str, but are commonly str representation of int and float numbers.
-    # in this case converting them prior to other processing allows to maintain the order of the labels
+    # in this case, converting them prior to other processing allows maintaining the order of the labels
     # if they are really str labels, then the conversion fails, but it's not a problem because they will be ordered correctly
     try:
         y_train = y_train.astype(np.float).astype(np.int32)
@@ -65,11 +66,11 @@ def reimmission_sample_in_monosample_classes(x: np.ndarray, y: np.ndarray, num_c
 
 
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
+    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
         super().__init__(dataset_config, enable_tpu_tricks)
 
-        self.rescale = dataset_config['rescale']
-        self.normalize = dataset_config['normalize']
+        self.rescale = dataset_config.rescale
+        self.normalize = dataset_config.normalize
 
     def supports_early_batching(self) -> bool:
         return True

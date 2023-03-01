@@ -9,6 +9,7 @@ import pandas as pd
 from models.generators.factory import get_model_generator_class_for_task
 from models.results.base import TargetMetric
 from search_space import CellSpecification
+from utils.config_dataclasses import RunConfig
 from utils.config_utils import retrieve_search_config
 from utils.func_utils import from_seconds_to_hms
 
@@ -82,9 +83,9 @@ class FinalTrainingInfo:
                 format(self.score, '.3f'), self.training_time_str, str(self.cell_spec)]
 
 
-def extract_score_metric(config: dict):
-    task = config['dataset']['type']
-    score_metric = config['search_strategy']['score_metric']
+def extract_score_metric(config: RunConfig):
+    task = config.dataset.type
+    score_metric = config.search_strategy.score_metric
     results_processor = get_model_generator_class_for_task(task).get_results_processor_class()
     return next(m for m in results_processor.keras_metrics_considered() if m.name == score_metric)
 
@@ -116,7 +117,7 @@ def get_sampled_networks_count(log_path: str):
 
 def get_dataset_name(log_path: str):
     run_config = retrieve_search_config(log_path)
-    return run_config['dataset']['name']
+    return run_config.dataset.name
 
 
 def get_top_scores(log_path: str, score_metric: TargetMetric):
@@ -153,8 +154,8 @@ def get_final_network_macro_structure(log_path: str):
     with open(os.path.join(log_path, 'final_model_training', 'run.json'), 'r') as f:
         train_config = json.load(f)
 
-    cnn_hp = train_config['cnn_hp']
-    arc_hp = train_config['architecture_parameters']
+    cnn_hp = train_config.cnn_hp
+    arc_hp = train_config.architecture_parameters
 
     return cnn_hp['filters'], arc_hp['motifs'], arc_hp['normal_cells_per_motif']
 

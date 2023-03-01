@@ -1,7 +1,6 @@
 import os
 import pickle
 from timeit import default_timer as timer
-from typing import Any
 
 import tensorflow as tf
 
@@ -15,6 +14,7 @@ from models.results import BaseTrainingResults
 from models.results.base import get_pareto_targeted_metrics
 from predictors.initializer import PredictorsHandler
 from search_space import SearchSpace, CellSpecification, BlockSpecification
+from utils.config_dataclasses import RunConfig
 from utils.experiments_summary import get_sampled_networks_count, get_dataset_name, SearchInfo, get_top_scores, write_search_infos_csv
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \
     generate_dynamic_reindex_function, build_score_feature_names
@@ -27,40 +27,42 @@ remove_annoying_tensorflow_messages()
 
 
 class Popnas:
-    def __init__(self, run_config: 'dict[str, Any]', train_strategy: tf.distribute.Strategy, benchmarking: bool = False):
+    def __init__(self, run_config: RunConfig, train_strategy: tf.distribute.Strategy, benchmarking: bool = False):
         ''' Configure and set up POPNAS algorithm for execution. Use start() function to start the NAS procedure. '''
         self._logger = log_service.get_logger(__name__)
         self._start_time = timer()
 
         # search space parameters
-        ss_config = run_config['search_space']
-        self.blocks = ss_config['blocks']
-        self.input_lookback_depth = ss_config['lookback_depth']
-        self.operators = ss_config['operators']
+        ss_config = run_config.search_space
+        self.blocks = ss_config.blocks
+        self.input_lookback_depth = ss_config.lookback_depth
+        self.operators = ss_config.operators
 
         # search strategy parameters
-        sstr_config = run_config['search_strategy']
-        self.children_max_size = sstr_config['max_children']
-        self.score_metric_name = sstr_config['score_metric']
-        self.pareto_objectives = [self.score_metric_name] + sstr_config['additional_pareto_objectives']
+        sstr_config = run_config.search_strategy
+        self.children_max_size = sstr_config.max_children
+        self.score_metric_name = sstr_config.score_metric
+        self.pareto_objectives = [self.score_metric_name] + sstr_config.additional_pareto_objectives
 
         # dataset parameters
-        ds_config = run_config['dataset']
+        ds_config = run_config.dataset
 
         # CNN models hyperparameters
-        cnn_config = run_config['cnn_hp']
+        cnn_config = run_config.cnn_hp
 
         # CNN architecture parameters
-        arc_config = run_config['architecture_parameters']
-        self.multi_output_models = arc_config['multi_output']
+        arc_config = run_config.architecture_parameters
+        self.multi_output_models = arc_config.multi_output
 
         # Other parameters (last category including heterogeneous parameters not classifiable in previous sections)
-        others_config = run_config['others']
-        self.pnas_mode = others_config['pnas_mode']
-        self.preds_batch_size = others_config['predictions_batch_size']
-        self.acc_predictor_ensemble_units = others_config['accuracy_predictor_ensemble_units']
+        others_config = run_config.others
+        self.pnas_mode = others_config.pnas_mode
+        self.preds_batch_size = others_config.predictions_batch_size
+        self.acc_predictor_ensemble_units = others_config.accuracy_predictor_ensemble_units
 
-        self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
+        # TODO: deprecated for now, there are already too much hyperparameters...
+        # self.rnn_config = run_config.get('rnn_hp')  # None if not defined in config
+        self.rnn_config = None
 
         # build a search space
         self.search_space = SearchSpace(ss_config, benchmarking=benchmarking)

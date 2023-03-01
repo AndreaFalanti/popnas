@@ -10,6 +10,7 @@ from tensorflow.keras import Sequential
 from dataset.augmentation import get_image_segmentation_tf_data_aug
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset, DatasetsFold
 from dataset.preprocessing import ImagePreprocessor
+from utils.config_dataclasses import DatasetConfig
 
 # make sure the spatial dimensions of any image are multiples of this value.
 # since M motifs perform M-1 reductions, this number should be at least 2^(M-1), otherwise pooling-upsample will produce different dimensions.
@@ -17,11 +18,11 @@ PAD_MULTIPLES = 16
 
 
 class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: dict, enable_tpu_tricks: bool = False):
+    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
         super().__init__(dataset_config, enable_tpu_tricks)
 
-        resize_config = dataset_config['resize']
-        self.resize_dim = (resize_config['height'], resize_config['width']) if resize_config['enabled'] else None
+        resize_config = dataset_config.resize
+        self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None
 
     def supports_early_batching(self) -> bool:
         return False

@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 
 from dataset.augmentation import get_image_segmentation_tf_data_aug
 from dataset.generators import *
+from utils.config_dataclasses import DatasetConfig
 
 
 def test_data_augmentation(ds: tf.data.Dataset):
@@ -75,11 +76,11 @@ def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, flo
     return class_weights_dict
 
 
-def dataset_generator_factory(ds_config: dict, enable_tpu_tricks: bool = False) -> BaseDatasetGenerator:
+def dataset_generator_factory(ds_config: DatasetConfig, enable_tpu_tricks: bool = False) -> BaseDatasetGenerator:
     '''
-    Return the right dataset generator, based on task type.
+    Return the right dataset generator, based on the task type.
     '''
-    task_type = ds_config['type']
+    task_type = ds_config.type
 
     if task_type == 'image_classification':
         return ImageClassificationDatasetGenerator(ds_config, enable_tpu_tricks)

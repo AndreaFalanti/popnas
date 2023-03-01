@@ -5,6 +5,7 @@ from functools import cached_property
 from typing import Any, Callable, Generator, Sequence, NamedTuple, Iterable
 
 import log_service
+from utils.config_dataclasses import SearchSpaceConfig
 from utils.func_utils import list_flatten
 from utils.rstr import rstr
 
@@ -123,7 +124,7 @@ class SearchSpace:
     for various use cases.
     '''
 
-    def __init__(self, ss_config: 'dict[str, Any]', benchmarking: bool = False):
+    def __init__(self, ss_config: SearchSpaceConfig, benchmarking: bool = False):
         '''
         Constructs a search space which models the NASNet and PNAS papers, producing encodings for blocks and cells.
         The encodings are useful to store architecture information, from which the models can be generated.
@@ -147,9 +148,9 @@ class SearchSpace:
         self.input_encoders = {}  # type: dict[str, Encoder]
         self.operator_encoders = {}  # type: dict[str, Encoder]
 
-        self.B = ss_config['blocks']
-        self.input_lookback_depth = ss_config['lookback_depth']    # positive value
-        self.operator_values = ss_config['operators']
+        self.B = ss_config.blocks
+        self.input_lookback_depth = ss_config.lookback_depth    # positive value
+        self.operator_values = ss_config.operators
 
         if self.input_lookback_depth < 0:
             raise ValueError('Invalid lookback_depth value')

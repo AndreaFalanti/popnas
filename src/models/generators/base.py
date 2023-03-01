@@ -15,6 +15,7 @@ from models.graphs.network_graph import NetworkGraph
 from models.operators.op_instantiator import OpInstantiator
 from models.results.base import BaseTrainingResults
 from search_space import CellSpecification
+from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
 from utils.func_utils import elementwise_mult
 
 
@@ -44,7 +45,7 @@ class NetworkBuildInfo:
 
 class BaseModelGenerator(ABC):
     '''
-    Abstract class used as baseline for model generators concrete implementations.
+    Abstract class used as a baseline for model generators concrete implementations.
     This class contains all the shared logic between the models, like how the blocks and cells are built,
     while the macro-implementation, loss function, optimizer, and metrics can be defined ad-hoc for the type of tasks addressed.
 
@@ -52,37 +53,37 @@ class BaseModelGenerator(ABC):
     '''
 
     # TODO: missing max_lookback to adapt inputs based on the actual lookback. For now only 1 or 2 is supported.
-    def __init__(self, cnn_hp: dict, arc_params: dict, training_steps_per_epoch: int, output_classes_count: int, input_shape: 'tuple[int, ...]',
-                 data_augmentation_model: Optional[Sequential] = None, preprocessing_model: Optional[Sequential] = None,
-                 save_weights: bool = False):
+    def __init__(self, cnn_hp: CnnHpConfig, arc_params: ArchitectureParametersConfig, training_steps_per_epoch: int, output_classes_count: int,
+                 input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
+                 preprocessing_model: Optional[Sequential] = None, save_weights: bool = False):
         self._logger = log_service.get_logger(__name__)
 
-        self.concat_only_unused = arc_params['concat_only_unused_blocks']
-        self.lookback_reshape = arc_params['lookback_reshape']
-        self.motifs = arc_params['motifs']
-        self.normal_cells_per_motif = arc_params['normal_cells_per_motif']
-        self.multi_output = arc_params['multi_output']
-        self.residual_cells = arc_params['residual_cells']
-        self.se_cell_output = arc_params['se_cell_output']
+        self.concat_only_unused = arc_params.concat_only_unused_blocks
+        self.lookback_reshape = arc_params.lookback_reshape
+        self.motifs = arc_params.motifs
+        self.normal_cells_per_motif = arc_params.normal_cells_per_motif
+        self.multi_output = arc_params.multi_output
+        self.residual_cells = arc_params.residual_cells
+        self.se_cell_output = arc_params.se_cell_output
         self.output_classes_count = output_classes_count
         self.input_shape = input_shape
         # basically, it indicates the application domain of the operators, as int (2D for images, 1D for time series)
         self.op_dims = len(input_shape) - 1
 
-        self.lr = cnn_hp['learning_rate']
-        self.filters = cnn_hp['filters']
-        self.wr = cnn_hp['weight_reg']
-        self.use_adamW = cnn_hp['use_adamW']
+        self.lr = cnn_hp.learning_rate
+        self.filters = cnn_hp.filters
+        self.wr = cnn_hp.weight_reg
+        self.use_adamW = cnn_hp.use_adamW
         self.l2_weight_reg = regularizers.l2(self.wr) if (self.wr is not None and not self.use_adamW) else None
-        self.drop_path_keep_prob = 1.0 - cnn_hp['drop_path_prob']
-        self.dropout_prob = cnn_hp['softmax_dropout']  # dropout probability on final softmax
-        self.cdr_config = cnn_hp['cosine_decay_restart']  # type: dict
+        self.drop_path_keep_prob = 1.0 - cnn_hp.drop_path_prob
+        self.dropout_prob = cnn_hp.softmax_dropout  # dropout probability on final softmax
+        self.cdr_config = cnn_hp.cosine_decay_restart
         self.filters_ratio = self.filters / self.input_shape[-1]  # the filters expansion ratio applied between input and first layer
 
         self.save_weights = save_weights
 
         # necessary for techniques that scale parameters during training, like cosine decay and scheduled drop path
-        self.epochs = cnn_hp['epochs']
+        self.epochs = cnn_hp.epochs
         self.training_steps_per_epoch = training_steps_per_epoch
 
         # if not None, data augmentation will be integrated in the model to be performed directly on the GPU
@@ -94,12 +95,12 @@ class BaseModelGenerator(ABC):
         self.cell_output_shapes = self._compute_cell_output_shapes()
 
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
-        self.op_instantiator = OpInstantiator(len(input_shape), arc_params['block_join_operator'], weight_reg=self.l2_weight_reg)
+        self.op_instantiator = OpInstantiator(len(input_shape), arc_params.block_join_operator, weight_reg=self.l2_weight_reg)
 
         # attributes defined below this comment are manipulated and used during model building.
-        # defined in class to avoid having lots of parameter passing in each function.
+        # defined in class to avoid having lots of parameters passing in each function.
 
-        # used for layers naming and partition dictionary
+        # used for layer naming and partition dictionary
         self.cell_index = 0
         self.block_index = 0
 
@@ -627,13 +628,13 @@ class BaseModelGenerator(ABC):
         # accuracy is better as string, since it automatically converted to binary or categorical based on loss
         model_metrics = self._get_metrics()
 
-        if self.cdr_config['enabled']:
-            decay_period = self.training_steps_per_epoch * self.cdr_config['period_in_epochs']
-            lr_schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config['t_mul'],
-                                                                   self.cdr_config['m_mul'], self.cdr_config['alpha'])
+        if self.cdr_config.enabled:
+            decay_period = self.training_steps_per_epoch * self.cdr_config.period_in_epochs
+            lr_schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config.t_mul,
+                                                                   self.cdr_config.m_mul, self.cdr_config.alpha)
             # weight decay for adamW, if used
-            wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config['t_mul'],
-                                                                   self.cdr_config['m_mul'], self.cdr_config['alpha'])
+            wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config.t_mul,
+                                                                   self.cdr_config.m_mul, self.cdr_config.alpha)
         # if cosine decay restart is not enabled, use cosine decay restart
         else:
             lr_schedule = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
