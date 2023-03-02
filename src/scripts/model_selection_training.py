@@ -21,7 +21,7 @@ from utils.func_utils import create_empty_folder
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, save_complete_and_trimmed_json_config, define_callbacks, \
-    build_config, override_checkpoint_callback, MacroConfig, compile_post_search_model, build_macro_customized_config, \
+    build_config, MacroConfig, compile_post_search_model, build_macro_customized_config, \
     get_best_cell_specs, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict
 
@@ -32,7 +32,7 @@ remove_annoying_tensorflow_messages()
 def get_cells_to_train_iter(run_path: str, spec: str, top_cells: int, score_metric: TargetMetric, macro: MacroConfig,
                             logger: logging.Logger) -> Iterator['tuple[int, tuple[CellSpecification, MacroConfig]]']:
     '''
-    Return an iterator of all cells to train during model selection process.
+    Return an iterator of all cells to train during the model selection process.
 
     Args:
         run_path: path to run folder
@@ -197,8 +197,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         train_dataset, validation_dataset = dataset_folds[0]
 
         # Define callbacks
-        train_callbacks = define_callbacks(score_metric_name, multi_output, output_names)
-        override_checkpoint_callback(train_callbacks, score_metric_name, output_names, use_val=True)
+        train_callbacks = define_callbacks(score_metric_name, output_names, use_val=True)
         time_cb = TrainingTimeCallback()
         train_callbacks.insert(0, time_cb)
 

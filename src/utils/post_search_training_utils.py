@@ -43,16 +43,19 @@ class MacroConfig(NamedTuple):
                            config.cnn_hp.filters)
 
 
-def define_callbacks(score_metric: str, multi_output: bool, output_names: 'list[str]') -> 'list[callbacks.Callback]':
+def define_callbacks(score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False) -> 'list[callbacks.Callback]':
     ''' Define callbacks used during model training in post search procedures. '''
     # Save best weights, considering the score metric of last output
-    target_metric = f'val_{output_names[-1]}_{score_metric}' if multi_output else f'val_{score_metric}'
-    ckpt_save_format = 'cp_e{epoch:02d}_vl{val_loss:.2f}_v' + score_metric[:2] + '{' + target_metric + ':.4f}.ckpt'
+    prefix = 'val_' if use_val else ''
+    target_metric = f'{prefix}{output_names[-1]}_{score_metric}'
+
+    ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
     # TODO: best score metric could be the min, should use the .optimal value from the TargetMetric. Refactor this later...
-    ckpt_callback = callbacks.ModelCheckpoint(filepath=log_service.build_path('weights', ckpt_save_format),
-                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max')
+    ckpt_callback = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
+                                               save_weights_only=True, save_best_only=True,
+                                               monitor=target_metric, mode='max', save_chunk=save_chunk)
     # By default, it shows losses and metrics for both training and validation
-    tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0)
+    tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0, write_graph=False)
 
     return [ckpt_callback, tb_callback]
 
@@ -175,17 +178,6 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
     }
 
     return model, loss_weights, output_names
-
-
-def override_checkpoint_callback(train_callbacks: list, score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False):
-    # Save best weights, here we have no validation set, so we check the best on training
-    prefix = 'val_' if use_val else ''
-    target_metric = f'{prefix}{output_names[-1]}_{score_metric}'
-
-    ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
-    train_callbacks[0] = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
-                                               save_weights_only=True, save_best_only=True,
-                                               monitor=target_metric, mode='max', save_chunk=save_chunk)
 
 
 def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy):
