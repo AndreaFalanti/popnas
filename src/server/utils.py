@@ -7,4 +7,4 @@ def build_popnas_restore_command(run_name: str):
 
 
 def build_tensorboard_command(run_name: str, port: int):
-    return f'tensorboard --logdir logs/{run_name}/tensorboard_cnn --port {port} --bind_all'
+    return f'tensorboard --logdir logs/{run_name}/sampled_models --port {port} --bind_all'

@@ -45,12 +45,12 @@ def initialize_log_folders(folder_name: str = None):
     except FileExistsError:
         raise AttributeError('The provided log folder name already exists, use another name to avoid conflicts')
 
-    os.mkdir(os.path.join(log_path, 'csv'))  # create .csv path
+    os.mkdir(os.path.join(log_path, 'csv'))  # create folder for csv files
     os.mkdir(os.path.join(log_path, 'best_model'))  # create folder for best model save
-    os.mkdir(os.path.join(log_path, 'tensorboard_cnn'))  # create folder for saving tensorboard logs
+    os.mkdir(os.path.join(log_path, 'sampled_models'))  # create folder for saving models data
     os.mkdir(os.path.join(log_path, 'plots'))  # create folder for saving data plots
-    os.mkdir(os.path.join(log_path, 'predictors'))  # create folder for saving predictors' outputs
-    os.mkdir(os.path.join(log_path, 'restore'))  # create folder for additional files used in restore mode
+    os.mkdir(os.path.join(log_path, 'predictors'))  # create folder for saving predictors data
+    os.mkdir(os.path.join(log_path, 'restore'))  # create folder for additional files used for restoring interrupted runs
 
     # additional folders for different plot formats
     # os.mkdir(os.path.join(log_path, 'plots', 'eps'))
@@ -93,8 +93,8 @@ def create_critical_logger():
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(logging.Formatter("%(message)s"))
 
-    # loggers with same name are actually the same logger, so they already have handlers in that case.
-    # clear them and add the new ones. In this way, when running multiple experiments with e2e scripts, each experiments has its isolated log file.
+    # loggers with the same name are actually the same logger, so they already have handlers in that case.
+    # clear them and add the new ones; in this way, when running multiple experiments with e2e scripts, each experiment has its isolated log file.
     logger.handlers.clear()
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)

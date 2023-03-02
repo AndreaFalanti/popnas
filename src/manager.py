@@ -45,7 +45,7 @@ class NetworkManager:
         self.train_strategy = train_strategy
         self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
-        # integer id assigned to each network trained, name of the folder containing the training outputs (see tensorboard_cnn) folder
+        # integer id assigned to each network trained, name of the folder containing the training outputs (see "sampled_models" folder)
         self.current_network_id = 0
         # fix for correcting the network id automatically when restoring a previous run
         train_csv_path = log_service.build_path('csv', 'training_results.csv')
@@ -89,13 +89,13 @@ class NetworkManager:
         # DEBUG ONLY
         # test_data_augmentation(self.dataset_folds[0][0])
 
-    def __compile_model(self, cell_spec: CellSpecification, tb_logdir: str) -> 'tuple[Model, list[Callback]]':
+    def __compile_model(self, cell_spec: CellSpecification, model_logdir: str) -> 'tuple[Model, list[Callback]]':
         '''
         Generate and compile a Keras model, with cell structure defined by actions provided.
 
         Args:
             cell_spec: cell specification
-            tb_logdir: path for tensorboard logging
+            model_logdir: path for storing logs and data about the trained model
 
         Returns:
             model and callbacks to use while training
@@ -112,10 +112,10 @@ class NetworkManager:
         # model.run_eagerly = True
 
         if self.save_onnx:
-            save_keras_model_to_onnx(model, os.path.join(tb_logdir, 'model.onnx'))
+            save_keras_model_to_onnx(model, os.path.join(model_logdir, 'model.onnx'))
             self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
-        return model, self.model_gen.define_callbacks(tb_logdir, self.score_objective)
+        return model, self.model_gen.define_callbacks(model_logdir, self.score_objective)
 
     def _save_model(self, model: Model):
         ''' Save the model in ONNX format. Any previous model is automatically overwritten, leaving only the last model saved. '''
@@ -130,7 +130,7 @@ class NetworkManager:
         is not affected by a time estimation bias (which can be very large for datasets generated from image folders).
         '''
         self._logger.info('Performing an epoch of training to lazy load and cache the dataset')
-        fake_tb_logdir = log_service.build_path('tensorboard_cnn', f'Bx')
+        fake_tb_logdir = log_service.build_path('sampled_models', f'Bx')
         model, callbacks = self.__compile_model(CellSpecification(), fake_tb_logdir)
 
         for i, (train_ds, val_ds) in enumerate(self.dataset_folds):
@@ -166,7 +166,7 @@ class NetworkManager:
 
         # create children folder for Tensorboard logs, grouped for block count and enumerated progressively
         self.current_network_id = self.current_network_id + 1
-        tb_logdir = log_service.build_path('tensorboard_cnn', f'B{len(cell_spec)}', str(self.current_network_id))
+        tb_logdir = log_service.build_path('sampled_models', f'B{len(cell_spec)}', str(self.current_network_id))
         os.makedirs(tb_logdir, exist_ok=True)
 
         model, histories, times = self.train_model(cell_spec, tb_logdir)

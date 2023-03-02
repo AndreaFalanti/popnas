@@ -572,7 +572,7 @@ class BaseModelGenerator(ABC):
 
         return WrappedTensor(out, target_output_shape)
 
-    def define_callbacks(self, tb_logdir: str, score_metric: str) -> 'list[callbacks.Callback]':
+    def define_callbacks(self, model_logdir: str, score_metric: str) -> 'list[callbacks.Callback]':
         '''
         Define callbacks used in model training.
 
@@ -580,7 +580,8 @@ class BaseModelGenerator(ABC):
             Keras callbacks to apply in model.fit() function.
         '''
         # By default, shows losses and metrics for both training and validation
-        model_callbacks = [callbacks.TensorBoard(log_dir=tb_logdir, profile_batch=0, histogram_freq=0, update_freq='epoch', write_graph=False)]
+        model_callbacks = [callbacks.TensorBoard(log_dir=os.path.join(model_logdir, 'tensorboard'),
+                                                 profile_batch=0, histogram_freq=0, update_freq='epoch', write_graph=False)]
 
         if self.save_weights:
             # Save best weights, using as metric the last output in case of multi-output models
@@ -588,7 +589,7 @@ class BaseModelGenerator(ABC):
             last_used_cell = max(self.network_build_info.used_cell_indexes)
             target_metric = f'val_{output_layer_name}_c{last_used_cell}_{score_metric}' \
                 if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
-            model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(tb_logdir, 'best_weights.ckpt'),
+            model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(model_logdir, 'best_weights.ckpt'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
 
         # TODO: if you want to use early stopping, training time should be rescaled for predictor
