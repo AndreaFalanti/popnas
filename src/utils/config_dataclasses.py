@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
+
+# NOTE: to keep support for python 3.8, do not use types with '', the dacite package will incorrectly consider them as forward references.
+#  Use instead the classes from typing package.
 
 
 @dataclass
@@ -29,7 +32,7 @@ class DataAugmentationDict:
 class SearchSpaceConfig:
     blocks: int
     lookback_depth: int
-    operators: 'list[str]'
+    operators: List[str]
 
 
 @dataclass
@@ -37,7 +40,7 @@ class SearchStrategyConfig:
     max_children: int
     max_exploration_children: int
     score_metric: str = 'accuracy'
-    additional_pareto_objectives: 'list[str]' = field(default_factory=lambda: ['time'])
+    additional_pareto_objectives: List[str] = field(default_factory=lambda: ['time'])
 
 
 @dataclass

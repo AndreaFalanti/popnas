@@ -126,7 +126,7 @@ def log_training_results_dict(logger: logging.Logger, results_dict: 'dict[str, d
     logger.info('*' * 80)
 
 
-def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str) -> tuple[RunConfig, tf.distribute.Strategy]:
+def build_config(run_path: str, batch_size: int, train_strategy: str, custom_json_path: str) -> 'tuple[RunConfig, tf.distribute.Strategy]':
     # run configuration used during search
     with open(os.path.join(run_path, 'restore', 'run.json'), 'r') as f:
         search_config = json.load(f)
