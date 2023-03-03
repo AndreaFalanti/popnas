@@ -8,7 +8,7 @@ from search_space import CellSpecification
 class NetworkGraph:
     def __init__(self, input_shape: 'list[float]', op_instantiator: OpInstantiator,
                  cell_specification: CellSpecification, target_shapes: 'list[list[float, ...]]',
-                 used_cell_indexes: list[int], lookback_reshape_cell_indexes: list[int], residual_output: bool):
+                 used_cell_indexes: 'list[int]', lookback_reshape_cell_indexes: 'list[int]', residual_output: bool):
         self.cell_spec = cell_specification
         self.op_instantiator = op_instantiator
         self.residual_output = residual_output
@@ -61,7 +61,8 @@ class NetworkGraph:
 
     def get_params_per_layer(self):
         ''' Grouped by cell for more readability. '''
-        return [list(zip(self.g.vs.select(cell_index=i)['name'], self.g.vs.select(cell_index=i)['params'])) for i in range(0, self.last_cell_index + 1)]
+        return [list(zip(self.g.vs.select(cell_index=i)['name'], self.g.vs.select(cell_index=i)['params']))
+                for i in range(0, self.last_cell_index + 1)]
 
     def get_params_up_through_cell_index(self, c_index: int):
         ''' Cell index is inclusive. '''
