@@ -185,7 +185,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             model_gen.alter_macro_structure(*macro)
 
             mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
-            model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy)
+            model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy,
+                                                            enable_xla=model_config.others.enable_XLA_compilation)
 
         model_logger.info('Model generated successfully')
         model.summary(line_length=140, print_fn=model_logger.info)

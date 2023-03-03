@@ -180,7 +180,7 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
     return model, loss_weights, output_names
 
 
-def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy):
+def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy, enable_xla: bool):
     '''
     Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
     '''
@@ -193,7 +193,8 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     model, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_loss_weights)
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
-    model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics, steps_per_execution=execution_steps)
+    model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics,
+                  steps_per_execution=execution_steps, jit_compile=enable_xla)
     return model, output_names
 
 

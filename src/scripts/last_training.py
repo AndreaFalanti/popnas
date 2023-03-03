@@ -96,7 +96,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     with train_strategy.scope():
         mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
-        model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy)
+        model, output_names = compile_post_search_model(mo_model, model_gen, train_strategy, enable_xla=config.others.enable_XLA_compilation)
 
     logger.info('Model generated successfully')
     model.summary(line_length=140, print_fn=logger.info)
