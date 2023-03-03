@@ -18,8 +18,8 @@ PAD_MULTIPLES = 16
 
 
 class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
-        super().__init__(dataset_config, enable_tpu_tricks)
+    def __init__(self, dataset_config: DatasetConfig, optimize_for_xla_compilation: bool = False):
+        super().__init__(dataset_config, optimize_for_xla_compilation)
 
         resize_config = dataset_config.resize
         self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None

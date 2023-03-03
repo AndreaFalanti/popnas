@@ -126,7 +126,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_generator = dataset_generator_factory(ds_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
+    dataset_generator = dataset_generator_factory(ds_config, config.others)
     dataset_folds, classes_count, input_shape, train_batches, val_batches, preprocessing_model = dataset_generator.generate_train_val_datasets()
 
     # produce weights for balanced loss if option is enabled in database config

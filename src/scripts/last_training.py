@@ -2,7 +2,6 @@ import argparse
 import os
 from pathlib import Path
 
-import tensorflow as tf
 from tensorflow.keras import callbacks
 from tensorflow.keras.utils import plot_model
 
@@ -53,7 +52,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
-    dataset_generator = dataset_generator_factory(ds_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
+    dataset_generator = dataset_generator_factory(ds_config, config.others)
     train_ds, classes_count, input_shape, train_batches, preprocessing_model = dataset_generator.generate_final_training_dataset()
     # produce weights for balanced loss if option is enabled in database config
     balanced_class_weights = generate_balanced_weights_for_classes(train_ds) if ds_config.balance_class_losses else None

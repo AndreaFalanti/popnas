@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 from dataset.augmentation import get_image_segmentation_tf_data_aug
 from dataset.generators import *
-from utils.config_dataclasses import DatasetConfig
+from utils.config_dataclasses import DatasetConfig, OthersConfig
 
 
 def test_data_augmentation(ds: tf.data.Dataset):
@@ -76,17 +76,18 @@ def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, flo
     return class_weights_dict
 
 
-def dataset_generator_factory(ds_config: DatasetConfig, enable_tpu_tricks: bool = False) -> BaseDatasetGenerator:
+def dataset_generator_factory(ds_config: DatasetConfig, others_config: OthersConfig) -> BaseDatasetGenerator:
     '''
     Return the right dataset generator, based on the task type.
     '''
     task_type = ds_config.type
+    optimize_for_xla_compilation = others_config.enable_XLA_compilation or others_config.train_strategy == 'TPU'
 
     if task_type == 'image_classification':
-        return ImageClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
+        return ImageClassificationDatasetGenerator(ds_config, optimize_for_xla_compilation)
     elif task_type == 'time_series_classification':
-        return TimeSeriesClassificationDatasetGenerator(ds_config, enable_tpu_tricks)
+        return TimeSeriesClassificationDatasetGenerator(ds_config, optimize_for_xla_compilation)
     elif task_type == 'image_segmentation':
-        return ImageSegmentationDatasetGenerator(ds_config, enable_tpu_tricks)
+        return ImageSegmentationDatasetGenerator(ds_config, optimize_for_xla_compilation)
     else:
         raise ValueError('Dataset task type is not supported by POPNAS or invalid')

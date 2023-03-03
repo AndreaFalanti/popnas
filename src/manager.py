@@ -57,7 +57,7 @@ class NetworkManager:
         self.score_objective = score_objective
 
         # setup dataset; batches variables are used for displaying progress during training
-        dataset_generator = dataset_generator_factory(dataset_config, isinstance(train_strategy, tf.distribute.TPUStrategy))
+        dataset_generator = dataset_generator_factory(dataset_config, others_config)
         self.dataset_folds, ds_classes, input_shape, self.train_batches, self.validation_batches, preprocessing_model \
             = dataset_generator.generate_train_val_datasets()
         self.dataset_classes_count = ds_classes or self.dataset_classes_count  # Javascript || operator

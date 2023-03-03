@@ -63,7 +63,7 @@ class BaseDatasetGenerator(ABC):
     The right subclass should be instantiated from the task type given in configuration (e.g. image classification).
     '''
 
-    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
+    def __init__(self, dataset_config: DatasetConfig, optimize_for_xla_compilation: bool = False):
         self._logger = log_service.get_logger(__name__)
 
         self.dataset_name = dataset_config.name
@@ -78,7 +78,7 @@ class BaseDatasetGenerator(ABC):
         self.use_data_augmentation = dataset_config.data_augmentation.enabled
         self.augment_on_gpu = dataset_config.data_augmentation.perform_on_gpu
 
-        self.enable_tpu_tricks = enable_tpu_tricks
+        self.optimize_for_xla_compilation = optimize_for_xla_compilation
 
     @abstractmethod
     def supports_early_batching(self) -> bool:
@@ -122,8 +122,9 @@ class BaseDatasetGenerator(ABC):
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
             # make all batches of the same size, avoids "drop_remainder" to not loss data, instead duplicates some samples
-            if self.enable_tpu_tricks:
-                duplicated_samples_count = batch_size - (len(ds) % batch_size)
+            remainder = len(ds) % batch_size
+            if self.optimize_for_xla_compilation and remainder != 0:
+                duplicated_samples_count = batch_size - remainder
                 duplicate_ds = ds.take(duplicated_samples_count)
                 ds = ds.concatenate(duplicate_ds)
 

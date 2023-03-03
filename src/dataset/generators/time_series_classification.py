@@ -66,8 +66,8 @@ def reimmission_sample_in_monosample_classes(x: np.ndarray, y: np.ndarray, num_c
 
 
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
-    def __init__(self, dataset_config: DatasetConfig, enable_tpu_tricks: bool = False):
-        super().__init__(dataset_config, enable_tpu_tricks)
+    def __init__(self, dataset_config: DatasetConfig, optimize_for_xla_compilation: bool = False):
+        super().__init__(dataset_config, optimize_for_xla_compilation)
 
         self.rescale = dataset_config.rescale
         self.normalize = dataset_config.normalize
