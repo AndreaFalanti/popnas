@@ -140,7 +140,7 @@ class BaseModelGenerator(ABC):
         self.motifs = m
         self.normal_cells_per_motif = n
         self.filters = f
-        self.filters_ratio = self.input_shape[-1] / f
+        self.filters_ratio = f / self.input_shape[-1]
 
         # recompute properties associated to the macro-structure parameters
         self.cell_output_shapes = self._compute_cell_output_shapes()
