@@ -21,7 +21,6 @@ def merge_attribute_dicts(dict1: dict, dict2: dict):
     return {k: v + dict2[k] for k, v in dict1}
 
 
-# TODO: if speed is slow, return the info about vertices and edges and then create the graph in a single shot
 def build_block_dag(g: Graph, input_nodes: 'list[TensorNode]', target_shape: 'list[float, ...]',
                     block_spec: BlockSpecification, block_index: int, cell_index: int,
                     compute_layer_params: 'Callable[[str, list[float], list[float]], int]'):

@@ -38,6 +38,8 @@ class NetworkGraph:
 
         self.cell_index = 0
 
+    # TODO: if speed is slow, return the info about vertices and edges, accumulate them,
+    #  and then create the graph in a single shot into another function
     def build_cell(self):
         if self.cell_index in self.used_cell_indexes:
             cell_target_shape = self.target_shapes[self.cell_index]
