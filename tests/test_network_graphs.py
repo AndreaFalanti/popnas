@@ -1,12 +1,15 @@
 import unittest
 
+from dacite import from_dict
+
 from models.generators import *
 from search_space import CellSpecification, BlockSpecification
+from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
 
 
 class TestNetworkGraphs(unittest.TestCase):
     def build_cnn_hp(self, f: int):
-        return {
+        return from_dict(data_class=CnnHpConfig, data= {
             "epochs": 21,
             "learning_rate": 0.01,
             "filters": f,
@@ -21,10 +24,10 @@ class TestNetworkGraphs(unittest.TestCase):
                 "alpha": 0.0
             },
             "softmax_dropout": 0.0
-        }
+        })
 
     def build_architecture_parameters(self, m: int, n: int, use_lb_reshape: bool, use_residuals: bool):
-        return {
+        return from_dict(data_class=ArchitectureParametersConfig, data= {
             "motifs": m,
             "normal_cells_per_motif": n,
             "block_join_operator": "add",
@@ -33,7 +36,7 @@ class TestNetworkGraphs(unittest.TestCase):
             "residual_cells": use_residuals,
             "se_cell_output": False,
             "multi_output": False
-        }
+        })
 
     def initialize_model_gen(self, model_gen_class: type[BaseModelGenerator], input_shape: tuple, classes: int,
                              m: int, n: int, f: int, lb_reshape: bool, residuals: bool):
