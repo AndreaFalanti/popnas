@@ -107,6 +107,8 @@ class TestNetworkGraphs(unittest.TestCase):
         g = model_gen.build_model_graph(cell_spec)
         self.assertEqual(g.get_total_params(), 1156858, 'Residual multiple blocks wrong params count')
 
+    # TODO: now these networks use transpose convolutions instead of bilinear upsample (for XLA compatibility), so the number of parameters must be updated!
+    #  They are expected to fail right now, will be updated when I have the data on a new search experiment using the new macro-architecture.
     def test_segmentation_network_graphs(self):
         input_shape = (None, None, 3)
         classes = 22

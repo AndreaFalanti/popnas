@@ -6,6 +6,7 @@ from tensorflow.keras import layers, metrics, Model, losses
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.graphs.network_graph import NetworkGraph
 from models.graphs.units import TensorNode
+from models.operators.params_utils import compute_conv_params
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
 from utils.func_utils import elementwise_mult
@@ -83,9 +84,10 @@ class SegmentationModelGenerator(BaseModelGenerator):
         upscale_ratio = 1 / hidden_tensor_spatial_ratio
 
         h_tensor = hidden_tensor.tensor
+        h_filters = int(hidden_tensor.shape[-1] * self.input_shape[-1])
         if upscale_ratio > 1:
-            # TODO: maybe it is better to make it "nearest neighbour" instead of bilinear. Perform some tests.
-            h_tensor = self.op_instantiator.generate_linear_upsample(int(upscale_ratio), name=f'output_upsample{name_suffix}')(h_tensor)
+            h_tensor = self.op_instantiator.generate_transpose_conv(h_filters, int(upscale_ratio),
+                                                                    name=f'output_upsample{name_suffix}')(h_tensor)
 
         # TODO: a spatial dropout could be more indicated for this structure
         if dropout_prob > 0.0:
@@ -106,7 +108,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         concat_shape = encoder_node.shape[:-1] + [encoder_node.shape[-1] + lb1.shape[-1]]
 
         prefix = f'c{net_graph.cell_index}'
-        upsample_name = f'{prefix}_lb1_linear_upsample'
+        upsample_name = f'{prefix}_lb1_tconv_upsample'
         concat_name = f'{prefix}_u_net_concat'
         compressor_name = f'{prefix}_pointwise_compressor'
         v_attributes = {
@@ -114,7 +116,10 @@ class SegmentationModelGenerator(BaseModelGenerator):
             'op': ['upsample', 'concat', '1x1 conv'],
             'cell_index': [net_graph.cell_index] * 3,
             'block_index': [-1] * 3,
-            'params': [0, 0, self.op_instantiator.get_op_params('1x1 conv', concat_shape, target_shape)]
+            'params': [
+                compute_conv_params((2, 2), int(lb1.shape[-1]), int(lb1.shape[-1]) // 2),
+                0,
+                self.op_instantiator.get_op_params('1x1 conv', concat_shape, target_shape)]
         }
         net_graph.g.add_vertices(3, v_attributes)
 
@@ -263,9 +268,10 @@ class SegmentationModelGenerator(BaseModelGenerator):
         # build -1 lookback input, as a linear upsample + concatenation with specular output of last encoder layer on the same U-net "level".
         # the number of filters is regularized with a pointwise convolution.
         if lb1 is not None:
-            linear_upsampled_tensor = self.op_instantiator.generate_linear_upsample(2, name=f'lin_upsample_unit_c{self.cell_index}')(lb1.tensor)
+            # halve the filters while upsampling (previous decoder has 2 times the number of filters than target)
+            upsampled_tensor = self.op_instantiator.generate_transpose_conv(filters, 2, name=f'tconv_upsample_unit_c{self.cell_index}')(lb1.tensor)
             specular_output = level_outputs.pop().tensor
-            unet_concat = layers.Concatenate(name=f'u_net_concat_c{self.cell_index}')([linear_upsampled_tensor, specular_output])
+            unet_concat = layers.Concatenate(name=f'u_net_concat_c{self.cell_index}')([upsampled_tensor, specular_output])
             # TODO: the compression is not necessary since operators could directly adapt the depth dimension,
             #  but using it should reduce quite a bit the number of parameters and FLOPs performed by the upsample cell operators.
             lb1_tensor = self.op_instantiator.generate_pointwise_conv(filters, strided=False,
