@@ -107,7 +107,7 @@ def display_predictors_test_slide(test_folder_path: str, reference_plot_path: st
         display_plot_overview(predictors_plot_paths, cols, rows, title=title, save=save, save_name=save_name)
 
 
-def display_dynamic_layout_slide(plots: list[os.DirEntry], title: str, save: bool, save_path: str):
+def display_dynamic_layout_slide(plots: 'list[os.DirEntry]', title: str, save: bool, save_path: str):
     if len(plots) > 1:
         cols, rows = compute_dynamic_size_layout(len(plots))
         plot_paths = [f.path for f in plots]
