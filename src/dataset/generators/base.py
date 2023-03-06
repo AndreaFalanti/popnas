@@ -7,6 +7,7 @@ from tensorflow.keras import Sequential
 
 import log_service
 from dataset.preprocessing import DataPreprocessor
+from dataset.utils import generate_sample_weights_from_class_weights
 from utils.config_dataclasses import DatasetConfig
 
 AUTOTUNE = tf.data.AUTOTUNE
@@ -89,6 +90,7 @@ class BaseDatasetGenerator(ABC):
     def _finalize_dataset(self, ds: tf.data.Dataset, batch_size: Optional[int], preprocessor: DataPreprocessor,
                           keras_data_augmentation: Optional[Sequential] = None, tf_data_augmentation: 'Optional[Callable]' = None,
                           shuffle: bool = False, fit_preprocessing_layers: bool = False,
+                          use_sample_weights: bool = False,
                           shard_policy: AutoShardPolicy = AutoShardPolicy.DATA) -> 'tuple[tf.data.Dataset, int]':
         '''
         Complete the dataset pipelines with the operations common to all different implementations (keras, tfds, and custom loaded with keras).
@@ -118,6 +120,10 @@ class BaseDatasetGenerator(ABC):
         # PREPROCESSING
         # TODO: should be done after batching, to exploit vectorization. Right now there is a problem with ragged tensors, so moved before batching.
         ds = preprocessor.apply_preprocessing(ds, fit_preprocessing_layers)
+
+        # compute tensor used to re-weight the loss in a pixelwise manner (assigns a weight to each pixel, based on class imbalances)
+        if use_sample_weights:
+            ds = generate_sample_weights_from_class_weights(ds)
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:

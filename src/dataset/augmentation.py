@@ -32,32 +32,55 @@ def get_image_classification_tf_data_aug():
     return ds_mappable_f
 
 
-def get_image_segmentation_tf_data_aug(crop_size: 'tuple[int, int]'):
+def get_augmentation_random_params(x: tf.Tensor, crop_x_size: int, crop_y_size: int):
+    # Get the shape of the image and mask, and the respective crop targets
+    shape = tf.shape(x)
+    h, w = shape[0], shape[1]
+
+    # Randomly generate the crop start point
+    crop_y_start = tf.random.uniform(shape=(), minval=0, maxval=h - crop_y_size + 1, dtype=tf.int32)
+    crop_x_start = tf.random.uniform(shape=(), minval=0, maxval=w - crop_x_size + 1, dtype=tf.int32)
+
+    # Compute if the random horizontal flip will be applied or not (50%)
+    use_horizontal_flip = tf.random.uniform(()) > 0.5
+
+    return crop_x_start, crop_y_start, use_horizontal_flip
+
+
+def get_image_segmentation_tf_data_aug_xy(crop_size: 'tuple[int, int]'):
     @tf.function
     def ds_mappable_f(x, y):
-        # thanks ChatGPT for the idea of using tf.random.uniform instead of already made random functions!
-
-        # Get the shape of the image and mask, and the respective crop targets
-        shape = tf.shape(x)
-        h, w = shape[0], shape[1]
         crop_x_size, crop_y_size = crop_size
+        crop_x_start, crop_y_start, use_horizontal_flip = get_augmentation_random_params(x, crop_x_size, crop_y_size)
 
-        # Randomly generate the crop start point
-        y_start = tf.random.uniform(shape=(), minval=0, maxval=h - crop_y_size + 1, dtype=tf.int32)
-        x_start = tf.random.uniform(shape=(), minval=0, maxval=w - crop_x_size + 1, dtype=tf.int32)
-
-        # Apply the crop to both the image and the mask
-        x = tf.image.crop_to_bounding_box(x, y_start, x_start, crop_y_size, crop_x_size)
-        y = tf.image.crop_to_bounding_box(y, y_start, x_start, crop_y_size, crop_x_size)
-
-        if tf.random.uniform(()) > 0.5:
+        x = tf.image.crop_to_bounding_box(x, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        y = tf.image.crop_to_bounding_box(y, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        if use_horizontal_flip:
             x = tf.image.flip_left_right(x)
             y = tf.image.flip_left_right(y)
 
-        # in this way, the transformations are not applied in the same way to image and masks...
-        # x, y = tf.image.random_crop(x, crop_size + (image_channels,), seed=SEED), tf.image.random_crop(y, crop_size + (num_classes,), seed=SEED)
-        # x, y = tf.image.random_flip_left_right(x, seed=SEED), tf.image.random_flip_left_right(y, seed=SEED)
-
         return x, y
+
+    return ds_mappable_f
+
+
+# same of above, but working on 3 elements (sample weights)
+# unfortunately, there seems that tf.data.Dataset can map only function using the exact number of elements as the dataset tuples,
+# it is not possible to use a single element as tuple and then iterate on that.
+def get_image_segmentation_tf_data_aug_xys(crop_size: 'tuple[int, int]'):
+    @tf.function
+    def ds_mappable_f(x, y, s):
+        crop_x_size, crop_y_size = crop_size
+        crop_x_start, crop_y_start, use_horizontal_flip = get_augmentation_random_params(x, crop_x_size, crop_y_size)
+
+        x = tf.image.crop_to_bounding_box(x, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        y = tf.image.crop_to_bounding_box(y, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        s = tf.image.crop_to_bounding_box(s, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        if use_horizontal_flip:
+            x = tf.image.flip_left_right(x)
+            y = tf.image.flip_left_right(y)
+            s = tf.image.flip_left_right(s)
+
+        return x, y, s
 
     return ds_mappable_f
