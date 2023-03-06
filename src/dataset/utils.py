@@ -4,9 +4,7 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from dataset.augmentation import get_image_segmentation_tf_data_aug
-from dataset.generators import *
-from utils.config_dataclasses import DatasetConfig, OthersConfig
+from dataset.augmentation import get_image_segmentation_tf_data_aug_xy
 
 
 def test_data_augmentation(ds: tf.data.Dataset):
@@ -21,10 +19,10 @@ def test_data_augmentation(ds: tf.data.Dataset):
     plt.switch_backend('TkAgg')
 
     # data_augmentation_model = get_image_data_augmentation_model()
-    data_aug = get_image_segmentation_tf_data_aug((112, 112))
+    data_aug = get_image_segmentation_tf_data_aug_xy((112, 112))
 
     # get a batch
-    images, labels = next(iter(ds))
+    images, labels, weights = next(iter(ds))
 
     # display 8 transformations of the first 3 images belonging to the first training batch
     for j in range(3):
@@ -55,7 +53,10 @@ def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
     label_counter = Counter()
 
     for (x, y) in ds:
-        label_counter.update(np.argmax(y, axis=-1))
+        # from one-hot to int
+        labels = np.argmax(y, axis=-1)
+        # flatten is required for cases where the labels are multidimensional (e.g. segmentation masks, which have a label for each image pixel)
+        label_counter.update(labels.flatten())
 
     percentages_dict = {}
     for (k, v) in label_counter.items():
@@ -76,18 +77,14 @@ def generate_balanced_weights_for_classes(ds: tf.data.Dataset) -> 'dict[int, flo
     return class_weights_dict
 
 
-def dataset_generator_factory(ds_config: DatasetConfig, others_config: OthersConfig) -> BaseDatasetGenerator:
-    '''
-    Return the right dataset generator, based on the task type.
-    '''
-    task_type = ds_config.type
-    optimize_for_xla_compilation = others_config.enable_XLA_compilation or others_config.train_strategy == 'TPU'
+def generate_sample_weights_from_class_weights(ds: tf.data.Dataset):
+    class_weights = generate_balanced_weights_for_classes(ds)
 
-    if task_type == 'image_classification':
-        return ImageClassificationDatasetGenerator(ds_config, optimize_for_xla_compilation)
-    elif task_type == 'time_series_classification':
-        return TimeSeriesClassificationDatasetGenerator(ds_config, optimize_for_xla_compilation)
-    elif task_type == 'image_segmentation':
-        return ImageSegmentationDatasetGenerator(ds_config, optimize_for_xla_compilation)
-    else:
-        raise ValueError('Dataset task type is not supported by POPNAS or invalid')
+    def map_sample_weights(x: tf.Tensor, y: tf.Tensor):
+        y_labels = tf.argmax(y, axis=-1)
+        class_weights_arr = [class_weights[key] for key in sorted(class_weights.keys())]
+        sample_weight = tf.gather(class_weights_arr, indices=y_labels)
+
+        return x, y, tf.expand_dims(sample_weight, axis=-1)
+
+    return ds.map(map_sample_weights, num_parallel_calls=tf.data.AUTOTUNE)
