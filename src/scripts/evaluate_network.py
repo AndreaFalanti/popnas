@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.keras import models
 
 import log_service
-from dataset.utils import dataset_generator_factory
+from dataset.generators.factory import dataset_generator_factory
 from models.generators.factory import model_generator_factory
 from search_space import CellSpecification
 from utils.config_utils import read_json_config

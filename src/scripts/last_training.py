@@ -7,7 +7,8 @@ from tensorflow.keras.utils import plot_model
 
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.utils import dataset_generator_factory, generate_balanced_weights_for_classes
+from dataset.generators.factory import dataset_generator_factory
+from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.graphs.utils import save_cell_dag_image

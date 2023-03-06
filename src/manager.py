@@ -11,7 +11,8 @@ from tensorflow.keras.utils import plot_model
 import file_writer as fw
 import log_service
 from dataset.augmentation import get_image_data_augmentation_model
-from dataset.utils import generate_balanced_weights_for_classes, dataset_generator_factory
+from dataset.generators.factory import dataset_generator_factory
+from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.results.base import write_multi_output_results_to_csv
