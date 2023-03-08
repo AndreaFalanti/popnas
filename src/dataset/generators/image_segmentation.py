@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
-from dataset.augmentation import get_image_segmentation_tf_data_aug_xys
+from dataset.augmentation import get_image_segmentation_tf_data_aug_xys, get_image_segmentation_tf_data_aug_xy
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset, DatasetsFold
 from dataset.preprocessing import ImagePreprocessor
 from utils.config_dataclasses import DatasetConfig
@@ -23,6 +23,14 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         resize_config = dataset_config.resize
         self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None
+
+        self.use_sample_weights = dataset_config.balance_class_losses
+        # introduce side effect on the configuration dataclass, avoiding the use of loss weights which can't be applied on >= 3 dims labels
+        # TODO: side effects are far from ideal, but workarounds require workarounds (or clever users which can set complicated options correctly)...
+        dataset_config.balance_class_losses = False
+
+        self.tf_aug = get_image_segmentation_tf_data_aug_xys(self.resize_dim) if self.use_sample_weights \
+            else get_image_segmentation_tf_data_aug_xy(self.resize_dim)
 
     def supports_early_batching(self) -> bool:
         return False
@@ -63,15 +71,13 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             else:
                 raise NotImplementedError('Only custom datasets are supported right now')
 
-            tf_aug = get_image_segmentation_tf_data_aug_xys(self.resize_dim)
-
             # finalize dataset generation, common logic to all dataset formats
             data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
                                                   pad_to_multiples_of=PAD_MULTIPLES)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                             keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
+                                                             keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
-                                                             use_sample_weights=True)
+                                                             use_sample_weights=self.use_sample_weights)
             # since images can have different sizes, it's not possible to batch multiple images together (batch_size = 1)
             val_ds, val_batches = self._finalize_dataset(val_ds, 1, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
@@ -132,15 +138,13 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         else:
             raise NotImplementedError('Only custom datasets are supported right now')
 
-        tf_aug = get_image_segmentation_tf_data_aug_xys(self.resize_dim)
-
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
                                               pad_to_multiples_of=PAD_MULTIPLES)
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                         keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
+                                                         keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
-                                                         use_sample_weights=True)
+                                                         use_sample_weights=self.use_sample_weights)
 
         self._logger.info('Final training dataset built successfully')
         return train_ds, classes, image_shape, train_batches, data_preprocessor.preprocessor_model

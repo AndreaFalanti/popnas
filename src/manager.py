@@ -39,7 +39,6 @@ class NetworkManager:
 
         self.dataset_folds_count = dataset_config.folds
         self.dataset_classes_count = dataset_config.classes_count
-        self.balance_class_losses = dataset_config.balance_class_losses
         self.augment_on_gpu = dataset_config.data_augmentation.enabled and dataset_config.data_augmentation.perform_on_gpu
 
         self.epochs = cnn_config.epochs
@@ -62,8 +61,9 @@ class NetworkManager:
         self.dataset_folds, ds_classes, input_shape, self.train_batches, self.validation_batches, preprocessing_model \
             = dataset_generator.generate_train_val_datasets()
         self.dataset_classes_count = ds_classes or self.dataset_classes_count  # Javascript || operator
+        # setting weights to None is the default option to not regularize classes
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
-            if self.balance_class_losses else None
+            if dataset_config.balance_class_losses else [None] * len(self.dataset_folds)
 
         self.model_gen = model_generator_factory(dataset_config.type, cnn_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
@@ -143,7 +143,7 @@ class NetworkManager:
                       steps_per_epoch=self.train_batches,
                       validation_data=val_ds,
                       validation_steps=self.validation_batches,
-                      class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)
+                      class_weight=self.balanced_class_weights[i])
 
         # remove useless directory
         shutil.rmtree(fake_tb_logdir, ignore_errors=True)
@@ -250,7 +250,7 @@ class NetworkManager:
                              validation_data=val_ds,
                              validation_steps=self.validation_batches,
                              callbacks=callbacks,
-                             class_weight=self.balanced_class_weights[i] if self.balance_class_losses else None)  # type: History
+                             class_weight=self.balanced_class_weights[i])  # type: History
 
             times[i] = time_cb.get_total_time()
             histories.append(hist.history)

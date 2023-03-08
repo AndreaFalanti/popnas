@@ -132,7 +132,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # produce weights for balanced loss if option is enabled in database config
     balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in dataset_folds] \
-        if ds_config.balance_class_losses else None
+        if ds_config.balance_class_losses else [None] * len(dataset_folds)
     logger.info('Datasets generated successfully')
 
     # DEBUG ONLY
@@ -210,7 +210,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
-                         class_weight=balanced_class_weights[0] if ds_config.balance_class_losses else None,
+                         class_weight=balanced_class_weights[0],
                          callbacks=train_callbacks)  # type: callbacks.History
 
         training_time = time_cb.get_total_time()
