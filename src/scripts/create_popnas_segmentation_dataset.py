@@ -73,6 +73,9 @@ def convert_mask(mask: Image, masks_palette: set, target_type: str):
     ''' Convert masks to target type. '''
     if target_type == ConversionType.TENSOR.value:
         return convert_from_rgb_to_tensor(mask, masks_palette)
+    elif target_type == ConversionType.RGB.value:
+        arr = np.asarray(mask)
+        return np.expand_dims(arr, axis=-1)
     else:
         raise AttributeError('Not supported conversion target type')
 
@@ -97,7 +100,7 @@ def main(ds_folders: list[str], masks_conversion_mode: str, resize_min_axis: Opt
     if init_type not in ConversionType.values() or target_type not in ConversionType.values():
         raise AttributeError('Invalid conversion type')
     if init_type == target_type:
-        raise AttributeError('Conversion types are set to same value...')
+        print('Conversion types are set to the same value, masks will not be converted')
 
     mask_colours = extract_palette_from_masks(first_split_masks_folder, init_type)
     print('Masks palette extracted successfully!')
@@ -132,7 +135,7 @@ def main(ds_folders: list[str], masks_conversion_mode: str, resize_min_axis: Opt
                     img = img.resize(new_size, resample=Image.NEAREST)
 
                 np_mask = convert_mask(img, mask_colours, target_type)
-                Y.append(np.asarray(np_mask))
+                Y.append(np_mask)
 
         print('Saving NPZ archive...')
         name_suffix = '' if resize_min_axis is None else str(resize_min_axis)
