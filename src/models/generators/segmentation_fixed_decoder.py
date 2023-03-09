@@ -1,6 +1,7 @@
-from typing import Type
+from typing import Type, Optional
 
 import tensorflow as tf
+from keras import Sequential
 from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
@@ -8,6 +9,7 @@ from models.graphs.network_graph import NetworkGraph
 from models.operators.layers import AtrousSpatialPyramidPooling, Convolution
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
+from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
 from utils.func_utils import elementwise_mult
 
 
@@ -20,6 +22,14 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
     NOTE: these models use bilinear upsample, which is not compilable with XLA (see: https://github.com/tensorflow/tensorflow/issues/57575).
     Do not set the XLA compilation flag in config, otherwise it will cause an error during model building!
     '''
+
+    def __init__(self, cnn_hp: CnnHpConfig, arc_params: ArchitectureParametersConfig, training_steps_per_epoch: int, output_classes_count: int,
+                 input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
+                 preprocessing_model: Optional[Sequential] = None, save_weights: bool = False, ignore_class: Optional[int] = None):
+        super().__init__(cnn_hp, arc_params, training_steps_per_epoch, output_classes_count, input_shape, data_augmentation_model,
+                         preprocessing_model, save_weights)
+
+        self.ignore_class = ignore_class
 
     def _generate_network_info(self, cell_spec: CellSpecification, use_stem: bool) -> NetworkBuildInfo:
         blocks = len(cell_spec)
@@ -195,10 +205,10 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
         return WrappedTensor(conv, elementwise_mult(decoder_input.shape, [upsample_factor] * self.op_dims + [1]))
 
     def _get_loss_function(self) -> losses.Loss:
-        return losses.CategoricalCrossentropy()
+        return losses.SparseCategoricalCrossentropy(ignore_class=self.ignore_class)
 
     def _get_metrics(self) -> 'list[metrics.Metric]':
-        return ['accuracy', metrics.OneHotMeanIoU(self.output_classes_count, name='mean_iou')]
+        return ['accuracy', metrics.MeanIoU(self.output_classes_count, ignore_class=self.ignore_class, sparse_y_pred=False, name='mean_iou')]
 
     @staticmethod
     def get_results_processor_class() -> Type[BaseTrainingResults]:
