@@ -212,13 +212,16 @@ Here it is presented a list of the configuration sections and fields, with a bri
 [//]: # (- **cells**: total LSTM cells of the model.)
 
 **Dataset**:
-- **type**: specifies the problem domain of the provided data. Processing pipeline and other parameters depends on the
-  addressed task. Supported values: [image_classification, time_series_classification].
+- **type**: specifies the problem domain of the provided data. Processing pipeline and other parameters depend on the
+  addressed task. Supported values: [image_classification, time_series_classification, image_segmentation].
 - **name**: used to identify and load a Keras or TFDS dataset supported by POPNAS.
   Can be _null_ if the path of a custom dataset is provided.
 - **path**: path to a folder containing a custom dataset.
   Can be _null_ if you want to use a supported dataset already present in Keras or TFDS.
 - **classes_count**: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
+- **ignore_class**: optional parameter used only in image segmentation problems. Defines the integer value of a class
+  (e.g., background or void class) to ignore during loss and mean IoU computations (accuracy will still consider it,
+  no current support for masking in TF).
 - **batch_size**: defines the batch size dimension of the dataset.
 - **inference_batch_size**: defines the batch size dimension for benchmarking the inference time of a network.
 - **validation_size**: fraction of the total samples to use for the validation set, e.g. _0.1_ value means that 10% of the

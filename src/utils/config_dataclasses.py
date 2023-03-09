@@ -73,6 +73,7 @@ class DatasetConfig:
     name: str
     path: Optional[str]
     classes_count: int
+    ignore_class: Optional[int]
     batch_size: int
     inference_batch_size: int
     validation_size: Optional[float]
