@@ -63,7 +63,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # test_data_augmentation(train_ds)
 
     with train_strategy.scope():
-        model_gen = model_generator_factory(ds_config.type, cnn_config, arc_config, train_batches,
+        model_gen = model_generator_factory(ds_config, cnn_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)

@@ -65,7 +65,7 @@ class NetworkManager:
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if dataset_config.balance_class_losses else [None] * len(self.dataset_folds)
 
-        self.model_gen = model_generator_factory(dataset_config.type, cnn_config, arc_config, self.train_batches,
+        self.model_gen = model_generator_factory(dataset_config, cnn_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
                                                  data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,

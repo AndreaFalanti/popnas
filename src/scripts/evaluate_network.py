@@ -78,7 +78,7 @@ def main():
                                               save_path=os.path.join(model_path, 'test_confusion_matrix'))
     else:
         with train_strategy.scope():
-            model_gen = model_generator_factory(config.dataset.type, cnn_config, arc_config, test_batches,
+            model_gen = model_generator_factory(config.dataset, cnn_config, arc_config, test_batches,
                                                 output_classes_count=classes_count, input_shape=image_shape, data_augmentation_model=None)
 
         model_paths = [f.path for f in os.scandir(model_path) if f.is_dir()] if args.top else [model_path]
