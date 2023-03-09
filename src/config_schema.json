@@ -62,7 +62,7 @@
                 "additional_pareto_objectives"
             ]
         },
-        "cnn_hp": {
+        "training_hyperparameters": {
             "type": "object",
             "properties": {
                 "epochs": {
@@ -72,10 +72,6 @@
                 "learning_rate": {
                     "type": "number",
                     "minimum": 0
-                },
-                "filters": {
-                    "type": "integer",
-                    "minimum": 1
                 },
                 "weight_reg": {
                     "type": "number",
@@ -126,7 +122,6 @@
             "required": [
                 "epochs",
                 "learning_rate",
-                "filters",
                 "weight_reg",
                 "use_adamW",
                 "drop_path_prob",
@@ -134,9 +129,13 @@
                 "softmax_dropout"
             ]
         },
-        "architecture_parameters": {
+        "architecture_hyperparameters": {
             "type": "object",
             "properties": {
+                "filters": {
+                    "type": "integer",
+                    "minimum": 1
+                },
                 "motifs": {
                     "type": "integer",
                     "minimum": 2
@@ -169,6 +168,7 @@
                 }
             },
             "required": [
+                "filters",
                 "motifs",
                 "normal_cells_per_motif",
                 "block_join_operator",
@@ -362,8 +362,8 @@
     "required": [
         "search_space",
         "search_strategy",
-        "cnn_hp",
-        "architecture_parameters",
+        "training_hyperparameters",
+        "architecture_hyperparameters",
         "dataset",
         "others"
     ]

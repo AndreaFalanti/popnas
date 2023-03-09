@@ -4,30 +4,29 @@ from dacite import from_dict
 
 from models.generators import *
 from search_space import CellSpecification, BlockSpecification
-from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
+from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
+
+train_hp = from_dict(data_class=TrainingHyperparametersConfig, data={
+        "epochs": 21,
+        "learning_rate": 0.01,
+        "weight_reg": 5e-4,
+        "use_adamW": True,
+        "drop_path_prob": 0.0,
+        "cosine_decay_restart": {
+            "enabled": True,
+            "period_in_epochs": 3,
+            "t_mul": 2.0,
+            "m_mul": 1.0,
+            "alpha": 0.0
+        },
+        "softmax_dropout": 0.0
+    })
 
 
 class TestNetworkGraphs(unittest.TestCase):
-    def build_cnn_hp(self, f: int):
-        return from_dict(data_class=CnnHpConfig, data= {
-            "epochs": 21,
-            "learning_rate": 0.01,
+    def build_architecture_parameters(self, f: int, m: int, n: int, use_lb_reshape: bool, use_residuals: bool):
+        return from_dict(data_class=ArchitectureHyperparametersConfig, data={
             "filters": f,
-            "weight_reg": 5e-4,
-            "use_adamW": True,
-            "drop_path_prob": 0.0,
-            "cosine_decay_restart": {
-                "enabled": True,
-                "period_in_epochs": 3,
-                "t_mul": 2.0,
-                "m_mul": 1.0,
-                "alpha": 0.0
-            },
-            "softmax_dropout": 0.0
-        })
-
-    def build_architecture_parameters(self, m: int, n: int, use_lb_reshape: bool, use_residuals: bool):
-        return from_dict(data_class=ArchitectureParametersConfig, data= {
             "motifs": m,
             "normal_cells_per_motif": n,
             "block_join_operator": "add",
@@ -40,10 +39,9 @@ class TestNetworkGraphs(unittest.TestCase):
 
     def initialize_model_gen(self, model_gen_class: type[BaseModelGenerator], input_shape: tuple, classes: int,
                              m: int, n: int, f: int, lb_reshape: bool, residuals: bool):
-        cnn_hp = self.build_cnn_hp(f)
-        arc_params = self.build_architecture_parameters(m, n, lb_reshape, residuals)
+        arc_params = self.build_architecture_parameters(f, m, n, lb_reshape, residuals)
 
-        return model_gen_class(cnn_hp, arc_params, training_steps_per_epoch=100,
+        return model_gen_class(train_hp, arc_params, training_steps_per_epoch=100,
                                output_classes_count=classes, input_shape=input_shape)
 
     def test_simple_block_network(self):

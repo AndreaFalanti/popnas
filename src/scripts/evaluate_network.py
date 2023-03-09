@@ -53,8 +53,8 @@ def main():
     print('Reading configuration...')
     config = read_json_config(custom_json_path)
 
-    cnn_config = config.cnn_hp
-    arc_config = config.architecture_parameters
+    cnn_config = config.training_hyperparameters
+    arc_config = config.architecture_hyperparameters
     multi_output = arc_config.multi_output
 
     train_strategy = initialize_train_strategy(args.ts)

@@ -44,10 +44,9 @@ class SearchStrategyConfig:
 
 
 @dataclass
-class CnnHpConfig:
+class TrainingHyperparametersConfig:
     epochs: int
     learning_rate: float
-    filters: int
     weight_reg: float
     use_adamW: bool
     drop_path_prob: float
@@ -56,7 +55,8 @@ class CnnHpConfig:
 
 
 @dataclass
-class ArchitectureParametersConfig:
+class ArchitectureHyperparametersConfig:
+    filters: int
     motifs: int
     normal_cells_per_motif: int
     block_join_operator: str
@@ -102,7 +102,7 @@ class OthersConfig:
 class RunConfig:
     search_space: SearchSpaceConfig
     search_strategy: SearchStrategyConfig
-    cnn_hp: CnnHpConfig
-    architecture_parameters: ArchitectureParametersConfig
+    training_hyperparameters: TrainingHyperparametersConfig
+    architecture_hyperparameters: ArchitectureHyperparametersConfig
     dataset: DatasetConfig
     others: OthersConfig

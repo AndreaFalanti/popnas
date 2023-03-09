@@ -28,7 +28,7 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: DatasetConfig, cnn_config: CnnHpConfig, arc_config: ArchitectureParametersConfig, others_config: OthersConfig,
+    def __init__(self, dataset_config: DatasetConfig, cnn_config: TrainingHyperparametersConfig, arc_config: ArchitectureHyperparametersConfig, others_config: OthersConfig,
                  score_objective: str, train_strategy: tf.distribute.Strategy):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving

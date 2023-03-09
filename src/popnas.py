@@ -48,10 +48,10 @@ class Popnas:
         ds_config = run_config.dataset
 
         # CNN models hyperparameters
-        cnn_config = run_config.cnn_hp
+        cnn_config = run_config.training_hyperparameters
 
         # CNN architecture parameters
-        arc_config = run_config.architecture_parameters
+        arc_config = run_config.architecture_hyperparameters
         self.multi_output_models = arc_config.multi_output
 
         # Other parameters (last category including heterogeneous parameters not classifiable in previous sections)

@@ -38,8 +38,8 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
 
-    cnn_config = config.cnn_hp
-    arc_config = config.architecture_parameters
+    cnn_config = config.training_hyperparameters
+    arc_config = config.architecture_hyperparameters
     ds_config = config.dataset
 
     multi_output = arc_config.multi_output

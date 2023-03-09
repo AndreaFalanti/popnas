@@ -38,9 +38,9 @@ class MacroConfig(NamedTuple):
 
     @staticmethod
     def from_config(config: RunConfig):
-        return MacroConfig(config.architecture_parameters.motifs,
-                           config.architecture_parameters.normal_cells_per_motif,
-                           config.cnn_hp.filters)
+        return MacroConfig(config.architecture_hyperparameters.motifs,
+                           config.architecture_hyperparameters.normal_cells_per_motif,
+                           config.architecture_hyperparameters.filters)
 
 
 def define_callbacks(score_metric: str, output_names: 'list[str]', save_chunk: int = 100, use_val: bool = False) -> 'list[callbacks.Callback]':
@@ -140,7 +140,7 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
 
     # set custom batch size, if present
     if batch_size is not None:
-        ms_config.cnn_hp.learning_rate = ms_config.cnn_hp.learning_rate * (batch_size / ms_config.dataset.batch_size)
+        ms_config.training_hyperparameters.learning_rate = ms_config.training_hyperparameters.learning_rate * (batch_size / ms_config.dataset.batch_size)
         ms_config.dataset.batch_size = batch_size
 
     # initialize train strategy (try-except to be retrocompatible with the previous config format)
@@ -200,9 +200,9 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
 
 def build_macro_customized_config(config: RunConfig, macro: MacroConfig):
     model_config = copy.deepcopy(config)
-    model_config.architecture_parameters.motifs = macro.m
-    model_config.architecture_parameters.normal_cells_per_motif = macro.n
-    model_config.cnn_hp.filters = macro.f
+    model_config.architecture_hyperparameters.motifs = macro.m
+    model_config.architecture_hyperparameters.normal_cells_per_motif = macro.n
+    model_config.training_hyperparameters.filters = macro.f
 
     return model_config
 

@@ -114,8 +114,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
 
-    cnn_config = config.cnn_hp
-    arc_config = config.architecture_parameters
+    cnn_config = config.training_hyperparameters
+    arc_config = config.architecture_hyperparameters
     ds_config = config.dataset
 
     multi_output = arc_config.multi_output
@@ -151,7 +151,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     m = arc_config.motifs
     n = arc_config.normal_cells_per_motif
-    f = cnn_config.filters
+    f = arc_config.filters
     macro_config = MacroConfig(m, n, f)
 
     cell_score_iter = get_cells_to_train_iter(p, spec, k, target_metric, macro_config, logger)

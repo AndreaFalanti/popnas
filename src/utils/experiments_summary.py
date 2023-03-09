@@ -154,8 +154,8 @@ def get_final_network_macro_structure(log_path: str):
     with open(os.path.join(log_path, 'final_model_training', 'run.json'), 'r') as f:
         train_config = json.load(f)
 
-    cnn_hp = train_config.cnn_hp
-    arc_hp = train_config.architecture_parameters
+    cnn_hp = train_config.training_hyperparameters
+    arc_hp = train_config.architecture_hyperparameters
 
     return cnn_hp['filters'], arc_hp['motifs'], arc_hp['normal_cells_per_motif']
 

@@ -9,7 +9,7 @@ from models.graphs.network_graph import NetworkGraph
 from models.operators.layers import AtrousSpatialPyramidPooling, Convolution
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
-from utils.config_dataclasses import CnnHpConfig, ArchitectureParametersConfig
+from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
 from utils.func_utils import elementwise_mult
 
 
@@ -23,10 +23,10 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
     Do not set the XLA compilation flag in config, otherwise it will cause an error during model building!
     '''
 
-    def __init__(self, cnn_hp: CnnHpConfig, arc_params: ArchitectureParametersConfig, training_steps_per_epoch: int, output_classes_count: int,
+    def __init__(self, train_hp: TrainingHyperparametersConfig, arc_hp: ArchitectureHyperparametersConfig, training_steps_per_epoch: int, output_classes_count: int,
                  input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
                  preprocessing_model: Optional[Sequential] = None, save_weights: bool = False, ignore_class: Optional[int] = None):
-        super().__init__(cnn_hp, arc_params, training_steps_per_epoch, output_classes_count, input_shape, data_augmentation_model,
+        super().__init__(train_hp, arc_hp, training_steps_per_epoch, output_classes_count, input_shape, data_augmentation_model,
                          preprocessing_model, save_weights)
 
         self.ignore_class = ignore_class
