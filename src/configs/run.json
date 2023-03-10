@@ -26,20 +26,16 @@
     "cnn_hp": {
         "epochs": 21,
         "learning_rate": 0.01,
-        "filters": 24,
         "weight_reg": 5e-4,
-        "use_adamW": true,
         "drop_path_prob": 0.0,
-        "cosine_decay_restart": {
-            "enabled": true,
-            "period_in_epochs": 3,
-            "t_mul": 2.0,
-            "m_mul": 1.0,
-            "alpha": 0.0
-        },
-        "softmax_dropout": 0.0
+        "softmax_dropout": 0.0,
+        "optimizer": {
+            "type": "adamW",
+            "scheduler": "cdr: 3 period"
+        }
     },
     "architecture_parameters": {
+        "filters": 24,
         "motifs": 3,
         "normal_cells_per_motif": 2,
         "block_join_operator": "add",
