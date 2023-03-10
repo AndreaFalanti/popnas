@@ -96,3 +96,27 @@ Other changes include the mapping of the configuration to dataclasses, and the i
 - Fix bug in time series classification Keras preprocessing model (related to TF update).
 - General bug fixes and code cleaning.
 
+### v3.5.0
+
+Add new ModelGenerator for semantic segmentation tasks, based on DeepLab architectures.
+Refactor the configuration format for clarity and adds a new optimizer section, which can be used to define the scheduler
+and optimizer to use for the neural networks training directly from the config.
+
+- Add new custom layer implementing the Atrous Spatial Pyramid Pooling (ASPP), used in deeplab architectures.
+- Add SegmentationFixedDecoderModelGenerator, an alternative model generator for semantic segmentation tasks, which
+  macro-architecture is inspired by DeepLab. The encoder is built in a similar way to POPNAS classification networks, and
+  terminates with ASPP. The decoder is fixed and uses a lightweight structure similar to DeepLabV3+.
+  Furthermore, this model generator works with datasets using sparse labels.
+- Update TensorFlow to 2.10.1, to support easier class masking in semantic segmentation tasks. Now a class (void label)
+  can be ignored in the loss and mean IoU metric.
+  NOTE: TF 2.10.1 has a vectorization issue with Keras augmentation layers, so classification experiments can have some overhead due to this bug.
+- Fix major bug in the model selection step, causing the algorithm to not compute correctly the number of parameters
+  required by the macro-config alternatives.
+- Add weight sampling in the segmentation task, used to balance the loss based on the distribution of the class labels.
+  It is activated if the "balance_class_weights" config flag is set to True.
+- Add support for instantiating and combining schedulers and optimizers at runtime, based on some structured strings
+  provided in the configuration JSON. The strings define the scheduler/optimizer type and eventual optional parameters,
+  recognized through regexes. The new logic is more powerful and supports 5 optimizers, 2 schedulers and the optional
+  usage of the lookahead mechanism.
+- Heavily refactor the JSON configuration format, improving clarity and making some fields optional to avoid clutter.
+- Fix sampled models ONNX save using the model without the trained weights. Add also the TF format for convenience.
