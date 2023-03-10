@@ -80,7 +80,7 @@ def convert_mask(mask: Image, masks_palette: set, target_type: str):
         raise AttributeError('Not supported conversion target type')
 
 
-def main(ds_folders: list[str], masks_conversion_mode: str, resize_min_axis: Optional[int] = None):
+def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: Optional[int] = None):
     '''
     Generate a segmentation dataset in a standardized .npz format, easily readable by POPNAS.
     Each split should be placed in a folder, with subfolders for RGB images and masks.

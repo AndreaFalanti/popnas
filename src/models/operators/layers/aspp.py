@@ -38,7 +38,7 @@ class ImagePooling(Layer):
 
 
 class AtrousSpatialPyramidPooling(Layer):
-    def __init__(self, filters: int, dilation_rates: tuple[int, int, int],
+    def __init__(self, filters: int, dilation_rates: 'tuple[int, int, int]',
                  weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='ASPP', **kwargs):
         '''
         ASPP layer.
