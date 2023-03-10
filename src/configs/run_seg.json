@@ -4,39 +4,42 @@
         "lookback_depth": 2,
         "operators": [
             "identity",
-            "3x3 dconv",
-            "5x5 dconv",
-            "7x7 dconv",
-            "1x3-3x1 conv",
-            "1x5-5x1 conv",
             "1x7-7x1 conv",
-            "1x1 conv",
+            "1x9-9x1 conv",
             "3x3 conv",
+            "3x3:3dr conv",
+            "3x3:6dr conv",
             "5x5 conv",
+            "5x5:2dr conv",
+            "5x5:4dr conv",
             "2x2 maxpool",
-            "2x2 avgpool"
+            "2x2 avgpool",
+            "8 SE"
         ]
     },
     "search_strategy": {
         "max_children": 128,
         "max_exploration_children": 16,
-        "score_metric": "accuracy",
+        "score_metric": "mean_iou",
         "additional_pareto_objectives": ["time"]
     },
     "training_hyperparameters": {
-        "epochs": 21,
-        "learning_rate": 0.01,
+        "epochs": 60,
+        "learning_rate": 0.04,
         "weight_decay": 5e-4,
         "drop_path": 0.0,
         "softmax_dropout": 0.0,
         "optimizer": {
-            "type": "adamW",
-            "scheduler": "cdr: 3 period"
+            "type": "radam: 0.01 alpha",
+            "lookahead": {
+                "sync_period": 6,
+                "slow_step_size": 0.5
+            }
         }
     },
     "architecture_hyperparameters": {
         "filters": 24,
-        "motifs": 3,
+        "motifs": 4,
         "normal_cells_per_motif": 2,
         "block_join_operator": "add",
         "lookback_reshape": false,
@@ -46,17 +49,21 @@
         "multi_output": false
     },
     "dataset": {
-        "type": "image_classification",
-        "name": "cifar10",
-        "path": null,
+        "type": "image_segmentation",
+        "name": "custom-dataset",
+        "path": "insert-path",
         "classes_count": 10,
-        "batch_size": 128,
-        "inference_batch_size": 16,
+        "batch_size": 32,
+        "inference_batch_size": 1,
         "validation_size": 0.1,
         "cache": true,
         "folds": 1,
         "samples": null,
         "balance_class_losses": false,
+        "resize": {
+            "width": 224,
+            "height": 224
+        },
         "data_augmentation": {
             "enabled": true,
             "use_cutout": false,

@@ -24,7 +24,7 @@
         "score_metric": "accuracy",
         "additional_pareto_objectives": ["time"]
     },
-    "cnn_hp": {
+    "training_hyperparameters": {
         "epochs": 21,
         "learning_rate": 0.01,
         "weight_decay": 1e-3,
@@ -35,7 +35,7 @@
             "scheduler": "cdr: 3 period"
         }
     },
-    "architecture_parameters": {
+    "architecture_hyperparameters": {
         "filters": 24,
         "motifs": 3,
         "normal_cells_per_motif": 2,
