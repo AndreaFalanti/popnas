@@ -229,7 +229,7 @@
                 },
                 "inference_batch_size": {
                     "type": "integer",
-                    "minimum": 2
+                    "minimum": 1
                 },
                 "validation_size": {
                     "oneOf": [

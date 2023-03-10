@@ -114,7 +114,7 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
                 encoder_concat_nodes.append(net.lookback_nodes[-1])
                 net.build_cell()
 
-        # TODO: decoder and output
+        # TODO: ASPP, decoder and output
 
         return net
 
