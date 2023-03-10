@@ -73,9 +73,9 @@ class BaseModelGenerator(ABC):
         self.op_dims = len(input_shape) - 1
 
         self.lr = train_hp.learning_rate
-        self.wr = train_hp.weight_reg
-        self.l2_weight_reg = regularizers.l2(self.wr) if (self.wr is not None and not support_weight_decay(train_hp.optimizer.type)) else None
-        self.drop_path_keep_prob = 1.0 - train_hp.drop_path_prob
+        self.wd = train_hp.weight_decay
+        self.l2_weight_reg = regularizers.l2(self.wd) if (self.wd is not None and not support_weight_decay(train_hp.optimizer.type)) else None
+        self.drop_path_keep_prob = 1.0 - train_hp.drop_path
         self.dropout_prob = train_hp.softmax_dropout  # dropout probability on final softmax
         self.optimizer_config = train_hp.optimizer
         self.filters_ratio = self.filters / self.input_shape[-1]  # the filters expansion ratio applied between input and first layer
@@ -629,7 +629,7 @@ class BaseModelGenerator(ABC):
         # accuracy is better as string, since it automatically converted to binary or categorical based on loss
         model_metrics = self._get_metrics()
 
-        optimizer = instantiate_optimizer_and_schedulers(self.optimizer_config, self.lr, self.wr, self.training_steps_per_epoch, self.epochs)
+        optimizer = instantiate_optimizer_and_schedulers(self.optimizer_config, self.lr, self.wd, self.training_steps_per_epoch, self.epochs)
 
         return loss, loss_weights, optimizer, model_metrics
 

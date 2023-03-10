@@ -27,9 +27,8 @@
     "cnn_hp": {
         "epochs": 21,
         "learning_rate": 0.01,
-        "weight_reg": 1e-3,
-        "use_adamW": true,
-        "drop_path_prob": 0.2,
+        "weight_decay": 1e-3,
+        "drop_path": 0.2,
         "softmax_dropout": 0.0,
         "optimizer": {
             "type": "adamW",

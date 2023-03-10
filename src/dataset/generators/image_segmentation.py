@@ -22,7 +22,10 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         super().__init__(dataset_config, optimize_for_xla_compilation)
 
         resize_config = dataset_config.resize
-        self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None
+        self.resize_dim = None if resize_config is None else (resize_config.height, resize_config.width)
+
+        if self.resize_dim is None:
+            raise ValueError('Images must have a set resize dimension for applying random crop and batching during training')
 
         self.use_sample_weights = dataset_config.balance_class_losses
         # introduce side effect on the configuration dataclass, avoiding the use of loss weights which can't be applied on >= 3 dims labels

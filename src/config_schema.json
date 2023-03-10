@@ -73,11 +73,11 @@
                     "type": "number",
                     "minimum": 0
                 },
-                "weight_reg": {
+                "weight_decay": {
                     "type": "number",
                     "minimum": 0
                 },
-                "drop_path_prob": {
+                "drop_path": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
@@ -130,8 +130,8 @@
             "required": [
                 "epochs",
                 "learning_rate",
-                "weight_reg",
-                "drop_path_prob",
+                "weight_decay",
+                "drop_path",
                 "optimizer",
                 "softmax_dropout"
             ]
@@ -269,20 +269,16 @@
                         {
                             "type": "object",
                             "properties": {
-                                "enabled": {
-                                    "type": "boolean"
-                                },
                                 "width": {
                                     "type": "integer",
-                                    "minimum": 8
+                                    "minimum": 16
                                 },
                                 "height": {
                                     "type": "integer",
-                                    "minimum": 8
+                                    "minimum": 16
                                 }
                             },
                             "required": [
-                                "enabled",
                                 "width",
                                 "height"
                             ]

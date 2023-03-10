@@ -26,8 +26,8 @@
     "cnn_hp": {
         "epochs": 21,
         "learning_rate": 0.01,
-        "weight_reg": 5e-4,
-        "drop_path_prob": 0.0,
+        "weight_decay": 5e-4,
+        "drop_path": 0.0,
         "softmax_dropout": 0.0,
         "optimizer": {
             "type": "adamW",
@@ -57,11 +57,6 @@
         "folds": 1,
         "samples": null,
         "balance_class_losses": false,
-        "resize": {
-            "enabled": false,
-            "width": 224,
-            "height": 224
-        },
         "data_augmentation": {
             "enabled": true,
             "use_cutout": false,

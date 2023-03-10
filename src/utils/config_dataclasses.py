@@ -20,7 +20,6 @@ class OptimizerDict:
 
 @dataclass
 class ResizeDict:
-    enabled: bool
     width: int
     height: int
 
@@ -51,8 +50,8 @@ class SearchStrategyConfig:
 class TrainingHyperparametersConfig:
     epochs: int
     learning_rate: float
-    weight_reg: float
-    drop_path_prob: float
+    weight_decay: float
+    drop_path: float
     softmax_dropout: float
     optimizer: OptimizerDict
 
@@ -94,9 +93,9 @@ class DatasetConfig:
 class OthersConfig:
     accuracy_predictor_ensemble_units: int
     predictions_batch_size: int
-    save_children_weights: bool
-    save_children_as_onnx: bool
     train_strategy: str
+    save_children_weights: bool = False
+    save_children_as_onnx: bool = False
     pnas_mode: bool = False
     enable_XLA_compilation: bool = False
 

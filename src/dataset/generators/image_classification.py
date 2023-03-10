@@ -20,7 +20,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         super().__init__(dataset_config, optimize_for_xla_compilation)
 
         resize_config = dataset_config.resize
-        self.resize_dim = (resize_config.height, resize_config.width) if resize_config.enabled else None
+        self.resize_dim = None if resize_config is None else (resize_config.height, resize_config.width)
         self.use_cutout = dataset_config.data_augmentation.use_cutout
 
     def supports_early_batching(self) -> bool:
@@ -252,7 +252,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         # Custom dataset, loaded with Keras utilities
         if self.dataset_path is not None:
             if self.resize_dim is None:
-                raise ValueError('Image must have a set resize dimension to use a custom dataset')
+                raise ValueError('Images must have a set resize dimension to use a custom dataset')
 
             train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
                                                     image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
