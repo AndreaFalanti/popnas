@@ -159,21 +159,29 @@ Here it is presented a list of the configuration sections and fields, with a bri
 **CNN hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
 - **learning_rate**: defines the learning rate of the child CNN networks.
-- **filters**: defines the initial number of filters to use, which increase in each reduction cell.
-- **weight_reg**: defines the L2 regularization factor to use in CNNs. If _null_, regularization is not applied.
-- **use_adamW**: use adamW instead of standard L2 regularization.
-- **drop_path_prob**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
+- **weight_decay**: defines the weight decay to apply. For optimizers not supporting weight decay,
+  L2 regularization is instead applied to all the weights of the model. If _null_, regularization is not applied.
+- **drop_path**: defines the max probability of dropping a path in _scheduled drop path_. If set to 0,
   then _scheduled drop path_ is not used.
-- **cosine_decay_restart**: dictionary for hyperparameters about cosine decay restart schedule.
-  - **enabled**: if _true_ use cosine decay restart schedule, _false_ instead of using a cosine decay schedule.
-  - **period_in_epochs**: first decay period in epochs, changes at each period based on _m_mul_ value.
-  - **[t_mul, m_mul, alpha]**:
-    see [tensorflow documentation](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecayRestarts).
 - **softmax_dropout**: probability of dropping a value in output Softmax layer. If set to 0, then dropout is not used.
   Note that dropout is used on each output when _multi_output_ flag is set.
+- **optimizer**: dictionary for hyperparameters about the optimizer definition. See the TensorFlow documentation for details
+  about the optimizers and schedulers hyperparameters.
+  - **type**: string defining the optimizer class and potential hyperparameters. Supported formats: ["adamW", "adam",
+    "SGDW: \f momentum", "SGD: \f momentum", "radam: \f alpha"], with `\f` representing a float number.
+    Parameters are optional, so you can just specify the name (e.g., "SGD") and default values will be used.
+  - **scheduler**: string defining the optimizer class and potential hyperparameters. Supported formats: 
+    [(CosineDecayRestart) "cdr: \f period, \f t_mul, \f m_mul, \f alpha",
+    (CosineDecay) "cd: \f alpha"], with `\f` representing a float number.
+    Parameters are optional, so you can just specify the name (e.g., "cdr") or a subset of parameters,
+    and default values will be used for undefined groups. NOTE: parameters must be ordered as in specification.
+  - **lookahead**: optional object which can enable the lookahead mechanism when defined.
+    - **sync_period**: integer defining the number of steps before syncing slow weights.
+    - **slow_step_size**: float value indicating the ratio for updating the slow weights.
 
 
 **CNN architecture parameters**:
+- **filters**: defines the initial number of filters to use, which increase in each reduction cell.
 - **motifs**: number of motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell,
   here instead it is used to indicate a stack of N normal cells followed by a single reduction cell.
 - **normal_cells_per_motif**: normal cells to stack in each motif.
@@ -245,8 +253,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - ...extra parameters depending on dataset type, see next sections.
 
 **Dataset(_image_classification_ only)**:
-- **resize**: dictionary with parameters related to image resizing.
-  - **enabled**: _true_ for using resizing, _false_ otherwise.
+- **resize**: an optional object with parameters related to image resizing. Applied only if the object is defined.
   - **width**: target image width in pixels.
   - **height**: target image height in pixels.
 
@@ -265,8 +272,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
 - **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
   Currently, it supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
-- **enable_XLA_compilation**: enable XLA compilation when compiling Keras models. Could be incompatible with some operators,
-  it needs more testing.
+- **enable_XLA_compilation**: enable XLA compilation when compiling Keras models.
+  It is incompatible with some operators (e.g., bilinear upsample), and cause memory leaks on prolonged experiments, use it with caution.
 
 
 ## Output folder structure

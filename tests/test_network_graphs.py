@@ -13,9 +13,9 @@ train_hp = from_dict(data_class=TrainingHyperparametersConfig, data={
         "drop_path": 0.0,
         "softmax_dropout": 0.0,
         "optimizer": {
-                "type": "adamW",
-                "scheduler": "cd"
-            }
+            "type": "adamW",
+            "scheduler": "cd"
+        }
     })
 
 
