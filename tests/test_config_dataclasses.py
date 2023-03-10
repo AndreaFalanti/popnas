@@ -25,8 +25,8 @@ class TestConfigDataclasses(unittest.TestCase):
         "training_hyperparameters": {
             "epochs": 3,
             "learning_rate": 0.01,
-            "weight_reg": 5e-4,
-            "drop_path_prob": 0.0,
+            "weight_decay": 5e-4,
+            "drop_path": 0.0,
             "softmax_dropout": 0.0,
             "optimizer": {
                 "type": "adamW",
@@ -57,7 +57,6 @@ class TestConfigDataclasses(unittest.TestCase):
             "samples": 2000,
             "balance_class_losses": False,
             # "resize": {
-            #     "enabled": False,
             #     "width": 28,
             #     "height": 28
             # },

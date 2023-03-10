@@ -9,17 +9,13 @@ from utils.config_dataclasses import TrainingHyperparametersConfig, Architecture
 train_hp = from_dict(data_class=TrainingHyperparametersConfig, data={
         "epochs": 21,
         "learning_rate": 0.01,
-        "weight_reg": 5e-4,
-        "use_adamW": True,
-        "drop_path_prob": 0.0,
-        "cosine_decay_restart": {
-            "enabled": True,
-            "period_in_epochs": 3,
-            "t_mul": 2.0,
-            "m_mul": 1.0,
-            "alpha": 0.0
-        },
-        "softmax_dropout": 0.0
+        "weight_decay": 5e-4,
+        "drop_path": 0.0,
+        "softmax_dropout": 0.0,
+        "optimizer": {
+                "type": "adamW",
+                "scheduler": "cd"
+            }
     })
 
 
