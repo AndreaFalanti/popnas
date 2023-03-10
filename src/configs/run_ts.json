@@ -69,7 +69,7 @@
         "accuracy_predictor_ensemble_units": 5,
         "predictions_batch_size": 1024,
         "save_children_weights": false,
-        "save_children_as_onnx": false,
+        "save_children_models": false,
         "pnas_mode": false,
         "train_strategy": "GPU",
         "enable_XLA_compilation": false

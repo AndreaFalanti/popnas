@@ -69,7 +69,7 @@ class TestConfigDataclasses(unittest.TestCase):
             "accuracy_predictor_ensemble_units": 2,
             "predictions_batch_size": 512,
             "save_children_weights": False,
-            "save_children_as_onnx": False,
+            "save_children_models": False,
             "pnas_mode": False,
             "train_strategy": "GPU",
             # "enable_XLA_compilation": False

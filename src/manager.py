@@ -76,7 +76,7 @@ class NetworkManager:
         self.multi_output_csv_headers = [f'c{i}_{m.name}' for m in self.TrainingResults.keras_metrics_considered()
                                          for i in range(self.model_gen.get_maximum_cells())] + ['cell_spec']
 
-        self.save_onnx = others_config.save_children_as_onnx
+        self.save_all_models = others_config.save_children_models
         self.XLA_compile = others_config.enable_XLA_compilation
 
         # take 6 batches of size provided in config, used to test the inference time.
@@ -112,18 +112,15 @@ class NetworkManager:
         # for debugging keras layers, otherwise leave this commented since it will destroy performance
         # model.run_eagerly = True
 
-        if self.save_onnx:
-            save_keras_model_to_onnx(model, os.path.join(model_logdir, 'model.onnx'))
-            self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
-
         return model, self.model_gen.define_callbacks(model_logdir, self.score_objective)
 
-    def _save_model(self, model: Model):
-        ''' Save the model in ONNX format. Any previous model is automatically overwritten, leaving only the last model saved. '''
-        self._logger.info('Saving model...')
-        model.save(log_service.build_path('best_model', 'tf_model'))
-        save_keras_model_to_onnx(model, log_service.build_path('best_model', 'saved_model.onnx'))
-        self._logger.info('Model saved successfully')
+    def _save_model(self, model: Model, save_path: str):
+        ''' Save the model in ONNX format. Any previous model in the same path is automatically overwritten, leaving only the last model saved. '''
+        self._logger.info('Saving model at path: %s', save_path)
+        model.save(os.path.join(save_path, 'tf_model'))
+        self._logger.info('TF model saved successfully')
+        save_keras_model_to_onnx(model, os.path.join(save_path, 'model.onnx'))
+        self._logger.info('Equivalent ONNX model serialized successfully and saved to file')
 
     def bootstrap_dataset_lazy_initialization(self):
         '''
@@ -167,10 +164,10 @@ class NetworkManager:
 
         # create children folder for Tensorboard logs, grouped for block count and enumerated progressively
         self.current_network_id = self.current_network_id + 1
-        tb_logdir = log_service.build_path('sampled_models', f'B{len(cell_spec)}', str(self.current_network_id))
-        os.makedirs(tb_logdir, exist_ok=True)
+        model_logdir = log_service.build_path('sampled_models', f'B{len(cell_spec)}', str(self.current_network_id))
+        os.makedirs(model_logdir, exist_ok=True)
 
-        model, histories, times = self.train_model(cell_spec, tb_logdir)
+        model, histories, times = self.train_model(cell_spec, model_logdir)
 
         training_time = times.mean()
         total_params = model.count_params()
@@ -178,7 +175,7 @@ class NetworkManager:
         # TODO: bugged on Google Cloud TPU VMs, since they seems to lack CPU:0 device (hidden by environment or strategy?).
         #  Set to 0 on TPUs for now since it is only retrieved for additional analysis, take care if using FLOPs in algorithm.
         if not any(dim is None for dim in self.model_gen.input_shape) and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
-            flops = get_model_flops(model, os.path.join(tb_logdir, 'flops_log.txt'))
+            flops = get_model_flops(model, os.path.join(model_logdir, 'flops_log.txt'))
         else:
             flops = 0
 
@@ -193,11 +190,15 @@ class NetworkManager:
         training_res = self.TrainingResults.from_training_histories(cell_spec, training_time, inference_time, total_params, flops,
                                                                     histories, is_multi_output)
 
+        # save ONNX and TF models for each child, if the related flag is enabled in the JSON config
+        if self.save_all_models:
+            self._save_model(model, save_path=model_logdir)
+
         # write additional model files
-        fw.write_model_summary_file(cell_spec, flops, model, os.path.join(tb_logdir, 'summary.txt'))
+        fw.write_model_summary_file(cell_spec, flops, model, os.path.join(model_logdir, 'summary.txt'))
         partition_dict = self.model_gen.compute_network_partitions(cell_spec, tensor_dtype=tf.float32)
-        fw.write_partitions_file(partition_dict, os.path.join(tb_logdir, 'partitions.txt'))
-        plot_model(model, to_file=os.path.join(tb_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
+        fw.write_partitions_file(partition_dict, os.path.join(model_logdir, 'partitions.txt'))
+        plot_model(model, to_file=os.path.join(model_logdir, 'model.pdf'), show_shapes=True, show_layer_names=True)
         if is_multi_output:
             multi_output_csv_path = log_service.build_path('csv', 'multi_output.csv')
             write_multi_output_results_to_csv(multi_output_csv_path, cell_spec, histories,
@@ -209,19 +210,19 @@ class NetworkManager:
         # avoid saving ONNX on TPU (CPU:0 device not found, same as flops)
         if save_best_model and score > self.best_score and not isinstance(self.train_strategy, tf.distribute.TPUStrategy):
             self.best_score = score
-            self._save_model(model)
+            self._save_model(model, save_path=log_service.build_path('best_model'))
 
         perform_global_memory_clear()
 
         return training_res
 
-    def train_model(self, cell_spec: CellSpecification, tb_logdir: str):
+    def train_model(self, cell_spec: CellSpecification, model_logdir: str):
         '''
         Generate and train the model on all the dataset folds, returning the results of each training session.
 
         Args:
             cell_spec: cell specification
-            tb_logdir: log path for tensorboard callbacks
+            model_logdir: log path for saving tensorboard callbacks and other data related to the model
 
         Returns:
             the model, the training results for each session performed, and the training time for each session
@@ -236,7 +237,7 @@ class NetworkManager:
 
             # generate a CNN model given the cell specification
             # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
-            model, callbacks = self.__compile_model(cell_spec, tb_logdir)
+            model, callbacks = self.__compile_model(cell_spec, model_logdir)
 
             # add callback to register as accurate as possible the training time.
             # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the

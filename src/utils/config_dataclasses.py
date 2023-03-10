@@ -95,7 +95,7 @@ class OthersConfig:
     predictions_batch_size: int
     train_strategy: str
     save_children_weights: bool = False
-    save_children_as_onnx: bool = False
+    save_children_models: bool = False
     pnas_mode: bool = False
     enable_XLA_compilation: bool = False
 

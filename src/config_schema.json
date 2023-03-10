@@ -333,7 +333,7 @@
                 "save_children_weights": {
                     "type": "boolean"
                 },
-                "save_children_as_onnx": {
+                "save_children_models": {
                     "type": "boolean"
                 },
                 "pnas_mode": {
@@ -356,7 +356,7 @@
                 "accuracy_predictor_ensemble_units",
                 "predictions_batch_size",
                 "save_children_weights",
-                "save_children_as_onnx",
+                "save_children_models",
                 "pnas_mode",
                 "train_strategy"
             ]
