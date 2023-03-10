@@ -10,7 +10,7 @@ RUN pip install poetry==${POETRY_VERSION}
 RUN poetry export --without-hashes --no-interaction --no-ansi --with server -o requirements.txt
 
 
-FROM tensorflow/tensorflow:2.8.4-gpu
+FROM tensorflow/tensorflow:2.10.1-gpu
 
 ENV PYTHONFAULTHANDLER=1 \
   PYTHONUNBUFFERED=1 \

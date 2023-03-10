@@ -6,3 +6,4 @@ src/logs/
 build/
 .venv/
 .github/
+tests/
