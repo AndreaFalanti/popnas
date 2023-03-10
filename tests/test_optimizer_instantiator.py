@@ -37,7 +37,8 @@ class TestOptimizerInstantiator(unittest.TestCase):
         self.assertEqual(wd_scheduler._t_mul, 2.0)
         self.assertEqual(wd_scheduler._m_mul, 1.0)
 
-        lr_scheduler, wd_scheduler = build_scheduler('cdr: 3 t_mul, 0.9 m_mul, 0.1 alpha', learning_rate, weight_decay, training_steps_per_epoch, epochs)
+        lr_scheduler, wd_scheduler = build_scheduler('cdr: 2 period, 2 t_mul, 0.9 m_mul, 0.1 alpha', learning_rate, weight_decay,
+                                                     training_steps_per_epoch, epochs)
         self.assertIsInstance(lr_scheduler, CosineDecayRestarts)
         self.assertIsInstance(wd_scheduler, CosineDecayRestarts)
         self.assertEqual(lr_scheduler.alpha, 0.1)

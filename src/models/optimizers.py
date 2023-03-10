@@ -26,13 +26,14 @@ def build_scheduler(scheduler_str: str, learning_rate: float, weight_decay: floa
 
     # Cosine Decay Restart
     match = re.compile(
-        rf'cdr:?(?: (?P<t_mul>{decimal_regex}) t_mul)?,?(?: (?P<m_mul>{decimal_regex}) m_mul)?,?(?: (?P<alpha>{decimal_regex}) alpha)?') \
+        rf'cdr:?(?: (?P<period>\d+) period)?,?(?: (?P<t_mul>{decimal_regex}) t_mul)?,?(?: (?P<m_mul>{decimal_regex}) m_mul)?,?(?: (?P<alpha>{decimal_regex}) alpha)?') \
         .match(scheduler_str)
     if match:
+        period = get_group_or_default(match, 'period', 3)
         t_mul = get_group_or_default(match, 't_mul', 2.0)
         m_mul = get_group_or_default(match, 'm_mul', 1.0)
         alpha = get_group_or_default(match, 'alpha', 0.0)
-        decay_steps = training_steps_per_epoch * t_mul
+        decay_steps = training_steps_per_epoch * period
 
         return schedules.CosineDecayRestarts(learning_rate, decay_steps, t_mul=t_mul, m_mul=m_mul, alpha=alpha), \
             schedules.CosineDecayRestarts(weight_decay, decay_steps, t_mul=t_mul, m_mul=m_mul, alpha=alpha)
