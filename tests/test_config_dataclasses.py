@@ -22,23 +22,19 @@ class TestConfigDataclasses(unittest.TestCase):
             "score_metric": "accuracy",
             "additional_pareto_objectives": ["time", "params"]
         },
-        "cnn_hp": {
+        "training_hyperparameters": {
             "epochs": 3,
             "learning_rate": 0.01,
-            "filters": 24,
             "weight_reg": 5e-4,
-            "use_adamW": True,
             "drop_path_prob": 0.0,
-            "cosine_decay_restart": {
-                "enabled": False,
-                "period_in_epochs": 3,
-                "t_mul": 2.0,
-                "m_mul": 1.0,
-                "alpha": 0.0
-            },
-            "softmax_dropout": 0.0
+            "softmax_dropout": 0.0,
+            "optimizer": {
+                "type": "adamW",
+                "scheduler": "cd"
+            }
         },
-        "architecture_parameters": {
+        "architecture_hyperparameters": {
+            "filters": 24,
             "motifs": 2,
             "normal_cells_per_motif": 1,
             "block_join_operator": "add",
@@ -82,20 +78,12 @@ class TestConfigDataclasses(unittest.TestCase):
     }
 
     post_search_partial_config = {
-        "cnn_hp": {
+        "training_hyperparameters": {
             "epochs": 5,
-            "use_adamW": True,
             "drop_path_prob": 0.2,
-            "cosine_decay_restart": {
-                "enabled": False,
-                "period_in_epochs": 2,
-                "t_mul": 2.0,
-                "m_mul": 1.0,
-                "alpha": 0.0
-            },
             "softmax_dropout": 0.0
         },
-        "architecture_parameters": {
+        "architecture_hyperparameters": {
             "multi_output": True
         },
         "dataset": {
