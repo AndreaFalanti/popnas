@@ -6,12 +6,16 @@ from typing import Optional, List
 
 
 @dataclass
-class CosineDecayRestartDict:
-    enabled: bool
-    period_in_epochs: int
-    t_mul: float
-    m_mul: float
-    alpha: float
+class LookaheadDict:
+    sync_period: int
+    slow_step_size: float
+
+
+@dataclass
+class OptimizerDict:
+    type: str
+    scheduler: Optional[str]
+    lookahead: Optional[LookaheadDict]
 
 
 @dataclass
@@ -48,10 +52,9 @@ class TrainingHyperparametersConfig:
     epochs: int
     learning_rate: float
     weight_reg: float
-    use_adamW: bool
     drop_path_prob: float
-    cosine_decay_restart: CosineDecayRestartDict
     softmax_dropout: float
+    optimizer: OptimizerDict
 
 
 @dataclass

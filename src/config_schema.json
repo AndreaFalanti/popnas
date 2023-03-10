@@ -77,40 +77,48 @@
                     "type": "number",
                     "minimum": 0
                 },
-                "use_adamW": {
-                    "type": "boolean"
-                },
                 "drop_path_prob": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                 },
-                "cosine_decay_restart": {
+                "optimizer": {
                     "type": "object",
                     "properties": {
-                        "enabled": {
-                            "type": "boolean"
+                        "type": {
+                            "type": "string"
                         },
-                        "period_in_epochs": {
-                            "type": "integer",
-                            "minimum": 1
+                        "scheduler": {
+                            "oneOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
                         },
-                        "t_mul": {
-                            "type": "number"
-                        },
-                        "m_mul": {
-                            "type": "number"
-                        },
-                        "alpha": {
-                            "type": "number"
+                        "lookahead": {
+                            "oneOf": [
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "sync_period": {
+                                            "type": "integer"
+                                        },
+                                        "slow_step_size": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
                         }
                     },
                     "required": [
-                        "enabled",
-                        "period_in_epochs",
-                        "t_mul",
-                        "m_mul",
-                        "alpha"
+                        "type"
                     ]
                 },
                 "softmax_dropout": {
@@ -123,9 +131,8 @@
                 "epochs",
                 "learning_rate",
                 "weight_reg",
-                "use_adamW",
                 "drop_path_prob",
-                "cosine_decay_restart",
+                "optimizer",
                 "softmax_dropout"
             ]
         },

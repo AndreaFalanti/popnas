@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Optional, Type, NamedTuple
 
 import tensorflow as tf
-import tensorflow_addons as tfa
 from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, callbacks, Model, Sequential
 
 import log_service
@@ -13,10 +12,12 @@ import models.operators.layers as ops
 import utils.tensor_utils as tu
 from models.graphs.network_graph import NetworkGraph
 from models.operators.op_instantiator import OpInstantiator
+from models.optimizers import instantiate_optimizer_and_schedulers
 from models.results.base import BaseTrainingResults
 from search_space import CellSpecification
 from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
 from utils.func_utils import elementwise_mult
+from utils.nn_utils import support_weight_decay
 
 
 class WrappedTensor(NamedTuple):
@@ -73,11 +74,10 @@ class BaseModelGenerator(ABC):
 
         self.lr = train_hp.learning_rate
         self.wr = train_hp.weight_reg
-        self.use_adamW = train_hp.use_adamW
-        self.l2_weight_reg = regularizers.l2(self.wr) if (self.wr is not None and not self.use_adamW) else None
+        self.l2_weight_reg = regularizers.l2(self.wr) if (self.wr is not None and not support_weight_decay(train_hp.optimizer.type)) else None
         self.drop_path_keep_prob = 1.0 - train_hp.drop_path_prob
         self.dropout_prob = train_hp.softmax_dropout  # dropout probability on final softmax
-        self.cdr_config = train_hp.cosine_decay_restart
+        self.optimizer_config = train_hp.optimizer
         self.filters_ratio = self.filters / self.input_shape[-1]  # the filters expansion ratio applied between input and first layer
 
         self.save_weights = save_weights
@@ -629,19 +629,7 @@ class BaseModelGenerator(ABC):
         # accuracy is better as string, since it automatically converted to binary or categorical based on loss
         model_metrics = self._get_metrics()
 
-        if self.cdr_config.enabled:
-            decay_period = self.training_steps_per_epoch * self.cdr_config.period_in_epochs
-            lr_schedule = optimizers.schedules.CosineDecayRestarts(self.lr, decay_period, self.cdr_config.t_mul,
-                                                                   self.cdr_config.m_mul, self.cdr_config.alpha)
-            # weight decay for adamW, if used
-            wd_schedule = optimizers.schedules.CosineDecayRestarts(self.wr, decay_period, self.cdr_config.t_mul,
-                                                                   self.cdr_config.m_mul, self.cdr_config.alpha)
-        # if cosine decay restart is not enabled, use cosine decay restart
-        else:
-            lr_schedule = optimizers.schedules.CosineDecay(self.lr, self.training_steps_per_epoch * self.epochs)
-            wd_schedule = optimizers.schedules.CosineDecay(self.wr, self.training_steps_per_epoch * self.epochs)
-
-        optimizer = tfa.optimizers.AdamW(wd_schedule, lr_schedule) if self.use_adamW else optimizers.Adam(learning_rate=lr_schedule)
+        optimizer = instantiate_optimizer_and_schedulers(self.optimizer_config, self.lr, self.wr, self.training_steps_per_epoch, self.epochs)
 
         return loss, loss_weights, optimizer, model_metrics
 

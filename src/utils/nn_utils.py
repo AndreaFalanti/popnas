@@ -111,6 +111,10 @@ def save_keras_model_to_onnx(model: Model, save_path: str):
     tf2onnx.convert.from_keras(model, opset=13, output_path=save_path)
 
 
+def support_weight_decay(optimizer_str: str):
+    return any(optimizer_str.startswith(opt) for opt in ['adamW', 'SGDW', 'radam'])
+
+
 def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int, normalize: bool):
     # if normalize is set, normalize the rows (true values)
     cmat = confusion_matrix(y_true, y_pred, normalize='true' if normalize else None)
