@@ -52,14 +52,15 @@ def get_dataset_labels_distribution(ds: tf.data.Dataset) -> 'dict[int, float]':
     ''' Returns the percentage of samples associated to each label of the dataset. '''
     label_counter = Counter()
 
-    for (x, y) in ds:
-        # from one-hot to int
-        labels = np.argmax(y, axis=-1)
+    for x, y in ds:
+        y_is_sparse_label = tf.shape(y)[-1] == 1
+        # if not a sparse label, perform one-hot to int
+        labels = y.numpy() if y_is_sparse_label else np.argmax(y, axis=-1)
         # flatten is required for cases where the labels are multidimensional (e.g. segmentation masks, which have a label for each image pixel)
         label_counter.update(labels.flatten())
 
     percentages_dict = {}
-    for (k, v) in label_counter.items():
+    for k, v in label_counter.items():
         percentages_dict[k] = v / sum(label_counter.values())
 
     return percentages_dict
@@ -81,10 +82,19 @@ def generate_sample_weights_from_class_weights(ds: tf.data.Dataset):
     class_weights = generate_balanced_weights_for_classes(ds)
 
     def map_sample_weights(x: tf.Tensor, y: tf.Tensor):
-        y_labels = tf.argmax(y, axis=-1)
-        class_weights_arr = [class_weights[key] for key in sorted(class_weights.keys())]
-        sample_weight = tf.gather(class_weights_arr, indices=y_labels)
+        y_is_sparse_label = tf.shape(y)[-1] == 1
 
-        return x, y, tf.expand_dims(sample_weight, axis=-1)
+        # if not a sparse label, perform one-hot to int
+        y_labels = tf.cast(y, dtype=tf.int32) if y_is_sparse_label else tf.argmax(y, axis=-1, output_type=tf.int32)
+        # the gather function is duplicated, but leave it as it is.
+        # TF autograph needs variables with different shapes to have different names, so the class weights must have different names to work!
+        if y_is_sparse_label:
+            sparse_class_weights_arr = [class_weights.get(i, 0.0) for i in range(max(class_weights.keys()) + 1)]
+            sample_weight = tf.gather(sparse_class_weights_arr, indices=y_labels)
+        else:
+            class_weights_arr = [class_weights[key] for key in sorted(class_weights.keys())]
+            sample_weight = tf.gather(class_weights_arr, indices=y_labels)
+
+        return x, y, sample_weight
 
     return ds.map(map_sample_weights, num_parallel_calls=tf.data.AUTOTUNE)
