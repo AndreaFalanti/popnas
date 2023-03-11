@@ -14,7 +14,7 @@
             "5x5:4dr conv",
             "2x2 maxpool",
             "2x2 avgpool",
-            "8 SE"
+            "8r SE"
         ]
     },
     "search_strategy": {
