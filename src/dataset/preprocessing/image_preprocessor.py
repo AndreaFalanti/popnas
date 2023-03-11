@@ -43,14 +43,14 @@ class ImagePreprocessor(DataPreprocessor):
                     # get spatial dims (HW), avoid first dim if the dataset is batched (should be 4 dims)
                     h, w = shape[0], shape[1]  # if len(shape) == 3 else shape[1:3]
 
-                    padding_y = self.pad_to_multiples_of - (h % self.pad_to_multiples_of)
-                    padding_x = self.pad_to_multiples_of - (w % self.pad_to_multiples_of)
+                    remainder_y = h % self.pad_to_multiples_of
+                    remainder_x = w % self.pad_to_multiples_of
+                    padding_y = 0 if remainder_y == 0 else self.pad_to_multiples_of - remainder_y
+                    padding_x = 0 if remainder_x == 0 else self.pad_to_multiples_of - remainder_x
 
                     pads_y = [tf.math.ceil(padding_y / 2), tf.math.floor(padding_y / 2)]
                     pads_x = [tf.math.ceil(padding_x / 2), tf.math.floor(padding_x / 2)]
                     padding = [pads_y, pads_x, [0, 0]]
-                    # if len(shape) == 4:
-                    #     padding.insert(0, [0, 0])
 
                     image = tf.pad(image, padding)
                     label = tf.pad(label, padding) if self.resize_labels else label

@@ -127,7 +127,7 @@ class BaseDatasetGenerator(ABC):
 
         # create a batched dataset (if batch is provided, otherwise is assumed to be already batched)
         if batch_size is not None:
-            # make all batches of the same size, avoids "drop_remainder" to not loss data, instead duplicates some samples
+            # make all batches of the same size, avoids "drop_remainder" to not lose data, instead duplicates some samples
             remainder = len(ds) % batch_size
             if self.optimize_for_xla_compilation and remainder != 0:
                 duplicated_samples_count = batch_size - remainder
