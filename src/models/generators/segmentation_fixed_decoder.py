@@ -6,7 +6,7 @@ from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.graphs.network_graph import NetworkGraph
-from models.operators.layers import AtrousSpatialPyramidPooling, Convolution
+from models.operators.layers import AtrousSpatialPyramidPooling, Convolution, PoolingConv, Pooling
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
 from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
@@ -139,6 +139,11 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
         if add_imagenet_stem:
             self._logger.warn('ImageNet stem is not supported in segmentation networks, the argument is ignored.')
 
+        # build encoder in empty cell case, to downsample the tensor before using ASPP and perform it on the same dimensionality
+        # this step is important to closely get the training time required by elements shared by all architectures
+        if M == 0:
+            cell_inputs, level_outputs, filters = self._build_empty_cell_fake_encoder(cell_inputs)
+
         # ENCODER part of the U-net structure
         # add M times N normal cells and a reduction cell (except in the last motif where the reduction cell is skipped)
         for motif_index in range(M):
@@ -162,31 +167,56 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
 
         # DECODER part (fixed)
         # Inspired by DeepLab, upsample progressively with steps of factor 4
-        if M > 0:
-            reductions = M - 1
-            upscale_factors = [4] * (reductions // 2)
-            # when using an odd number of reductions, the last upsample will have a 2x upsample
-            if reductions % 2 == 1:
-                upscale_factors.append(2)
+        reductions = self.motifs - 1
+        upscale_factors = [4] * (reductions // 2)
+        # when using an odd number of reductions, the last upsample will have a 2x upsample
+        if reductions % 2 == 1:
+            upscale_factors.append(2)
 
-            # leave out the last upsample factor, which does not require a decoder unit
-            decoder_out = encoder_out
-            for i, upsample_factor in enumerate(upscale_factors[:-1]):
-                encoder_level_pos = - 2 * (i + 1)
-                encoder_t = level_outputs[encoder_level_pos]
-                decoder_out = self.build_decoder_fixed_cell(upsample_factor, filters, decoder_out, encoder_t, i)
+        # leave out the last upsample factor, which does not require a decoder unit
+        decoder_out = encoder_out
+        for i, upsample_factor in enumerate(upscale_factors[:-1]):
+            encoder_level_pos = - 2 * (i + 1)
+            encoder_t = level_outputs[encoder_level_pos]
+            decoder_out = self.build_decoder_fixed_cell(upsample_factor, filters, decoder_out, encoder_t, i)
 
-            # last_output_tensor = self.op_instantiator.generate_transpose_conv(filters, upscale_factors[-1],
-            #                                                                   name='final_upscale')(decoder_out.tensor)
-            last_output_tensor = self.op_instantiator.generate_linear_upsample(upscale_factors[-1],
-                                                                               name='final_upscale')(decoder_out.tensor)
-            last_output = WrappedTensor(last_output_tensor, [1, 1, filters / self.filters_ratio])
-        # empty cell case
-        else:
-            last_output = encoder_out
+        # last_output_tensor = self.op_instantiator.generate_transpose_conv(filters, upscale_factors[-1],
+        #                                                                   name='final_upscale')(decoder_out.tensor)
+        last_output_tensor = self.op_instantiator.generate_linear_upsample(upscale_factors[-1],
+                                                                           name='final_upscale')(decoder_out.tensor)
+        last_output = WrappedTensor(last_output_tensor, [1, 1, filters / self.filters_ratio])
 
         model = self._finalize_model(model_input, last_output)
         return model, self._get_output_names()
+
+    def _build_empty_cell_fake_encoder(self, cell_inputs: 'list[WrappedTensor]'):
+        '''
+        Build encoder for the empty cell case, downsampling the tensor before using the ASPP module.
+
+        In this way, the ASPP is performed on the same dimensionality of other networks;
+        this step is important to closely get the training time required by elements shared by all architectures.
+        '''
+        filters = self.filters
+        decoder_needed_level_indexes = range(self.motifs - 1, 0, -2)
+        cur_shape = [1, 1, self.filters_ratio]
+        fake_encoder_units = []
+        t = cell_inputs[-1]
+
+        for i in range(self.motifs):
+            if i in decoder_needed_level_indexes:
+                pool_factor = 2 if i == 1 else 4
+                filters = filters * pool_factor
+                # avg pooling + pointwise, quick operation to reshape the tensor
+                pool_size = pool_stride = tuple([pool_factor] * self.op_dims)
+                downsampled_tensor = PoolingConv(Pooling('avg', pool_size, pool_stride, name=f'empty_cell_fake_encoder_unit_{i}'),
+                                                 filters, weight_reg=self.l2_weight_reg)(t.tensor)
+                cur_shape = elementwise_mult(cur_shape, [1 / pool_factor, 1 / pool_factor, pool_factor])
+                t = WrappedTensor(downsampled_tensor, cur_shape)
+                fake_encoder_units.append(t)
+            else:
+                fake_encoder_units.append(None)
+
+        return [fake_encoder_units[-1]], fake_encoder_units[:-1], filters
 
     def build_decoder_fixed_cell(self, upsample_factor: int, filters: int, decoder_input: WrappedTensor, encoder_level: WrappedTensor,
                                  decoder_index: int):
