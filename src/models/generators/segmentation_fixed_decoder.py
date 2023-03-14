@@ -23,8 +23,8 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
     Do not set the XLA compilation flag in config, otherwise it will cause an error during model building!
     '''
 
-    def __init__(self, train_hp: TrainingHyperparametersConfig, arc_hp: ArchitectureHyperparametersConfig, training_steps_per_epoch: int, output_classes_count: int,
-                 input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
+    def __init__(self, train_hp: TrainingHyperparametersConfig, arc_hp: ArchitectureHyperparametersConfig, training_steps_per_epoch: int,
+                 output_classes_count: int, input_shape: 'tuple[int, ...]', data_augmentation_model: Optional[Sequential] = None,
                  preprocessing_model: Optional[Sequential] = None, save_weights: bool = False, ignore_class: Optional[int] = None):
         super().__init__(train_hp, arc_hp, training_steps_per_epoch, output_classes_count, input_shape, data_augmentation_model,
                          preprocessing_model, save_weights)
@@ -42,8 +42,8 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
         used_cell_indexes = list(range(total_cells))[::nearest_lookback]
 
         reduction_cell_indexes = list(range(self.normal_cells_per_motif, total_cells, self.normal_cells_per_motif + 1))
-        need_input_norm_indexes = [el - min(cell_spec.used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape\
-                else []
+        need_input_norm_indexes = [el - min(cell_spec.used_lookbacks) - 1 for el in reduction_cell_indexes] if use_skip and self.lookback_reshape \
+            else []
 
         return NetworkBuildInfo(cell_spec, blocks, used_cell_indexes, reduction_cell_indexes, need_input_norm_indexes)
 
@@ -156,7 +156,8 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
                 cell_inputs = self._build_cell_util(filters, cell_inputs, reduction=True)
 
         # apply spatial pyramid pooling on encoder bottleneck
-        aspp = AtrousSpatialPyramidPooling(filters, dilation_rates=(3, 6, 12), weight_reg=self.l2_weight_reg)(cell_inputs[-1].tensor)
+        aspp = AtrousSpatialPyramidPooling(filters, dilation_rates=(3, 6, 12), filters_ratio=0.5,
+                                           weight_reg=self.l2_weight_reg)(cell_inputs[-1].tensor)
         encoder_out = WrappedTensor(aspp, cell_inputs[-1].shape)
 
         # DECODER part (fixed)

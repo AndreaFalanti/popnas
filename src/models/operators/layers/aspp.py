@@ -38,7 +38,7 @@ class ImagePooling(Layer):
 
 
 class AtrousSpatialPyramidPooling(Layer):
-    def __init__(self, filters: int, dilation_rates: 'tuple[int, int, int]',
+    def __init__(self, filters: int, dilation_rates: 'tuple[int, int, int]', filters_ratio: float = 1,
                  weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='ASPP', **kwargs):
         '''
         ASPP layer.
@@ -49,15 +49,18 @@ class AtrousSpatialPyramidPooling(Layer):
         self.dilation_rates = dilation_rates
         self.weight_reg = weight_reg
         self.activation_f = activation_f
+        self.filters_ratio = filters_ratio
 
-        self.conv_1x1 = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_reg=weight_reg, activation_f=activation_f)
-        self.conv_3x3_1 = Convolution(filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[0],
+        op_filters = int(filters * filters_ratio)
+
+        self.conv_1x1 = Convolution(op_filters, kernel=(1, 1), strides=(1, 1), weight_reg=weight_reg, activation_f=activation_f)
+        self.conv_3x3_1 = Convolution(op_filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[0],
                                       weight_reg=weight_reg, activation_f=activation_f)
-        self.conv_3x3_2 = Convolution(filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[1],
+        self.conv_3x3_2 = Convolution(op_filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[1],
                                       weight_reg=weight_reg, activation_f=activation_f)
-        self.conv_3x3_3 = Convolution(filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[2],
+        self.conv_3x3_3 = Convolution(op_filters, kernel=(3, 3), strides=(1, 1), dilation_rate=dilation_rates[2],
                                       weight_reg=weight_reg, activation_f=activation_f)
-        self.image_pool = ImagePooling(filters, weight_reg=weight_reg, activation_f=activation_f)
+        self.image_pool = ImagePooling(op_filters, weight_reg=weight_reg, activation_f=activation_f)
 
         self.bottleneck = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_reg=weight_reg, activation_f=activation_f)
 
@@ -76,6 +79,7 @@ class AtrousSpatialPyramidPooling(Layer):
         config.update({
             'filters': self.filters,
             'dilation_rates': self.dilation_rates,
+            'filters_ratio': self.filters_ratio,
             'weight_reg': self.weight_reg,
             'activation_f': self.activation_f
         })
