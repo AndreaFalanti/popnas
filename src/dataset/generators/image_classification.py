@@ -4,15 +4,16 @@ from typing import Optional
 
 import numpy as np
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, Sequential
 from tensorflow.keras.utils import image_dataset_from_directory
 
 from dataset.augmentation import get_image_data_augmentation_model, get_image_classification_tf_data_aug
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, DatasetsFold
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, DatasetsFold, generate_dataset_from_tfds, \
+    generate_train_val_datasets_from_tfds
 from dataset.preprocessing import ImagePreprocessor
 from utils.config_dataclasses import DatasetConfig
+from utils.func_utils import filter_none
 
 
 class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
@@ -54,33 +55,6 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         image_shape = x_train.shape[1:]
 
         return (x_train, y_train), (x_test, y_test), classes_count, image_shape, channels
-
-    def __generate_datasets_from_tfds(self):
-        # EuroSAT have only the train split, but conventionally the last 20% of samples is used as the test set
-        # (27000 total, 21600 for train, last 5400 for test)
-        if self.dataset_name == 'eurosat/rgb':
-            split_spec = 'train[:21600]' if self.samples_limit is None else f'train[:{min(21600, self.samples_limit)}]'
-        else:
-            split_spec = 'train' if self.samples_limit is None else f'train[:{self.samples_limit}]'
-
-        train_ds, info = tfds.load(self.dataset_name, split=split_spec, as_supervised=True, shuffle_files=True, with_info=True,
-                                   read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
-
-        if self.val_size is None:
-            val_split_spec = 'validation' if self.samples_limit is None else f'validation[:{self.samples_limit}]'
-            val_ds = tfds.load(self.dataset_name, split=val_split_spec, as_supervised=True, shuffle_files=True,
-                               read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
-        else:
-            samples_count = self.samples_limit or info.splits['train'].num_examples
-            if self.dataset_name == 'eurosat/rgb':
-                samples_count = 21600
-
-            train_samples = math.ceil(samples_count * (1 - self.val_size))
-
-            val_ds = train_ds.skip(train_samples)
-            train_ds = train_ds.take(train_samples)
-
-        return train_ds, val_ds, info
 
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
@@ -163,7 +137,14 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
             # TFDS case
             else:
-                train_ds, val_ds, info = self.__generate_datasets_from_tfds()
+                # EuroSAT have only the train split, but conventionally the last 20% of samples is used as the test set
+                # (27000 total samples, 21600 for train, last 5400 samples for test)
+                if self.dataset_name == 'eurosat/rgb':
+                    samples_limit = min(filter_none(21600, self.samples_limit), default=None)
+                else:
+                    samples_limit = self.samples_limit
+
+                train_ds, val_ds, info = generate_train_val_datasets_from_tfds(self.dataset_name, samples_limit, self.val_size)
 
                 image_shape = info.features['image'].shape if self.resize_dim is None else self.resize_dim + (info.features['image'].shape[2],)
                 classes = info.features['label'].num_classes
@@ -220,14 +201,13 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
         # TFDS case
         else:
-            # EuroSAT use the last 20% of samples as test, it isn't directly separated in multiple splits
+            # EuroSAT uses the last 20% of samples as test, it isn't directly separated in multiple splits
             if self.dataset_name == 'eurosat/rgb':
                 split_name = 'train[21600:]'
             else:
                 split_name = 'test'
 
-            test_ds, info = tfds.load(self.dataset_name, split=split_name, as_supervised=True, shuffle_files=False, with_info=True,
-                                      read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+            test_ds, info = generate_dataset_from_tfds(self.dataset_name, split_name, samples_limit=None)
 
             image_shape = info.features['image'].shape if self.resize_dim is None else self.resize_dim + (info.features['image'].shape[2],)
             classes = info.features['label'].num_classes
@@ -283,14 +263,15 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
         # TFDS case
         else:
-            # EuroSAT use the last 20% of samples as test, it isn't directly separated in multiple splits. Use the first 80% as train+val.
+            # EuroSAT uses the last 20% of samples as test, it isn't directly separated in multiple splits. Use the first 80% as train+val.
             if self.dataset_name == 'eurosat/rgb':
-                tfds_split = 'train[:21600]'
+                split_name = 'train'
+                samples_limit = min(filter_none(21600, self.samples_limit), default=None)
             else:
-                tfds_split = 'train+validation' if self.val_size is None else 'train'
+                split_name = 'train+validation' if self.val_size is None else 'train'
+                samples_limit = self.samples_limit
 
-            train_ds, info = tfds.load(self.dataset_name, split=tfds_split, as_supervised=True, shuffle_files=True, with_info=True,
-                                       read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+            train_ds, info = generate_dataset_from_tfds(self.dataset_name, split_name, samples_limit, shuffle=True)
 
             image_shape = info.features['image'].shape if self.resize_dim is None else self.resize_dim + (info.features['image'].shape[2],)
             classes = info.features['label'].num_classes

@@ -1,8 +1,10 @@
+import math
 from abc import ABC, abstractmethod
 from typing import Optional, Callable, NamedTuple
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from tensorflow.keras import Sequential
 
 import log_service
@@ -62,6 +64,33 @@ def generate_possibly_ragged_dataset(x: np.ndarray, y: np.ndarray) -> tf.data.Da
         return generate_tf_dataset_from_numpy_ragged_array(x, y, dtype=None)
     else:
         return tf.data.Dataset.from_tensor_slices((x, y))
+
+
+def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Optional[int], val_size: Optional[float]):
+    split_spec = 'train' if samples_limit is None else f'train[:{samples_limit}]'
+    train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=True, with_info=True,
+                               read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+    if val_size is None:
+        val_split_spec = 'validation' if samples_limit is None else f'validation[:{samples_limit}]'
+        val_ds = tfds.load(dataset_name, split=val_split_spec, as_supervised=True, shuffle_files=True,
+                           read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
+    else:
+        samples_count = samples_limit or info.splits['train'].num_examples
+        train_samples = math.ceil(samples_count * (1 - val_size))
+
+        val_ds = train_ds.skip(train_samples)
+        train_ds = train_ds.take(train_samples)
+
+    return train_ds, val_ds, info
+
+
+def generate_dataset_from_tfds(dataset_name: str, split_spec: str, samples_limit: Optional[int], shuffle: bool = False):
+    split_spec = split_spec if samples_limit is None else f'{split_spec}[:{samples_limit}]'
+    ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=True, shuffle_files=shuffle, with_info=True,
+                         read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
+
+    return ds, info
 
 
 class BaseDatasetGenerator(ABC):

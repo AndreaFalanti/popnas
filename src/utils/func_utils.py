@@ -125,3 +125,7 @@ def run_as_sequential_process(f: Callable, args: tuple = (), kwargs: dict = None
     process = Process(target=f, args=args, kwargs=kwargs)
     process.start()
     process.join()
+
+
+def filter_none(*args):
+    return iter(n for n in args if n is not None)
