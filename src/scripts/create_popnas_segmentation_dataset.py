@@ -80,7 +80,7 @@ def convert_mask(mask: Image, masks_palette: set, target_type: str):
         raise AttributeError('Not supported conversion target type')
 
 
-def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: Optional[int] = None):
+def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: Optional[int] = None, save_as_ragged: bool = False):
     '''
     Generate a segmentation dataset in a standardized .npz format, easily readable by POPNAS.
     Each split should be placed in a folder, with subfolders for RGB images and masks.
@@ -91,6 +91,7 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
          and one named 'masks', with PNG segmentation masks.
         masks_conversion_mode: conversion mode for masks
         resize_min_axis: optional parameter to resize the smallest axis of images and masks to the provided value, preserving the aspect ratio.
+        save_as_ragged: save the numpy array with object type, if it is ragged.
     '''
     first_split_masks_folder = os.path.join(ds_folders[0], 'masks')
 
@@ -140,8 +141,11 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
         print('Saving NPZ archive...')
         name_suffix = '' if resize_min_axis is None else str(resize_min_axis)
         save_name = f'{os.path.basename(ds_folder)}{name_suffix}'
-        # arrays could be ragged (different image shapes), so use object as dtype
-        np.savez_compressed(os.path.join(ds_folder, save_name), x=np.asarray(X, dtype=object), y=np.asarray(Y, dtype=object))
+        # use object as dtype if arrays are ragged
+        if save_as_ragged:
+            np.savez_compressed(os.path.join(ds_folder, save_name), x=np.asarray(X, dtype=object), y=np.asarray(Y, dtype=object))
+        else:
+            np.savez_compressed(os.path.join(ds_folder, save_name), x=np.asarray(X), y=np.asarray(Y))
         print('NPZ archive saved successfully!')
 
 
@@ -151,6 +155,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', metavar='MASK_CONVERSION_MODE', help='2 letters separated by colon, first is original format, second is target format. '
                                                                    'Supported values: R for RGB, T for tensor.', required=True)
     parser.add_argument('-r', metavar='RESIZE_MIN_AXIS', type=int, help="the target size for smallest axis of the image", default=None)
+    parser.add_argument('--ragged', action='store_true', help="use it if the images have different sizes", default=False)
     args = parser.parse_args()
 
-    main(args.p, args.m, args.r)
+    main(args.p, args.m, args.r, args.ragged)
