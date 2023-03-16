@@ -135,12 +135,16 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
     with open(custom_json_path, 'r') as f:
         ms_partial_config = json.load(f)  # type: dict
         
-    ms_config_dict = merge(search_config, ms_partial_config)
+    ms_config_dict = merge({}, search_config, ms_partial_config)
     ms_config = from_dict(data_class=RunConfig, data=ms_config_dict)
+
+    # force models to be multi-output (all post-search models have a secondary exit for improving generalization)
+    ms_config.architecture_hyperparameters.multi_output = True
 
     # set custom batch size, if present
     if batch_size is not None:
-        ms_config.training_hyperparameters.learning_rate = ms_config.training_hyperparameters.learning_rate * (batch_size / ms_config.dataset.batch_size)
+        ms_config.training_hyperparameters.learning_rate = ms_config.training_hyperparameters.learning_rate * \
+                                                           (batch_size / ms_config.dataset.batch_size)
         ms_config.dataset.batch_size = batch_size
 
     # initialize train strategy (try-except to be retrocompatible with the previous config format)
