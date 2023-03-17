@@ -44,6 +44,7 @@ class GCNPredictor(SpektralPredictor):
         # global_feat = ExtractLastNodeFeatures(config['f3'])(gconv3)
         global_feat = g_layers.GlobalAvgPool()(gconv3)
         dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg)(global_feat)
-        score = layers.Dense(1, activation=activations.sigmoid)(dense)
+        score = layers.Dense(1, kernel_regularizer=weight_reg)(dense)
+        out = layers.Activation(self.output_activation)(score)
 
-        return Model(inputs=[node_features, adj_matrix], outputs=score)
+        return Model(inputs=[node_features, adj_matrix], outputs=out)

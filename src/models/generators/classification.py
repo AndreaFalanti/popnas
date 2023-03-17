@@ -68,8 +68,9 @@ class ClassificationModelGenerator(BaseModelGenerator):
             gap = layers.Dropout(dropout_prob)(gap)
 
         output_name = self.get_output_layers_name()
-        output = layers.Dense(self.output_classes_count, activation='softmax', kernel_regularizer=self.l2_weight_reg,
-                              name=f'{output_name}{name_suffix}')(gap)
+        logits = layers.Dense(self.output_classes_count, activation=None, kernel_regularizer=self.l2_weight_reg,
+                              name=f'logits{name_suffix}')(gap)
+        output = layers.Activation('softmax', dtype='float32', name=f'{output_name}{name_suffix}')(logits)
 
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output

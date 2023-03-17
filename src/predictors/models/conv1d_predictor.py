@@ -45,9 +45,10 @@ class Conv1DPredictor(KerasPredictor):
 
         flatten = layers.Flatten()(block_temp_conv)
         sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
-        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=weight_reg)(sig_dense)
+        score = layers.Dense(1, kernel_regularizer=weight_reg)(sig_dense)
+        out = layers.Activation(self.output_activation)(score)
 
-        return Model(inputs=(inputs, ops), outputs=score)
+        return Model(inputs=(inputs, ops), outputs=out)
 
     def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
                           use_data_augmentation: bool = True, validation_split: bool = True,

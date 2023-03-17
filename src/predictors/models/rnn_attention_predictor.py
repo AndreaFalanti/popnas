@@ -64,9 +64,10 @@ class AttentionRNNPredictor(KerasPredictor):
 
         # many-to-one, so must have return_sequences = False (it is by default)
         lstm = layers.Bidirectional(rnn(config['cells'], kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg))(attention)
-        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=weight_reg)(lstm)
+        score = layers.Dense(1, kernel_regularizer=weight_reg)(lstm)
+        out = layers.Activation(self.output_activation)(score)
 
-        return Model(inputs=(inputs, ops), outputs=score)
+        return Model(inputs=(inputs, ops), outputs=out)
 
     def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
                           use_data_augmentation: bool = True, validation_split: bool = True,

@@ -71,7 +71,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         return output_shapes
 
     def get_output_layers_name(self) -> str:
-        return 'pointwise_softmax'
+        return 'Softmax'
 
     def _generate_output(self, hidden_tensor: WrappedTensor, dropout_prob: float = 0.0) -> tf.Tensor:
         # don't add suffix in models with a single output
@@ -94,8 +94,9 @@ class SegmentationModelGenerator(BaseModelGenerator):
             h_tensor = layers.Dropout(dropout_prob)(h_tensor)
 
         output_name = self.get_output_layers_name()
-        output = self.op_instantiator.generate_pointwise_conv(self.output_classes_count, strided=False, activation_f=tf.nn.softmax,
-                                                              name=f'{output_name}{name_suffix}')(h_tensor)
+        logits = layers.Conv2D(self.output_classes_count, kernel_size=(1, 1), kernel_initializer='he_uniform',
+                               kernel_regularizer=self.l2_weight_reg, name=f'logits{name_suffix}')(h_tensor)
+        output = layers.Activation('softmax', dtype='float32', name=f'{output_name}{name_suffix}')(logits)
 
         self.output_layers.update({f'{output_name}{name_suffix}': output})
         return output

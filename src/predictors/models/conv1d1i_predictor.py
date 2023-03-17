@@ -37,13 +37,14 @@ class Conv1D1IPredictor(KerasPredictor):
                                     kernel_regularizer=weight_reg, padding='same')(first_conv)
 
         final_conv = layers.Conv1D(config['filters'] * 2, config['kernel_size'], activation='relu',
-                                        kernel_regularizer=weight_reg, strides=2)(second_conv)
+                                   kernel_regularizer=weight_reg, strides=2)(second_conv)
 
         flatten = layers.Flatten()(final_conv)
         sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
-        score = layers.Dense(1, activation=self.output_activation, kernel_regularizer=weight_reg)(sig_dense)
+        score = layers.Dense(1, activation=None, kernel_regularizer=weight_reg)(sig_dense)
+        out = layers.Activation(self.output_activation)(score)
 
-        return Model(inputs=block_series, outputs=score)
+        return Model(inputs=block_series, outputs=out)
 
     def _build_tf_dataset(self, cell_specs: 'Sequence[list]', rewards: 'Sequence[float]' = None, batch_size: int = 8,
                           use_data_augmentation: bool = True, validation_split: bool = True,

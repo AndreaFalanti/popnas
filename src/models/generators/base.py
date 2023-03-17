@@ -218,6 +218,9 @@ class BaseModelGenerator(ABC):
         These layers can be stacked after any cell output to get the final output.
         They are always used at the network end, but could also be used for intermediate outputs.
 
+        NOTE: always separate logits from Softmax (or other activation layer), casting the final layer to dtype=float32.
+        This makes possible to correctly apply mixed precision, when set in the POPNAS config.
+
         Args:
             hidden_tensor: the tensor to process, i.e., any cell output.
             dropout_prob: [0, 1] probability value for applying dropout on the exit.
