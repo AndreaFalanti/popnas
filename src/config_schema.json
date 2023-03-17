@@ -360,6 +360,9 @@
                 },
                 "enable_XLA_compilation": {
                     "type": "boolean"
+                },
+                "use_mixed_precision": {
+                    "type": "boolean"
                 }
             },
             "required": [

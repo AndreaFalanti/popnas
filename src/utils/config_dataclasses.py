@@ -99,6 +99,7 @@ class OthersConfig:
     save_children_models: bool = False
     pnas_mode: bool = False
     enable_XLA_compilation: bool = False
+    use_mixed_precision: bool = False
 
 
 @dataclass
