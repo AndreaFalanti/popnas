@@ -151,9 +151,9 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
     try:
         if train_strategy is not None:
             ms_config.others.train_strategy = train_strategy
-        train_strategy = initialize_train_strategy(ms_config.others.train_strategy)
+        train_strategy = initialize_train_strategy(ms_config.others.train_strategy, ms_config.others.use_mixed_precision)
     except AttributeError:
-        train_strategy = initialize_train_strategy(None)
+        train_strategy = initialize_train_strategy(None, False)
 
     return ms_config, train_strategy
 

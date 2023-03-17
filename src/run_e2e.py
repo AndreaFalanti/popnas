@@ -54,7 +54,7 @@ def main():
 
 def run_search(log_path: str, run_config: RunConfig):
     log_service.set_log_path(log_path)
-    train_strategy = initialize_train_strategy(run_config.others.train_strategy)
+    train_strategy = initialize_train_strategy(run_config.others.train_strategy, run_config.others.use_mixed_precision)
 
     popnas = Popnas(run_config, train_strategy)
     popnas.start()

@@ -41,7 +41,7 @@ def main():
     parser.add_argument('-p', metavar='FOLDER', type=str, help="log folder", required=True)
     args = parser.parse_args()
 
-    t_strategy = initialize_train_strategy('GPU')
+    t_strategy = initialize_train_strategy('GPU', False)
     run_config = retrieve_search_config(args.p)
 
     log_path = setup_folders(args.p)

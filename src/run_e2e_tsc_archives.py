@@ -125,7 +125,7 @@ def run_search_experiment(log_path: str, customized_config: RunConfig):
     # check that the config is correct
     validate_config_json(customized_config)
 
-    train_strategy = initialize_train_strategy(customized_config.others.train_strategy)
+    train_strategy = initialize_train_strategy(customized_config.others.train_strategy, customized_config.others.use_mixed_precision)
 
     popnas = Popnas(customized_config, train_strategy)
     popnas.start()

@@ -135,7 +135,7 @@ def main():
         # check that the config is correct
         validate_config_json(run_config)
 
-        train_strategy = initialize_train_strategy(run_config.others.train_strategy)
+        train_strategy = initialize_train_strategy(run_config.others.train_strategy, run_config.others.use_mixed_precision)
 
         val_accuracies, test_accuracies = [], []
 

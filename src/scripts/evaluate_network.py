@@ -57,7 +57,7 @@ def main():
     arc_config = config.architecture_hyperparameters
     multi_output = arc_config.multi_output
 
-    train_strategy = initialize_train_strategy(args.ts)
+    train_strategy = initialize_train_strategy(args.ts, config.others.use_mixed_precision)
 
     # Load and prepare the dataset
     print('Preparing datasets...')

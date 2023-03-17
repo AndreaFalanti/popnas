@@ -12,7 +12,7 @@ import tensorflow as tf
 import tf2onnx
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
-from tensorflow.keras import Model
+from tensorflow.keras import Model, mixed_precision
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 
 
@@ -46,7 +46,7 @@ def get_model_flops(model: Model, write_path=None):
     return flops.total_float_ops
 
 
-def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distribute.Strategy:
+def initialize_train_strategy(strategy_device: Optional[str], use_mixed_precision: bool) -> tf.distribute.Strategy:
     # debug available devices
     device_list = tf.config.list_physical_devices()
     print(device_list)
@@ -54,15 +54,18 @@ def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distr
     gpu_devices = tf.config.list_physical_devices('GPU')
     tpu_devices = tf.config.list_physical_devices('TPU')
 
-    missing_device_msg = f'{config_strategy_device} is not available for execution, run with a different train strategy' \
-                         f' or troubleshot the issue in case a {config_strategy_device} is actually present in the device.'
+    missing_device_msg = f'{strategy_device} is not available for execution, run with a different train strategy' \
+                         f' or troubleshot the issue in case a {strategy_device} is actually present in the device.'
+
+    if use_mixed_precision:
+        mixed_precision.set_global_policy('mixed_float16')
 
     # Generate the train strategy. Currently supported values: ['CPU', 'GPU', 'multi-GPU', 'TPU']
     # Basically a switch, which it's not supported in used python version.
-    if config_strategy_device is None:
+    if strategy_device is None:
         # should use GPU if available, otherwise CPU. Fallback for when strategy is not specified and for backwards compatibility.
         train_strategy = tf.distribute.get_strategy()
-    elif config_strategy_device == 'CPU':
+    elif strategy_device == 'CPU':
         # remove GPUs from visible devices, using only CPUs
         tf.config.set_visible_devices([], 'GPU')
         tf.config.set_visible_devices([], 'TPU')
@@ -70,20 +73,20 @@ def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distr
         print('Using CPU devices only')
         # default strategy
         train_strategy = tf.distribute.get_strategy()
-    elif config_strategy_device == 'GPU':
+    elif strategy_device == 'GPU':
         if len(gpu_devices) == 0:
             sys.exit(missing_device_msg)
 
         # default strategy also for single GPU
         train_strategy = tf.distribute.get_strategy()
-    elif config_strategy_device == 'multi-GPU':
+    elif strategy_device == 'multi-GPU':
         if len(gpu_devices) < 2:
             sys.exit(f'At least 2 GPUs required for multi-GPU strategy, {len(gpu_devices)} GPUs have been found.')
 
-        # by default, uses all GPUs found in the worker. Multiple workers (cluster of devices) are not currently supported.
+        # by default, use all GPUs found in the worker. Multiple workers (cluster of devices) are not currently supported.
         # NOTE: Tune the batch size and learning rate to exploit more parallelism, if necessary.
         train_strategy = tf.distribute.MirroredStrategy()
-    elif config_strategy_device == 'TPU':
+    elif strategy_device == 'TPU':
         if len(tpu_devices) == 0:
             sys.exit(missing_device_msg)
 
@@ -93,6 +96,9 @@ def initialize_train_strategy(config_strategy_device: Optional[str]) -> tf.distr
     else:
         sys.exit('Train strategy provided in configuration file is invalid')
 
+    policy = mixed_precision.global_policy()
+    print(f'Compute dtype: {policy.compute_dtype}')
+    print(f'Variable dtype: {policy.variable_dtype}')
     return train_strategy
 
 
