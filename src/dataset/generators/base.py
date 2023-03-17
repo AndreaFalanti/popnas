@@ -61,7 +61,7 @@ def generate_possibly_ragged_dataset(x: np.ndarray, y: np.ndarray) -> tf.data.Da
 
 
 def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Optional[int], val_size: Optional[float],
-                                          supervised_labels: Optional[tuple] = None):
+                                          supervised_keys: Optional[tuple] = None):
     '''
     Generate a train-val dataset split of a dataset contained in the TFDS catalogue.
 
@@ -69,16 +69,16 @@ def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Opti
         dataset_name: TFDS dataset identifier
         samples_limit: optional limit for the number of samples contained in the training split
         val_size: portion of training data to reserve for validation; if None it tries to use the TFDS validation split, if present
-        supervised_labels: tuple with (x_feature, y_feature) keys, refer to TFDS features for your dataset.
+        supervised_keys: tuple with (x_feature, y_feature) keys, refer to TFDS features for your dataset.
             Required for dataset not supporting "as_supervised" tfds.load option, making possible to extract **x** and **y** tensors
     '''
-    supervised = True if supervised_labels is None else False
+    supervised = True if supervised_keys is None else False
     split_spec = 'train' if samples_limit is None else f'train[:{samples_limit}]'
 
     train_ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=supervised, shuffle_files=True, with_info=True,
                                read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
-    if supervised_labels:
-        x_key, y_key = supervised_labels
+    if supervised_keys:
+        x_key, y_key = supervised_keys
         train_ds = train_ds.map(lambda el_dict: (el_dict[x_key], el_dict[y_key]), num_parallel_calls=AUTOTUNE)
 
     if val_size is None:
@@ -86,8 +86,8 @@ def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Opti
 
         val_ds = tfds.load(dataset_name, split=val_split_spec, as_supervised=supervised, shuffle_files=True,
                            read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset
-        if supervised_labels:
-            x_key, y_key = supervised_labels
+        if supervised_keys:
+            x_key, y_key = supervised_keys
             val_ds = val_ds.map(lambda el_dict: (el_dict[x_key], el_dict[y_key]), num_parallel_calls=AUTOTUNE)
     else:
         samples_count = samples_limit or info.splits['train'].num_examples
@@ -100,7 +100,7 @@ def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Opti
 
 
 def generate_dataset_from_tfds(dataset_name: str, split_spec: str, samples_limit: Optional[int], shuffle: bool = False,
-                               supervised_labels: Optional[tuple] = None):
+                               supervised_keys: Optional[tuple] = None):
     '''
         Get a dataset split of a dataset contained in the TFDS catalogue.
 
@@ -109,16 +109,16 @@ def generate_dataset_from_tfds(dataset_name: str, split_spec: str, samples_limit
             split_spec: see TFDS splits API (https://www.tensorflow.org/datasets/splits?hl=en)
             samples_limit: optional limit for the number of samples contained in the split
             shuffle: flag for shuffling the dataset
-            supervised_labels: tuple with (x_feature, y_feature) keys, refer to TFDS features for your dataset.
+            supervised_keys: tuple with (x_feature, y_feature) keys, refer to TFDS features for your dataset.
                 Required for dataset not supporting "as_supervised" tfds.load option, making possible to extract **x** and **y** tensors
         '''
-    supervised = True if supervised_labels is None else False
+    supervised = True if supervised_keys is None else False
     split_spec = split_spec if samples_limit is None else f'{split_spec}[:{samples_limit}]'
     ds, info = tfds.load(dataset_name, split=split_spec, as_supervised=supervised, shuffle_files=shuffle, with_info=True,
                          read_config=tfds.ReadConfig(try_autocache=False))  # type: tf.data.Dataset, tfds.core.DatasetInfo
 
-    if supervised_labels:
-        x_key, y_key = supervised_labels
+    if supervised_keys:
+        x_key, y_key = supervised_keys
         ds = ds.map(lambda el_dict: (el_dict[x_key], el_dict[y_key]), num_parallel_calls=AUTOTUNE)
 
     return ds, info

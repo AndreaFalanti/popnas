@@ -8,13 +8,19 @@ from sklearn.utils import shuffle
 from tensorflow.keras import Sequential
 
 from dataset.augmentation import get_image_segmentation_tf_data_aug_xys, get_image_segmentation_tf_data_aug_xy
-from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset, DatasetsFold
+from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, load_npz, generate_possibly_ragged_dataset, DatasetsFold, \
+    generate_train_val_datasets_from_tfds, generate_dataset_from_tfds
 from dataset.preprocessing import ImagePreprocessor
 from utils.config_dataclasses import DatasetConfig
 
 # make sure the spatial dimensions of any image are multiples of this value.
 # since M motifs perform M-1 reductions, this number should be at least 2^(M-1), otherwise pooling-upsample will produce different dimensions.
 PAD_MULTIPLES = 16
+
+
+tfds_supported_datasets_labels = {
+    'cityscapes': ('image_left', 'segmentation_label')
+}
 
 
 class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
@@ -26,6 +32,13 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         if self.resize_dim is None:
             raise ValueError('Images must have a set resize dimension for applying random crop and batching during training')
+
+        # if using a TFDS dataset (no path to dataset), make sure it is supported and extract the feature keys for later usage
+        if dataset_config.path is None:
+            try:
+                self.tfds_feature_keys = tfds_supported_datasets_labels[self.dataset_name]
+            except KeyError:
+                raise AttributeError('The provided dataset name is not supported by POPNAS or by TFDS')
 
         self.use_sample_weights = dataset_config.balance_class_losses
         # introduce side effect on the configuration dataclass, avoiding the use of loss weights which can't be applied on >= 3 dims labels
@@ -70,9 +83,16 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
                 train_ds = generate_possibly_ragged_dataset(x_train, y_train)
                 val_ds = generate_possibly_ragged_dataset(x_val, y_val)
-            # Keras dataset case
+            # TFDS dataset case
             else:
-                raise NotImplementedError('Only custom datasets are supported right now')
+                train_ds, val_ds, info = generate_train_val_datasets_from_tfds(self.dataset_name, self.samples_limit, self.val_size,
+                                                                               self.tfds_feature_keys)
+                x_feature, y_feature = self.tfds_feature_keys
+                # even if the image shape is fixed, random crops at train time are smaller, so HW are kept None
+                # image_shape = info.features[x_feature].shape
+                image_shape = (None, None, 3)
+                # TODO: no way of determining classes in segmentation labels, without scanning the whole dataset... lets trust the user
+                classes = self.dataset_classes_count
 
             # finalize dataset generation, common logic to all dataset formats
             data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
@@ -103,9 +123,11 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             classes = self.dataset_classes_count
             # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
             image_shape = (None, None, 3)
-        # Keras dataset case
+        # TFDS dataset case
         else:
-            raise NotImplementedError('Only custom datasets are supported right now')
+            test_ds, info = generate_dataset_from_tfds(self.dataset_name, 'test', self.samples_limit, self.tfds_feature_keys)
+            image_shape = (None, None, 3)
+            classes = self.dataset_classes_count
 
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
@@ -137,9 +159,12 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             classes = self.dataset_classes_count
             # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
             image_shape = (None, None, 3)
-        # Keras dataset case
+        # TFDS dataset case
         else:
-            raise NotImplementedError('Only custom datasets are supported right now')
+            split_name = 'train+validation' if self.val_size is None else 'train'
+            train_ds, info = generate_dataset_from_tfds(self.dataset_name, split_name, self.samples_limit, self.tfds_feature_keys)
+            image_shape = (None, None, 3)
+            classes = self.dataset_classes_count
 
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
