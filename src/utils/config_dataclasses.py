@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict
+
 
 # NOTE: to keep support for python 3.8, do not use types with '', the dacite package will incorrectly consider them as forward references.
 #  Use instead the classes from typing package.
@@ -84,7 +85,7 @@ class DatasetConfig:
     samples: Optional[int]
     rescale: Optional[bool]
     normalize: Optional[bool]
-    class_labels_remapping: Optional[dict[str, int]]
+    class_labels_remapping: Optional[Dict[str, int]]
     resize: Optional[ResizeDict]
     data_augmentation: DataAugmentationDict
     balance_class_losses: bool = False

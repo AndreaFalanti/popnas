@@ -8,7 +8,7 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 class ImagePreprocessor(DataPreprocessor):
     def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], resize_labels: bool = False,
-                 pad_to_multiples_of: Optional[int] = None, to_one_hot: Optional[int] = None, remap_classes: Optional[dict[str, int]] = None):
+                 pad_to_multiples_of: Optional[int] = None, to_one_hot: Optional[int] = None, remap_classes: 'Optional[dict[str, int]]' = None):
         '''
         Preprocessor which can be applied to datasets composed of images to apply some basic transformations.
 

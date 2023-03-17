@@ -11,7 +11,7 @@ class DataPreprocessor(ABC):
     '''
     Abstract class defining the interface for dataset preprocessing strategy pattern.
     '''
-    def __init__(self, to_one_hot: Optional[int], remap_classes: Optional[dict[str, int]]):
+    def __init__(self, to_one_hot: Optional[int], remap_classes: 'Optional[dict[str, int]]'):
         self.preprocessor_model = None
         self.to_one_hot = to_one_hot
         self.remap_classes_dict = remap_classes

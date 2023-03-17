@@ -8,7 +8,7 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 class TimeSeriesPreprocessor(DataPreprocessor):
     def __init__(self, normalize: bool = False, rescale: float = 1,
-                 to_one_hot: Optional[int] = None, remap_classes: Optional[dict[str, int]] = None):
+                 to_one_hot: Optional[int] = None, remap_classes: 'Optional[dict[str, int]]' = None):
         super().__init__(to_one_hot, remap_classes)
         self.normalize = normalize
         self.rescale = rescale
