@@ -1,6 +1,7 @@
 from typing import Optional, Callable
 
 import tensorflow as tf
+from tensorflow.keras import mixed_precision
 from tensorflow.keras.layers import Layer, GlobalAveragePooling2D
 from tensorflow.keras.regularizers import Regularizer
 
@@ -21,11 +22,13 @@ class ImagePooling(Layer):
 
         self.gap = GlobalAveragePooling2D(keepdims=True)
         self.pw_conv = Convolution(filters, kernel=(1, 1), strides=(1, 1), weight_reg=weight_reg, activation_f=activation_f)
+        self.out_dtype = mixed_precision.global_policy().compute_dtype
 
     def call(self, inputs, training=None, mask=None):
         x = self.gap(inputs)
         x = self.pw_conv(x)
-        return tf.image.resize(x, tf.shape(inputs)[1:3])   # bilinear upsample to original dimensionality
+        x = tf.image.resize(x, tf.shape(inputs)[1:3])   # bilinear upsample to original dimensionality
+        return tf.cast(x, dtype=self.out_dtype)         # solve dtype problem when using mixed precision (resize seems to be fixed to float32)
 
     def get_config(self):
         config = super().get_config()
