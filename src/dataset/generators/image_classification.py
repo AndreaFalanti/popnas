@@ -27,6 +27,16 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
     def supports_early_batching(self) -> bool:
         return True
 
+    def build_preprocessor(self, onehot_classes: Optional[int]):
+        '''
+        Build the ImagePreprocessor for image classification tasks.
+
+        Args:
+            onehot_classes: leave it to None if labels are already in one-hot, otherwise provide the number of classes.
+        '''
+        return ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0),
+                                 to_one_hot=onehot_classes, remap_classes=self.class_labels_remapping_dict)
+
     def __load_keras_dataset_images(self):
         '''
         Load images of a Keras dataset. In this case, the data are in the form of Numpy arrays.
@@ -152,7 +162,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             # finalize dataset generation, common logic to all dataset formats
             # avoid categorical for custom datasets, since already done
             using_custom_ds = self.dataset_path is not None
-            data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
+            data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
             # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
             batch_len = None if using_custom_ds else self.batch_size
             train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
@@ -215,7 +225,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         # finalize dataset generation, common logic to all dataset formats
         # avoid categorical for custom datasets, since already done
         using_custom_ds = self.dataset_path is not None
-        data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
+        data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
         # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
         batch_len = None if using_custom_ds else self.batch_size
         test_ds, batches = self._finalize_dataset(test_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
@@ -279,7 +289,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         # finalize dataset generation, common logic to all dataset formats
         # avoid categorical for custom datasets, since already done
         using_custom_ds = self.dataset_path is not None
-        data_preprocessor = ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0), to_one_hot=None if using_custom_ds else classes)
+        data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
         # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
         batch_len = None if using_custom_ds else self.batch_size
         train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,

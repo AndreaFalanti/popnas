@@ -84,6 +84,7 @@ class DatasetConfig:
     samples: Optional[int]
     rescale: Optional[bool]
     normalize: Optional[bool]
+    class_labels_remapping: Optional[dict[str, int]]
     resize: Optional[ResizeDict]
     data_augmentation: DataAugmentationDict
     balance_class_losses: bool = False

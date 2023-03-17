@@ -141,6 +141,7 @@ class BaseDatasetGenerator(ABC):
         self.batch_size = dataset_config.batch_size
         self.val_size = dataset_config.validation_size
         self.cache = dataset_config.cache
+        self.class_labels_remapping_dict = dataset_config.class_labels_remapping
 
         self.use_data_augmentation = dataset_config.data_augmentation.enabled
         self.augment_on_gpu = dataset_config.data_augmentation.perform_on_gpu

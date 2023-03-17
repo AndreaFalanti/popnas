@@ -261,6 +261,16 @@
                 "balance_class_losses": {
                     "type": "boolean"
                 },
+                "class_labels_remapping": {
+                    "oneOf": [
+                        {
+                            "type": "null"
+                        },
+                        {
+                            "type": "object"
+                        }
+                    ]
+                },
                 "resize": {
                     "oneOf": [
                         {

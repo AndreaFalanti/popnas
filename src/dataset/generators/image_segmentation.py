@@ -51,6 +51,10 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
     def supports_early_batching(self) -> bool:
         return False
 
+    def build_preprocessor(self):
+        return ImagePreprocessor(resize_dim=None, rescaling=(1. / 255, 0), resize_labels=True,
+                                 pad_to_multiples_of=PAD_MULTIPLES, remap_classes=self.class_labels_remapping_dict)
+
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
 
@@ -95,8 +99,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 classes = self.dataset_classes_count
 
             # finalize dataset generation, common logic to all dataset formats
-            data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
-                                                  pad_to_multiples_of=PAD_MULTIPLES)
+            data_preprocessor = self.build_preprocessor()
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
@@ -130,8 +133,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             classes = self.dataset_classes_count
 
         # finalize dataset generation, common logic to all dataset formats
-        data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
-                                              pad_to_multiples_of=PAD_MULTIPLES)
+        data_preprocessor = self.build_preprocessor()
         # since images can have different sizes, it's not possible to batch multiple images together (batch_size = 1)
         test_ds, batches = self._finalize_dataset(test_ds, 1, data_preprocessor, shard_policy=shard_policy)
 
@@ -167,8 +169,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             classes = self.dataset_classes_count
 
         # finalize dataset generation, common logic to all dataset formats
-        data_preprocessor = ImagePreprocessor(None, rescaling=(1. / 255, 0), to_one_hot=None, resize_labels=True,
-                                              pad_to_multiples_of=PAD_MULTIPLES)
+        data_preprocessor = self.build_preprocessor()
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,

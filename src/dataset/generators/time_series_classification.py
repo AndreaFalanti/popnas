@@ -75,6 +75,10 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def supports_early_batching(self) -> bool:
         return True
 
+    def build_preprocessor(self, num_classes: int, rescale_factor: float):
+        return TimeSeriesPreprocessor(normalize=self.normalize, rescale=rescale_factor,
+                                      to_one_hot=num_classes, remap_classes=self.class_labels_remapping_dict)
+
     def _get_numpy_split(self, split_name: str):
         # numpy case
         if os.path.exists(os.path.join(self.dataset_path, f'{split_name}.npz')):
@@ -128,7 +132,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             else:
                 raise NotImplementedError()
 
-            preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
+            preprocessor = self.build_preprocessor(classes, q_x)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
@@ -154,7 +158,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         else:
             raise NotImplementedError()
 
-        preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
+        preprocessor = self.build_preprocessor(classes, q_x)
         test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, preprocessor)
 
         self._logger.info('Test dataset built successfully')
@@ -180,7 +184,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         else:
             raise NotImplementedError()
 
-        preprocessor = TimeSeriesPreprocessor(to_one_hot=classes, normalize=self.normalize, rescale=q_x)
+        preprocessor = self.build_preprocessor(classes, q_x)
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
 
         self._logger.info('Dataset folds built successfully')
