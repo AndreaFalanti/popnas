@@ -11,8 +11,28 @@ class DataPreprocessor(ABC):
     '''
     Abstract class defining the interface for dataset preprocessing strategy pattern.
     '''
-    def __init__(self):
+    def __init__(self, to_one_hot: Optional[int], remap_classes: Optional[dict[str, int]]):
         self.preprocessor_model = None
+        self.to_one_hot = to_one_hot
+        self.remap_classes_dict = remap_classes
+
+    def _apply_labels_preprocessing(self, ds: tf.data.Dataset):
+        if self.remap_classes_dict is not None:
+            # cast labels to int32, since lookup does not work on uint8
+            ds = ds.map(lambda x, y: (x, tf.cast(y, dtype=tf.int32)), num_parallel_calls=AUTOTUNE)
+
+            lookup_init = tf.lookup.KeyValueTensorInitializer(list(map(int, self.remap_classes_dict.keys())), list(self.remap_classes_dict.values()),
+                                                              key_dtype=tf.int32, value_dtype=tf.int32)
+            labels_lookup_table = tf.lookup.StaticHashTable(lookup_init, default_value=255)
+
+            # remap labels and cast back to uint8
+            ds = ds.map(lambda x, y: (x, tf.cast(labels_lookup_table.lookup(y), dtype=tf.uint8)), num_parallel_calls=AUTOTUNE)
+
+        # convert labels to one-hot encoding
+        if self.to_one_hot is not None:
+            ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot)), num_parallel_calls=AUTOTUNE)
+
+        return ds
 
     def apply_preprocessing(self, ds: tf.data.Dataset, fit_data: bool) -> tf.data.Dataset:
         '''
@@ -29,6 +49,7 @@ class DataPreprocessor(ABC):
             the preprocessed dataset
         '''
         ds = self._apply_preprocessing_on_dataset_pipeline(ds)
+        ds = self._apply_labels_preprocessing(ds)
         if fit_data:
             self.preprocessor_model = self._build_preprocessing_embeddable_model(ds)
 

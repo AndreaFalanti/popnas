@@ -7,17 +7,13 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 
 class TimeSeriesPreprocessor(DataPreprocessor):
-    def __init__(self, to_one_hot: Optional[int] = None, normalize: bool = False, rescale: float = 1):
-        super().__init__()
-        self.to_one_hot = to_one_hot
+    def __init__(self, normalize: bool = False, rescale: float = 1,
+                 to_one_hot: Optional[int] = None, remap_classes: Optional[dict[str, int]] = None):
+        super().__init__(to_one_hot, remap_classes)
         self.normalize = normalize
         self.rescale = rescale
 
     def _apply_preprocessing_on_dataset_pipeline(self, ds: tf.data.Dataset) -> tf.data.Dataset:
-        # convert to one-hot encoding
-        if self.to_one_hot is not None:
-            ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot)), num_parallel_calls=AUTOTUNE)
-
         # TODO: delete this or move to model-embeddable preprocessor?
         if self.rescale != 1:
             ds = ds.map(lambda x, y: (x / self.rescale, y))

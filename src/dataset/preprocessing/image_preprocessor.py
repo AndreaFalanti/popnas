@@ -7,8 +7,8 @@ from dataset.preprocessing.data_preprocessor import DataPreprocessor, AUTOTUNE
 
 
 class ImagePreprocessor(DataPreprocessor):
-    def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], to_one_hot: Optional[int],
-                 resize_labels: bool = False, pad_to_multiples_of: Optional[int] = None):
+    def __init__(self, resize_dim: Optional['tuple[int, int]'], rescaling: Optional['tuple[float, float]'], resize_labels: bool = False,
+                 pad_to_multiples_of: Optional[int] = None, to_one_hot: Optional[int] = None, remap_classes: Optional[dict[str, int]] = None):
         '''
         Preprocessor which can be applied to datasets composed of images to apply some basic transformations.
 
@@ -18,10 +18,9 @@ class ImagePreprocessor(DataPreprocessor):
             to_one_hot: encode labels as one-hot. Can be used on int labels.
             resize_labels: when labels are images (e.g. masks in segmentation tasks), set it to True to resize both X and Y.
         '''
-        super().__init__()
+        super().__init__(to_one_hot, remap_classes)
         self.resize_dim = resize_dim
         self.rescaling = rescaling
-        self.to_one_hot = to_one_hot
         self.resize_labels = resize_labels
         self.pad_to_multiples_of = pad_to_multiples_of
 
@@ -62,10 +61,6 @@ class ImagePreprocessor(DataPreprocessor):
         if self.rescaling is not None:
             normalization_layer = layers.Rescaling(self.rescaling[0], offset=self.rescaling[1])
             ds = ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=AUTOTUNE)
-
-        # convert to one-hot encoding
-        if self.to_one_hot is not None:
-            ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot)), num_parallel_calls=AUTOTUNE)
 
         return ds
 
