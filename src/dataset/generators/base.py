@@ -42,14 +42,8 @@ def generate_tf_dataset_from_numpy_ragged_array(x_arr: np.ndarray, y_arr: np.nda
     Returns:
         a TF dataset containing ragged tensors
     '''
-    x_tensors = [tf.constant(x, dtype=tf.float32) for x in x_arr]
-    y_tensors = [tf.constant(y, dtype=tf.uint8) for y in y_arr]
-    x_ragged_1 = tf.ragged.stack(x_tensors[:4000])
-    x_ragged_2 = tf.ragged.stack(x_tensors[4000:8000])
-    x_ragged_3 = tf.ragged.stack(x_tensors[8000:])
-    x_ragged = tf.concat([x_ragged_1, x_ragged_2, x_ragged_3], axis=0)
-
-    y_ragged = tf.ragged.stack(y_tensors)
+    x_ragged = tf.ragged.stack([np.asarray(x, dtype=dtype) for x in x_arr])
+    y_ragged = tf.ragged.stack([np.asarray(y, dtype=dtype) for y in y_arr])
 
     # to_tensor is required to use map functions in the pipeline. It's strange, maybe ragged tensors are not necessary?
     return tf.data.Dataset.from_tensor_slices((x_ragged, y_ragged)).map(lambda x, y: (x.to_tensor(), y.to_tensor()))
