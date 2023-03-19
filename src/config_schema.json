@@ -172,6 +172,16 @@
                 },
                 "multi_output": {
                     "type": "boolean"
+                },
+                "activation_function": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
                 }
             },
             "required": [

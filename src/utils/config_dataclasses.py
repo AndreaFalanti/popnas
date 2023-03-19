@@ -68,6 +68,7 @@ class ArchitectureHyperparametersConfig:
     residual_cells: bool
     multi_output: bool
     se_cell_output: bool = False
+    activation_function: str = 'swish'
 
 
 @dataclass

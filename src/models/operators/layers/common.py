@@ -52,9 +52,9 @@ class Identity(Layer):
 
 
 class ConvBatchActivation(Layer, ABC):
+    ''' Abstract utility class used as baseline for any {Convolution operator - Batch Normalization - Activation} layer. '''
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', dilation_rate: int = 1,
                  weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='abstract', **kwargs):
-        ''' Abstract utility class used as baseline for any {Convolution operator - Batch Normalization - Activation} layer. '''
         super().__init__(name=name, **kwargs)
         self.filters = filters
         self.kernel = kernel
