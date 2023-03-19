@@ -26,7 +26,8 @@ class SqueezeExcitationOpAllocator(BaseOpAllocator):
     def generate_normal_layer(self, match: re.Match, filters: int, name_prefix: str = '', name_suffix: str = '') -> Layer:
         ratio = int(match.group('ratio'))
         layer_name = f'{name_prefix}squeeze_excitation{name_suffix}'
-        return SqueezeExcitation(self.op_dims, filters, ratio, use_bias=True, weight_reg=self.weight_reg, name=layer_name)
+        return SqueezeExcitation(self.op_dims, filters, ratio, use_bias=True,
+                                 weight_reg=self.weight_reg, activation_f=self.activation_f, name=layer_name)
 
     def generate_depth_adaptation_layer(self, match: re.Match, filters: int, name_prefix: str = 'D/', name_suffix: str = '') -> Layer:
         ones = tuple([1] * self.op_dims)

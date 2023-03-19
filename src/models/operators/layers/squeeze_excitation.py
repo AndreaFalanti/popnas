@@ -1,5 +1,5 @@
 import math
-from typing import Optional
+from typing import Optional, Callable
 
 from tensorflow.keras import activations
 from tensorflow.keras.layers import Layer
@@ -12,7 +12,7 @@ class SqueezeExcitation(Layer):
     ''' Layer implementing the *Squeeze-and-Excitation* block, presented in the "Squeeze-and-Excitation Networks" paper. '''
 
     def __init__(self, dims: int, filters: int, se_ratio: int, use_bias: bool, weight_reg: Optional[Regularizer] = None,
-                 name='squeeze_excitation', **kwargs):
+                 activation_f: Callable = activations.swish, name='squeeze_excitation', **kwargs):
         ''' Creates a squeeze and excitation layer. *Dims* parameter is used to adapt to either images (2D) or time series (1D) tensor shapes. '''
         super().__init__(name=name, **kwargs)
 
@@ -21,6 +21,7 @@ class SqueezeExcitation(Layer):
         self.se_ratio = se_ratio
         self.use_bias = use_bias
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         bottleneck_filters = math.ceil(filters / se_ratio)
         conv = op_dim_selector['conv'][dims]
@@ -29,8 +30,9 @@ class SqueezeExcitation(Layer):
         self.gap = gap(keepdims=True)
         # use pointwise convolutions for densely connected; they are equivalent since the volume is in shape (1, 1, C)
         # use directly the Keras conv layers, since we don't want batch normalization here
-        self.first_dc = conv(bottleneck_filters, kernel_size=1, activation=activations.swish, use_bias=use_bias,
+        self.first_dc = conv(bottleneck_filters, kernel_size=1, activation=activation_f, use_bias=use_bias,
                              kernel_initializer='VarianceScaling', kernel_regularizer=weight_reg)
+        # the second "dense" activation is fixed to sigmoid by layer definition
         self.second_dc = conv(filters, kernel_size=1, activation=activations.sigmoid, use_bias=use_bias,
                               kernel_initializer='VarianceScaling', kernel_regularizer=weight_reg)
 
@@ -48,6 +50,7 @@ class SqueezeExcitation(Layer):
             'se_ratio': self.se_ratio,
             'use_bias': self.use_bias,
             'weight_reg': self.weight_reg,
+            'activation_f': self.activation_f
         })
         return config
 
