@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Type, NamedTuple
 
 import tensorflow as tf
-from tensorflow.keras import layers, regularizers, optimizers, losses, metrics, callbacks, Model, Sequential
+from tensorflow.keras import layers, regularizers, optimizers, activations, losses, metrics, callbacks, Model, Sequential
 
 import log_service
 import models.operators.layers as ops
@@ -95,7 +95,9 @@ class BaseModelGenerator(ABC):
         self.cell_output_shapes = self._compute_cell_output_shapes()
 
         # op instantiator takes care of handling the instantiation of Keras layers for building the final architecture
-        self.op_instantiator = OpInstantiator(len(input_shape), arc_hp.block_join_operator, weight_reg=self.l2_weight_reg)
+        keras_activation_f = activations.get(arc_hp.activation_function)
+        self.op_instantiator = OpInstantiator(len(input_shape), arc_hp.block_join_operator,
+                                              weight_reg=self.l2_weight_reg, activation_f=keras_activation_f)
 
         # attributes defined below this comment are manipulated and used during model building.
         # defined in class to avoid having lots of parameters passing in each function.

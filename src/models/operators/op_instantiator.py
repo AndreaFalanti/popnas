@@ -1,6 +1,7 @@
 from typing import Callable
 
 import tensorflow as tf
+from tensorflow.keras import activations
 from tensorflow.keras.layers import Layer, Add, Average
 from tensorflow.keras.regularizers import Regularizer
 
@@ -14,8 +15,10 @@ class OpInstantiator:
     Based on input shape, 1D or 2D operators are used accordingly.
     '''
 
-    def __init__(self, input_dims: int, block_op_join: str, reduction_stride_factor: int = 2, weight_reg: Regularizer = None):
+    def __init__(self, input_dims: int, block_op_join: str, reduction_stride_factor: int = 2,
+                 weight_reg: Regularizer = None, activation_f: Callable = activations.swish):
         self.weight_reg = weight_reg
+        self.activation_f = activation_f
 
         self.op_dims = input_dims - 1
         self.reduction_stride = tuple([reduction_stride_factor] * self.op_dims)
@@ -36,25 +39,25 @@ class OpInstantiator:
 
     def _define_common_allocators(self) -> 'dict[str, BaseOpAllocator]':
         return {
-            'identity': IdentityOpAllocator(self.op_dims),
-            'conv': ConvolutionOpAllocator(self.op_dims),
-            'dconv': SeparableConvolutionOpAllocator(self.op_dims),
-            'tconv': TransposeConvolutionOpAllocator(self.op_dims),
-            'stack_conv': StackedConvolutionOpAllocator(self.op_dims),
-            'pool': PoolOpAllocator(self.op_dims),
-            'se': SqueezeExcitationOpAllocator(self.op_dims)
+            'identity': IdentityOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'conv': ConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'dconv': SeparableConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'tconv': TransposeConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'stack_conv': StackedConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'pool': PoolOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'se': SqueezeExcitationOpAllocator(self.op_dims, self.weight_reg, self.activation_f)
         }
 
     def _define_2d_specific_allocators(self) -> 'dict[str, BaseOpAllocator]':
         return {
-            'cvt': CVTOpAllocator(self.op_dims),
-            'scvt': SimplifiedCVTOpAllocator(self.op_dims)
+            'cvt': CVTOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'scvt': SimplifiedCVTOpAllocator(self.op_dims, self.weight_reg, self.activation_f)
         }
 
     def _define_1d_specific_allocators(self) -> 'dict[str, BaseOpAllocator]':
         return {
-            'lstm': LSTMOpAllocator(self.op_dims),
-            'gru': GRUOpAllocator(self.op_dims)
+            'lstm': LSTMOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'gru': GRUOpAllocator(self.op_dims, self.weight_reg, self.activation_f)
         }
 
     def generate_block_join_operator(self, name_suffix: str):
@@ -106,13 +109,13 @@ class OpInstantiator:
             match = allocator.is_match(op_name)
             if match:
                 if adapt_depth and adapt_spatial:
-                    return allocator.generate_reduction_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
+                    return allocator.generate_reduction_layer(match, filters, strides, name_suffix=layer_name_suffix)
                 elif adapt_spatial:
-                    return allocator.generate_spatial_adaptation_layer(match, filters, self.weight_reg, strides, name_suffix=layer_name_suffix)
+                    return allocator.generate_spatial_adaptation_layer(match, filters, strides, name_suffix=layer_name_suffix)
                 elif adapt_depth:
-                    return allocator.generate_depth_adaptation_layer(match, filters, self.weight_reg, name_suffix=layer_name_suffix)
+                    return allocator.generate_depth_adaptation_layer(match, filters, name_suffix=layer_name_suffix)
                 else:
-                    return allocator.generate_normal_layer(match, filters, self.weight_reg, name_suffix=layer_name_suffix)
+                    return allocator.generate_normal_layer(match, filters, name_suffix=layer_name_suffix)
 
         # raised only if no allocator matches the operator string
         raise ValueError(f'Incorrect operator format or operator is not covered by POPNAS: {op_name}')

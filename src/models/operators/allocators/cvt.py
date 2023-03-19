@@ -1,8 +1,6 @@
 import re
-from typing import Optional
 
 from tensorflow.keras.layers import Layer
-from tensorflow.keras.regularizers import Regularizer
 
 from models.operators.layers import *
 from models.operators.params_utils import compute_cvt_params
@@ -17,7 +15,7 @@ class CVTOpAllocator(BaseOpAllocator):
         k, heads, blocks = int(match.group(1)), int(match.group(2)), int(match.group(3))
         return compute_cvt_params((k, k), heads, blocks, input_filters, output_filters, use_mlp=True)
 
-    def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
+    def generate_reduction_layer(self, match: re.Match, filters: int, strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:
         kernel = int(match.group('kernel'))
         heads = int(match.group('heads'))
@@ -25,7 +23,7 @@ class CVTOpAllocator(BaseOpAllocator):
         layer_name = f'{name_prefix}{kernel}k-{heads}h-{cvt_blocks}b_cvt{name_suffix}'
 
         return CVTStage(emb_dim=filters, emb_kernel=kernel, emb_stride=strides[0], mlp_mult=2,
-                        heads=heads, dim_head=filters, ct_blocks=cvt_blocks, weight_reg=weight_reg, name=layer_name)
+                        heads=heads, dim_head=filters, ct_blocks=cvt_blocks, weight_reg=self.weight_reg, name=layer_name)
 
 
 class SimplifiedCVTOpAllocator(BaseOpAllocator):
@@ -36,11 +34,11 @@ class SimplifiedCVTOpAllocator(BaseOpAllocator):
         k, heads = int(match.group(1)), int(match.group(2))
         return compute_cvt_params((k, k), heads, 1, input_filters, output_filters, use_mlp=False)
 
-    def generate_reduction_layer(self, match: re.Match, filters: int, weight_reg: Optional[Regularizer], strides: 'tuple[int, ...]',
+    def generate_reduction_layer(self, match: re.Match, filters: int, strides: 'tuple[int, ...]',
                                  name_prefix: str = 'R/', name_suffix: str = '') -> Layer:
         kernel = int(match.group('kernel'))
         heads = int(match.group('heads'))
         layer_name = f'{name_prefix}{kernel}k-{heads}h_scvt{name_suffix}'
 
         return SimplifiedCVT(emb_dim=filters, emb_kernel=kernel, emb_stride=strides[0],
-                             heads=heads, dim_head=filters, weight_reg=weight_reg, name=layer_name)
+                             heads=heads, dim_head=filters, weight_reg=self.weight_reg, name=layer_name)
