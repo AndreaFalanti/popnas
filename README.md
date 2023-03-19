@@ -142,7 +142,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
   - (1D only) lstm
   - (1D only) gru
 
-  conv and dconv support an optional group _:@dr_ for setting the dilation rate, which can be omitted  to use non-dilated convolutions.
+  conv and dconv support an optional group _:@dr_ for setting the dilation rate, which can be omitted to use non-dilated convolutions.
 
   For time series (1D inputs), specify the kernel size as @ instead of @x@, since the kernel size is mono dimensional.
 
@@ -156,7 +156,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
   the selection of the neural network architectures to train. Currently supported values: [time, params].
   POPNAS requires at least one of them.
   
-**CNN hyperparameters**:
+**Training hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
 - **learning_rate**: defines the learning rate of the child CNN networks.
 - **weight_decay**: defines the weight decay to apply. For optimizers not supporting weight decay,
@@ -180,7 +180,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
     - **slow_step_size**: float value indicating the ratio for updating the slow weights.
 
 
-**CNN architecture parameters**:
+**Architecture hyperparameters**:
 - **filters**: defines the initial number of filters to use, which increase in each reduction cell.
 - **motifs**: number of motifs to stack in each CNN. In NAS literature, a motif usually refers to a single cell,
   here instead it is used to indicate a stack of N normal cells followed by a single reduction cell.
@@ -198,6 +198,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
   the spatial dimension and the filters.
 - **se_cell_output**: if _true_, squeeze and excitation is performed on the cell output (before residual, if used together).
 - **multi_output**: if _true_, CNNs will have an output exit (GAP + Softmax) at the end of each cell.
+- **activation_function**: string name of the Keras activation function to use in operators.
+  If not provided, it defaults to Swish.
 
 [//]: # (**RNN hyperparameters &#40;controller, optional&#41;**: \\)
 
@@ -244,6 +246,9 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - **balance_class_losses**: if _true_, the class losses will be weighted proportionally to the number of samples.
   The exact formula for computing the weight of each class is:
   w<sub>class</sub> = 1 / (classes_count * samples_fraction<sub>class</sub>).
+- **class_labels_remapping**: optional dictionary to remap class labels. The keys are strings representing the original class labels,
+  the value associated with each key is instead an integer, representing the new label to assign to that class
+  (e.g., {"1": 0, "2": 255} will convert labels=1 to 0 and labels=2 to 255).
 - **data_augmentation**: dictionary with parameters related to data augmentation.
   - **enabled**: _true_ for using data augmentation, _false_ otherwise.
   - **perform_on_gpu**: perform data augmentation directly on GPU (through Keras experimental layers).
@@ -274,6 +279,9 @@ Here it is presented a list of the configuration sections and fields, with a bri
   Currently, it supports only local training with a single device. Accepted values: [CPU, GPU, multi-GPU, TPU].
 - **enable_XLA_compilation**: enable XLA compilation when compiling Keras models.
   It is incompatible with some operators (e.g., bilinear upsample), and cause memory leaks on prolonged experiments, use it with caution.
+- **use_mixed_precision**: use float16 when performing computations inside Keras models.
+  Should improve performances on GPUs equipped with tensor cores.
+  Also, it makes it possible to increase the batch size due to lower memory consumption.
 
 
 ## Output folder structure
