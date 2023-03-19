@@ -1,6 +1,5 @@
 from typing import Callable
 
-import tensorflow as tf
 from tensorflow.keras import activations
 from tensorflow.keras.layers import Layer, Add, Average
 from tensorflow.keras.regularizers import Regularizer
@@ -63,21 +62,21 @@ class OpInstantiator:
     def generate_block_join_operator(self, name_suffix: str):
         return self.block_join_op_selector[self.block_op_join](name=f'{self.block_op_join}{name_suffix}')
 
-    def generate_pointwise_conv(self, filters: int, strided: bool, name: str, activation_f: Callable = tf.nn.silu):
+    def generate_pointwise_conv(self, filters: int, strided: bool, name: str):
         '''
         Provide builder for easily generating a pointwise convolution, for tensor shape regularization purposes.
         '''
         strides = self.reduction_stride if strided else self.normal_stride
-        return Convolution(filters, tuple([1] * self.op_dims), strides=strides, activation_f=activation_f, name=name)
+        return Convolution(filters, tuple([1] * self.op_dims), strides=strides, activation_f=self.activation_f, name=name)
 
-    def generate_transpose_conv(self, filters: int, upsample_factor: int, name: str, activation_f: Callable = tf.nn.silu):
+    def generate_transpose_conv(self, filters: int, upsample_factor: int, name: str):
         '''
         Provide builder for easily generating a transpose convolution, for tensor shape regularization purposes in specific networks types,
         e.g, segmentation networks, which could require a way of upsampling the spatial resolution of a tensor.
         '''
         kernel = tuple([upsample_factor] * self.op_dims)
         stride = tuple([upsample_factor] * self.op_dims)
-        return TransposeConvolution(filters, kernel, stride, weight_reg=self.weight_reg, activation_f=activation_f, name=name)
+        return TransposeConvolution(filters, kernel, stride, weight_reg=self.weight_reg, activation_f=self.activation_f, name=name)
 
     def generate_linear_upsample(self, upsample_factor: int, name: str):
         upsampler = op_dim_selector['upsample'][self.op_dims]

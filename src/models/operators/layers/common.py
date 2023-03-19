@@ -3,6 +3,7 @@ from abc import abstractmethod, ABC
 from typing import Optional, Callable
 
 import tensorflow as tf
+from tensorflow.keras import activations
 from tensorflow.keras.layers import BatchNormalization, Layer
 from tensorflow.keras.regularizers import Regularizer
 
@@ -54,7 +55,7 @@ class Identity(Layer):
 class ConvBatchActivation(Layer, ABC):
     ''' Abstract utility class used as baseline for any {Convolution operator - Batch Normalization - Activation} layer. '''
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]', dilation_rate: int = 1,
-                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='abstract', **kwargs):
+                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = activations.swish, name='abstract', **kwargs):
         super().__init__(name=name, **kwargs)
         self.filters = filters
         self.kernel = kernel
@@ -149,7 +150,7 @@ class TransposeConvolution(ConvBatchActivation):
 
 class TransposeConvolutionStack(Layer):
     def __init__(self, filters: int, kernel: 'tuple[int, ...]', strides: 'tuple[int, ...]',
-                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='tconv', **kwargs):
+                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = activations.swish, name='tconv', **kwargs):
         '''
         Constructs a Transpose Convolution - Convolution layer. Batch Normalization and Relu are applied on both.
         '''
@@ -184,7 +185,7 @@ class TransposeConvolutionStack(Layer):
 
 class StackedConvolution(Layer):
     def __init__(self, filter_list: 'list[int]', kernel_list: 'list[tuple]', stride_list: 'list[tuple]', weight_reg: Optional[Regularizer] = None,
-                 activation_f: Callable = tf.nn.silu, name='stack_conv', **kwargs):
+                 activation_f: Callable = activations.swish, name='stack_conv', **kwargs):
         '''
         Constructs a stack of Convolution blocks that are chained together.
         '''
@@ -247,7 +248,8 @@ class Pooling(Layer):
 
 
 class PoolingConv(Layer):
-    def __init__(self, pool_layer: Pooling, filters: int, weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, **kwargs):
+    def __init__(self, pool_layer: Pooling, filters: int, weight_reg: Optional[Regularizer] = None,
+                 activation_f: Callable = activations.swish, **kwargs):
         ''' Adds a pointwise convolution (using Convolution class) to a Pooling layer, to adapt the output depth to filters size. '''
         super().__init__(name=f'{pool_layer.name}_pw', **kwargs)
         self.pool_layer = pool_layer

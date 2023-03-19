@@ -1,7 +1,7 @@
 from typing import Optional, Callable
 
 import tensorflow as tf
-from tensorflow.keras import mixed_precision
+from tensorflow.keras import mixed_precision, activations
 from tensorflow.keras.layers import Layer, GlobalAveragePooling2D
 from tensorflow.keras.regularizers import Regularizer
 
@@ -9,7 +9,8 @@ from models.operators.layers import Convolution
 
 
 class ImagePooling(Layer):
-    def __init__(self, filters: int, weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='img_pooling', **kwargs):
+    def __init__(self, filters: int, weight_reg: Optional[Regularizer] = None, activation_f: Callable = activations.swish,
+                 name='img_pooling', **kwargs):
         '''
         Image global pooling used in ASPP module.
         The implementation is different from the one proposed in the ParseNet paper, using batch normalization instead of L2 norm,
@@ -42,7 +43,7 @@ class ImagePooling(Layer):
 
 class AtrousSpatialPyramidPooling(Layer):
     def __init__(self, filters: int, dilation_rates: 'tuple[int, int, int]', filters_ratio: float = 1,
-                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = tf.nn.silu, name='ASPP', **kwargs):
+                 weight_reg: Optional[Regularizer] = None, activation_f: Callable = activations.swish, name='ASPP', **kwargs):
         '''
         ASPP layer.
         The implementation is inspired from: https://github.com/tensorflow/models/blob/v2.11.3/official/vision/modeling/layers/deeplab.py

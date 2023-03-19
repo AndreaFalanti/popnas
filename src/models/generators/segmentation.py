@@ -86,8 +86,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
         h_tensor = hidden_tensor.tensor
         h_filters = int(hidden_tensor.shape[-1] * self.input_shape[-1])
         if upscale_ratio > 1:
-            h_tensor = self.op_instantiator.generate_transpose_conv(h_filters, int(upscale_ratio),
-                                                                    name=f'output_upsample{name_suffix}')(h_tensor)
+            h_tensor = self.op_instantiator.generate_transpose_conv(h_filters, int(upscale_ratio), name=f'output_upsample{name_suffix}')(h_tensor)
 
         # TODO: a spatial dropout could be more indicated for this structure
         if dropout_prob > 0.0:
