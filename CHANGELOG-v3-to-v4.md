@@ -120,3 +120,21 @@ and optimizer to use for the neural networks training directly from the config.
   usage of the lookahead mechanism.
 - Heavily refactor the JSON configuration format, improving clarity and making some fields optional to avoid clutter.
 - Fix sampled models ONNX save using the model without the trained weights. Add also the TF format for convenience.
+
+### v3.6.0
+Add new functionalities and configuration options. Refactor how TFDS datasets are loaded and extend support to segmentation tasks.
+
+- Extend class weights for loss balancing for supporting sparse labels. The code automatically detects if one-hot or sparse labels
+  are used and compute the weights in a transparent way to the user.
+- Add class relabeling, a functionality that allows the substitution of any label with another value.
+  A possible use case for this feature is to aggregate multiple classes under a single label.
+- Add support for mixed precision (FP16 compute type, FP32 store type). See TF mixed precision guide for further info.
+- Make possible to change the default activation function directly from the JSON config. By default, Swish is used, as done in previous tests.
+  The config parameter accepts any string identifier accepted by Keras itself.
+- Refactor the operator allocators, simplifying the application of weight regularization and the new activation function setting.
+- Move onnxruntime to dev dependencies, since not used in actual POPNAS code.
+- Reduce the default number of filters used in each branch of the ASPP, set to half the original filters.
+  The ratio of filters can be set through a new parameter.
+- Change how the architecture derived from the empty cell of DeepLab-like models is built, following the macro-architecture
+  of other networks using non-empty cells.
+- Fix ImagePreprocessing padding being applied when not necessary.
