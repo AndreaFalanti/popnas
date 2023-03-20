@@ -32,8 +32,7 @@ Virtual environment and dependencies are managed by _poetry_, check out its [rep
 for installing it on your machine and learning more about it.
 Version >= 1.2.0 is required.
 
-You need either python version 3.7 or 3.8 installed in your system for building a valid environment (python versions > 3.8 could work,
-but they have not been officially tested).
+The supported python versions are listed in the _pyproject.toml_ file, in the first line of the dependencies section.
 To install and manage the python versions and work with _poetry_, it is advised to use [pyenv](https://github.com/pyenv/pyenv)
 or [pyenv-win](https://github.com/pyenv-win/pyenv-win) based on your system.
 
@@ -50,8 +49,8 @@ to change the virtual environment generation position directly in the project fo
 To generate the environment, open your terminal inside the repository folder and make sure that the python in use is a compatible version.
 If not, you can install it and activate it through pyenv with these commands:
 ```
-pyenv install 3.7.4 # or any valid version
-pyenv shell 3.7.4
+pyenv install 3.10.9 # or any valid version
+pyenv shell 3.10.9
 ```
 
 To install the dependencies, simply run:
@@ -79,7 +78,7 @@ python run.py
 ### GPU support
 To enable GPU computations locally, you must satisfy Tensorflow GPU hardware and software requirements.
 Follow https://www.tensorflow.org/install/gpu instructions to set up your device. Make sure
-to install the exact versions of CUDA and CUDNN for Tensorflow 2.7 (see https://www.tensorflow.org/install/source#linux).
+to install the exact versions of CUDA and CUDNN for Tensorflow 2.10 (see https://www.tensorflow.org/install/source#gpu).
 
 ### Note for fellow developers
 If you open the project with an IDE, the imports from _tensorflow.keras_ will be marked as error and autocomplete will not work.
@@ -99,12 +98,12 @@ and finally mounting POPNAS source code.
 
 To build the image, open the terminal into the root folder and execute this command:
 ```
-docker build -f docker/Dockerfile -t andreafalanti/popnas:tf2.7.3 .
+docker build -f docker/Dockerfile -t andreafalanti/popnas:v3 .
 ```
 
 POPNASv3 can then be launched with command (set arguments as you like):
 ```
-docker run -it --name popnas andreafalanti/popnas:tf2.7.3 python run.py -j configs/run_debug.json
+docker run -it --name popnas andreafalanti/popnas:v3 python run.py -j configs/run_debug.json
 ```
 
 ## Run configuration
@@ -370,7 +369,7 @@ To use it, only the log folder must be provided.
 
 An example of the command usage (from src folder):
 ```
-python ./scripts/plot_slideshow.py -p {path_to_log_folder}
+python scripts/plot_slideshow.py -p {path_to_log_folder}
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
@@ -398,7 +397,7 @@ POPNAS use the latest API provided by NATS-bench (topology search space is equiv
 
 The experiment can be run with command:
 ```
-python ./run_bench.py -p {path_to_folder_with_NATS_bench_files}
+python run_bench.py -p {path_to_folder_with_NATS_bench_files}
 ```
 
 ### Flask server
