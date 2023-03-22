@@ -194,19 +194,6 @@ class SpektralPredictor(KerasPredictor, ABC):
         return PackedBatchLoader(train_gds, batch_size=batch_size, shuffle=False, node_level=False).load(), \
                None if val_gds is None else PackedBatchLoader(val_gds, batch_size=batch_size, shuffle=False, node_level=False).load()
 
-    def _get_compilation_parameters(self, lr: float) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
-        loss = losses.MeanSquaredError()
-        train_metrics = [metrics.MeanAbsolutePercentageError()]
-        optimizer = optimizers.Adam(learning_rate=lr)
-
-        return loss, optimizer, train_metrics
-
-    def _get_callbacks(self, log_folder: str) -> 'list[callbacks.Callback]':
-        return [
-            callbacks.TensorBoard(log_dir=log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch'),
-            callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
-        ]
-
     def train(self, dataset: Union[str, 'list[tuple]'], use_data_augmentation=True):
         # get samples for file path string
         if isinstance(dataset, str):
