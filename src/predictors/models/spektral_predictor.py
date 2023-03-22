@@ -223,7 +223,7 @@ class SpektralPredictor(KerasPredictor, ABC):
             dataset = self._get_training_data_from_file(dataset)
 
         cells, rewards = zip(*dataset)
-        actual_b = len(cells[-1])
+        actual_b = max(len(cell) for cell in cells)
         # erase ensemble in case single training is used. If called from train_ensemble, the ensemble is local to the function and written
         # only at the end
         self.model_ensemble = None
@@ -233,8 +233,7 @@ class SpektralPredictor(KerasPredictor, ABC):
                                                   use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
 
         if self._model_log_folder is None:
-            b_max = len(cells[-1])
-            self._model_log_folder = os.path.join(self.log_folder, f'B{b_max}')
+            self._model_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
             create_empty_folder(self._model_log_folder)
 
         train_callbacks = self._get_callbacks(self._model_log_folder)
@@ -276,3 +275,5 @@ class SpektralPredictor(KerasPredictor, ABC):
 
         if self.save_weights:
             self.model.save_weights(os.path.join(self._model_log_folder, 'weights'))
+
+        self._model_log_folder = None
