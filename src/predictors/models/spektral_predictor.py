@@ -208,6 +208,7 @@ class SpektralPredictor(KerasPredictor, ABC):
         batch_size = 8
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
                                                   use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
+        total_training_steps = train_ds.steps_per_epoch * self.hp_config['epochs']
 
         if self._model_log_folder is None:
             self._model_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
@@ -235,13 +236,13 @@ class SpektralPredictor(KerasPredictor, ABC):
             whole_ds, _ = self._build_tf_dataset(cells, rewards, batch_size,
                                                  use_data_augmentation=use_data_augmentation, validation_split=False)
 
-            self.model = self._compile_model(best_hp)
+            self.model = self._compile_model(best_hp, total_training_steps)
             self.model.fit(x=whole_ds,
                            epochs=self.hp_config['epochs'],
                            steps_per_epoch=train_ds.steps_per_epoch,
                            callbacks=train_callbacks)   # type: callbacks.History
         else:
-            self.model = self._compile_model(self.hp_config)
+            self.model = self._compile_model(self.hp_config, total_training_steps)
             self.model.fit(x=train_ds,
                            epochs=self.hp_config['epochs'],
                            steps_per_epoch=train_ds.steps_per_epoch,

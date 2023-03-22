@@ -68,8 +68,8 @@ class KerasPredictor(Predictor, ABC):
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
         return {
-            'epochs': 30,
-            'lr': 0.004
+            'epochs': 50,
+            'lr': 0.006
         }
 
     @abstractmethod
@@ -79,8 +79,8 @@ class KerasPredictor(Predictor, ABC):
         Note that keras-tuner HyperParameters class can be treated as a dictionary.
         '''
         hp = kt.HyperParameters()
-        hp.Fixed('epochs', 30)
-        hp.Float('lr', 0.002, 0.02, sampling='linear')
+        hp.Fixed('epochs', 50)
+        hp.Float('lr', 0.005, 0.05, sampling='linear')
 
         return hp
 
@@ -110,9 +110,10 @@ class KerasPredictor(Predictor, ABC):
         '''
         pass
 
-    def _get_compilation_parameters(self, lr: float) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
+    def _get_compilation_parameters(self, lr: float, training_steps: int) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
         loss = losses.MeanSquaredError()
         train_metrics = [metrics.MeanAbsolutePercentageError()]
+        lr = optimizers.schedules.CosineDecay(lr, decay_steps=training_steps)
         optimizer = optimizers.Adam(learning_rate=lr)
 
         return loss, optimizer, train_metrics
@@ -124,9 +125,9 @@ class KerasPredictor(Predictor, ABC):
         ]
 
     # kt.HyperParameters is basically a dictionary and can be treated as such
-    def _compile_model(self, config: Union[kt.HyperParameters, dict]):
+    def _compile_model(self, config: Union[kt.HyperParameters, dict], training_steps: int):
         with self.train_strategy.scope():
-            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'])
+            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'], training_steps)
 
             model = self._build_model(config)
             execution_steps = get_optimized_steps_per_execution(self.train_strategy)
@@ -204,6 +205,9 @@ class KerasPredictor(Predictor, ABC):
         batch_size = 8
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
                                                   use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
+        train_steps_per_epoch = len(train_ds)
+        total_training_steps = train_steps_per_epoch * self.hp_config['epochs']
+
         if self._model_log_folder is None:
             self._model_log_folder = os.path.join(self.log_folder, f'B{actual_b}')
             create_empty_folder(self._model_log_folder)
@@ -226,12 +230,12 @@ class KerasPredictor(Predictor, ABC):
             # train the best model with all samples
             whole_ds = train_ds.concatenate(val_ds)
 
-            self.model = self._compile_model(best_hp)
+            self.model = self._compile_model(best_hp, total_training_steps)
             self.model.fit(x=whole_ds,
                            epochs=self.hp_config['epochs'],
                            callbacks=train_callbacks)   # type: callbacks.History
         else:
-            self.model = self._compile_model(self.hp_config)
+            self.model = self._compile_model(self.hp_config, total_training_steps)
             self.model.fit(x=train_ds,
                            epochs=self.hp_config['epochs'],
                            callbacks=train_callbacks)
