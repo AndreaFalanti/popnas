@@ -105,7 +105,8 @@ class CellGraphDataset(spektral.data.Dataset):
     def __init__(self, search_space: SearchSpace, cell_specs: 'list[list]', rewards: 'list[float]' = None, transforms=None, **kwargs):
         self.search_space = search_space
         self.cell_specs = cell_specs
-        self.rewards = rewards if rewards is not None else [None] * len(cell_specs)
+        # do not use None since they are trimmed by the loader, causing the usual bug with Keras predict detecting just one input
+        self.rewards = rewards if rewards is not None else [0] * len(cell_specs)
 
         super().__init__(transforms, **kwargs)
 
@@ -193,7 +194,8 @@ class SpektralPredictor(KerasPredictor, ABC):
             train_gds = CellGraphDataset(self.search_space, cells_train, rewards_train)
             val_gds = CellGraphDataset(self.search_space, cells_val, rewards_val)
         else:
-            cell_specs, rewards = sklearn.utils.shuffle(cell_specs, rewards)
+            if shuffle:
+                cell_specs, rewards = sklearn.utils.shuffle(cell_specs, rewards)
             train_gds = CellGraphDataset(self.search_space, cell_specs, rewards)
 
         for tx in self.data_transforms:
