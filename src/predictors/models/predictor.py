@@ -141,8 +141,7 @@ class Predictor(ABC):
             else:
                 self.train(dataset_b)
 
-            # TODO: use predict_batch for more speed, but prediction time here is negligible compared to training time
-            self._y_pred.append(list(map(self.predict, samples_b)))
+            self._y_pred.append(self.predict_batch(samples_b).tolist())
 
         self._logger.info('Computing additional metrics...')
         self._compute_pred_test_metrics()

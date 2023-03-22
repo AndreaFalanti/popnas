@@ -259,13 +259,13 @@ class KerasPredictor(Predictor, ABC):
 
         # predict using a single model
         if self.model_ensemble is None:
-            predictions = self.model.predict(x=pred_dataset)  # type: np.ndarray
-            return predictions.reshape(-1)
+            predictions = self.model.predict(x=pred_dataset, steps=1)  # type: np.ndarray
+            return predictions.flatten()
         # predict using a model ensemble
         else:
-            predictions = np.array(list(zip(*[model.predict(x=pred_dataset) for model in self.model_ensemble]))).squeeze()
+            predictions = np.array(list(zip(*[model.predict(x=pred_dataset, steps=1) for model in self.model_ensemble]))).squeeze()
             predictions = predictions.mean(axis=-1)
-            return predictions.reshape(-1)
+            return predictions.flatten()
 
     def prepare_prediction_test_data(self, file_path: str) -> 'tuple[list[Union[str, list[tuple]]], list[list], list[list[float]]]':
         dataset_df = pd.read_csv(file_path)
