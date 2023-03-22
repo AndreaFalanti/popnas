@@ -8,11 +8,9 @@ import numpy as np
 import sklearn
 import spektral
 import tensorflow as tf
-from einops import rearrange
 from sklearn.model_selection import train_test_split
-from spektral import layers as g_layers
 from spektral.data import Loader, Graph, PackedBatchLoader
-from tensorflow.keras import losses, optimizers, metrics, callbacks
+from tensorflow.keras import callbacks
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.utils import plot_model
 
@@ -119,25 +117,15 @@ class CellGraphDataset(spektral.data.Dataset):
 
 
 class ExtractLastNodeFeatures(Layer):
-    def __init__(self, node_dim: int, name='last_node_feat', **kwargs):
+    def __init__(self, name='last_node_feat', **kwargs):
         '''
         Take only last node features from features produced by a Spektral graph layer, reshaping it to squeeze dimensions.
-        Encapsulating the operation in a Keras layer allows to plot it during plot_model().
+        Encapsulating the operation in a Keras layer allows plotting it during plot_model().
         '''
         super().__init__(name=name, **kwargs)
-        self.sort_pool = g_layers.SortPool(1)
-        self.node_dim = node_dim
 
     def call(self, inputs, training=None, mask=None):
-        last_node_feat = self.sort_pool(inputs)
-        return rearrange(last_node_feat, 'b n f -> b (n f)', n=1, f=self.node_dim)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'node_dim': self.node_dim,
-        })
-        return config
+        return inputs[:, -1, :]
 
 
 class SpektralPredictor(KerasPredictor, ABC):
