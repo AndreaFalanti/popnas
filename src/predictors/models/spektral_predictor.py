@@ -29,9 +29,16 @@ def build_adjacency_matrix(edges: 'Iterable[tuple[int, int]]', num_nodes: int):
 
 
 def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: CellSpecification, y_label: Optional[float]):
-    # address empty cell case (0 blocks), doesn't work
-    # if len(cell_spec) == 0:
-    #     return Graph(x=[], a=[], y=y_label)
+    num_operators = len(search_space.operator_values)
+    max_lookback_abs = abs(search_space.input_lookback_depth)
+    # node features are (in order): operators as one-hot categorical, lookbacks, block_add and (cell_concat + pointwise conv)
+    # features are a one-hot vector, which should work well for GCN.
+    num_features = num_operators + max_lookback_abs + 2
+
+    # address the empty cell (0 blocks) case separately
+    # use a fictitious node with all features set to 0
+    if len(cell_spec) == 0:
+        return Graph(x=np.zeros((1, num_features), dtype=np.float), a=np.zeros((1, 1), dtype=np.float), y=y_label)
 
     cell_inputs = cell_spec.inputs
     encoded_flat_cell = search_space.encode_cell_spec(cell_spec)
@@ -40,12 +47,7 @@ def cell_spec_to_spektral_graph(search_space: SearchSpace, cell_spec: CellSpecif
     num_blocks = len(cell_spec)
     num_unused_blocks = len(cell_spec.unused_blocks)
     num_used_lookbacks = len(cell_spec.used_lookbacks)
-    num_operators = len(search_space.operator_values)
-    max_lookback_abs = abs(search_space.input_lookback_depth)
 
-    # node features are (in order): operators as one-hot categorical, lookbacks, block_add and (cell_concat + pointwise conv)
-    # features are a one-hot vector, which should work well for GCN.
-    num_features = num_operators + max_lookback_abs + 2
     num_nodes = num_used_lookbacks + num_blocks * 3 + (1 if num_unused_blocks > 1 else 0)
     num_edges = num_blocks * 4 + (num_unused_blocks if num_unused_blocks > 1 else 0)
 
@@ -165,11 +167,6 @@ class SpektralPredictor(KerasPredictor, ABC):
                           use_data_augmentation: bool = True, validation_split: bool = True,
                           shuffle: bool = True) -> 'tuple[Loader, Optional[Loader]]':
         # NOTE: instead of TF Datasets, this function returns spektral loaders, which are generators. Still, they should work fine in Keras functions.
-
-        # prune empty cell, since it's not possible to feed an empty graph.
-        if cell_specs[0] == []:
-            cell_specs = cell_specs[1:]
-            rewards = None if rewards is None else rewards[1:]
 
         # TODO: WORKAROUND -> predict case, avoid loader and use numpy directly, to avoid bug with keras model predict
         if len(cell_specs) == 1:
