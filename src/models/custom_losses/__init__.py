@@ -7,4 +7,4 @@ from .mse_hinge_loss import PairwiseHingeFromPred, MSEWithPairwiseHinge
 from .spearman_loss import Spearman, MSEWithSpearman
 from .squared_rank_error_loss import SquaredRankError, MSEWithSRE
 
-__all__ = ['PairwiseHingeFromPred', 'MSEWithSRE', 'SquaredRankError', 'MSEWithSRE', 'Spearman', 'MSEWithSpearman']
+__all__ = ['PairwiseHingeFromPred', 'MSEWithPairwiseHinge', 'SquaredRankError', 'MSEWithSRE', 'Spearman', 'MSEWithSpearman']
