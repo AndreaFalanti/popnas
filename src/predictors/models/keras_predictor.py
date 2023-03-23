@@ -12,6 +12,7 @@ import tensorflow as tf
 from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
+from tensorflow_addons import optimizers as tfa_optimizers
 
 from search_space import SearchSpace, parse_cell_strings
 from utils.func_utils import create_empty_folder, alternative_dict_to_string
@@ -68,8 +69,11 @@ class KerasPredictor(Predictor, ABC):
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
         return {
-            'epochs': 50,
-            'lr': 0.006
+            'epochs': 60,
+            'lr': 0.006,
+            'wd': 5e-4,
+            'use_wr': False,
+            'wr': 0
         }
 
     @abstractmethod
@@ -79,8 +83,11 @@ class KerasPredictor(Predictor, ABC):
         Note that keras-tuner HyperParameters class can be treated as a dictionary.
         '''
         hp = kt.HyperParameters()
-        hp.Fixed('epochs', 50)
-        hp.Float('lr', 0.005, 0.05, sampling='linear')
+        hp.Fixed('epochs', 60)
+        hp.Float('lr', 0.003, 0.03, sampling='linear')
+        hp.Float('wd', 1e-6, 1e-2, sampling='log')
+        hp.Boolean('use_wr')
+        hp.Float('wr', 1e-7, 1e-4, sampling='log', parent_name='use_wr', parent_values=[True])
 
         return hp
 
@@ -110,24 +117,26 @@ class KerasPredictor(Predictor, ABC):
         '''
         pass
 
-    def _get_compilation_parameters(self, lr: float, training_steps: int) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
+    def _get_compilation_parameters(self, lr: float, wd: float,
+                                    training_steps: int) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
         loss = losses.MeanSquaredError()
         train_metrics = [metrics.MeanAbsolutePercentageError()]
         lr = optimizers.schedules.CosineDecay(lr, decay_steps=training_steps)
-        optimizer = optimizers.Adam(learning_rate=lr)
+        wd = optimizers.schedules.CosineDecay(wd, decay_steps=training_steps)
+        optimizer = tfa_optimizers.AdamW(learning_rate=lr, weight_decay=wd)
 
         return loss, optimizer, train_metrics
 
     def _get_callbacks(self, log_folder: str) -> 'list[callbacks.Callback]':
         return [
             callbacks.TensorBoard(log_dir=log_folder, profile_batch=0, histogram_freq=0, update_freq='epoch', write_graph=False),
-            callbacks.EarlyStopping(monitor='loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
+            callbacks.EarlyStopping(monitor='loss', patience=12, verbose=1, mode='min', restore_best_weights=True)
         ]
 
     # kt.HyperParameters is basically a dictionary and can be treated as such
     def _compile_model(self, config: Union[kt.HyperParameters, dict], training_steps: int):
         with self.train_strategy.scope():
-            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'], training_steps)
+            loss, optimizer, train_metrics = self._get_compilation_parameters(config['lr'], config['wd'], training_steps)
 
             model = self._build_model(config)
             execution_steps = get_optimized_steps_per_execution(self.train_strategy)
@@ -202,7 +211,7 @@ class KerasPredictor(Predictor, ABC):
         # only at the end
         self.model_ensemble = None
 
-        batch_size = 8
+        batch_size = 16
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
                                                   use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         train_steps_per_epoch = len(train_ds)

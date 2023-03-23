@@ -12,21 +12,19 @@ class GCNPredictor(SpektralPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
             'lr': 1e-3,
-            'wr': 1e-5,
-            'f1': 20,
-            'f2': 30,
-            'f3': 40,
-            'dense_units': 50
+            'f1': 30,
+            'f2': 60,
+            'f3': 120,
+            'dense_units': 100
         })
 
     def _get_hp_search_space(self):
         hp = super()._get_hp_search_space()
         hp.Float('lr', 1e-4, 1e-2, sampling='log')
-        hp.Float('wr', 1e-7, 1e-4, sampling='log')
-        hp.Int('f1', 10, 100, sampling='linear')
-        hp.Int('f2', 10, 100, sampling='linear')
-        hp.Int('f3', 10, 100, sampling='linear')
-        hp.Int('dense_units', 10, 100, sampling='linear')
+        hp.Int('f1', 20, 150, step=10, sampling='linear')
+        hp.Int('f2', 20, 150, step=10, sampling='linear')
+        hp.Int('f3', 20, 150, step=10, sampling='linear')
+        hp.Int('dense_units', 20, 150, step=10, sampling='linear')
 
         return hp
 

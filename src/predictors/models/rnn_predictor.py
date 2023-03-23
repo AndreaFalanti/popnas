@@ -10,7 +10,6 @@ from .keras_predictor import KerasPredictor
 class RNNPredictor(KerasPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
-            'wr': 1e-5,
             'use_er': False,
             'er': 0,
             'cells': 48,
@@ -20,7 +19,6 @@ class RNNPredictor(KerasPredictor):
 
     def _get_hp_search_space(self):
         hp = super()._get_hp_search_space()
-        hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Boolean('use_er')
         hp.Float('er', 1e-7, 1e-4, sampling='log', parent_name='use_er', parent_values=[True])
         hp.Int('cells', 20, 100, sampling='linear')

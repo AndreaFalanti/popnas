@@ -10,7 +10,6 @@ from .keras_predictor import KerasPredictor
 class Conv1D1IPredictor(KerasPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
-            'wr': 1e-5,
             'filters': 12,
             'kernel_size': 2,
             'dense_units': 10
@@ -18,7 +17,6 @@ class Conv1D1IPredictor(KerasPredictor):
 
     def _get_hp_search_space(self):
         hp = super()._get_hp_search_space()
-        hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Int('filters', 10, 40, step=2, sampling='uniform')
         hp.Choice('kernel_size', [2, 3])
         hp.Int('dense_units', 5, 40, sampling='linear')
@@ -26,7 +24,7 @@ class Conv1D1IPredictor(KerasPredictor):
         return hp
 
     def _build_model(self, config: dict):
-        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+        weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # one input: a series of blocks
         block_series = layers.Input(shape=(self.search_space.B, 4))

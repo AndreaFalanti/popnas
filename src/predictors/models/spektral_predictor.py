@@ -202,7 +202,7 @@ class SpektralPredictor(KerasPredictor, ABC):
         # only at the end
         self.model_ensemble = None
 
-        batch_size = 8
+        batch_size = 16
         train_ds, val_ds = self._build_tf_dataset(cells, rewards, batch_size,
                                                   use_data_augmentation=use_data_augmentation, validation_split=self.hp_tuning)
         total_training_steps = train_ds.steps_per_epoch * self.hp_config['epochs']

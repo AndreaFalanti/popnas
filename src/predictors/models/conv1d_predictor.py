@@ -10,7 +10,6 @@ from .keras_predictor import KerasPredictor
 class Conv1DPredictor(KerasPredictor):
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
-            'wr': 1e-5,
             'filters': 12,
             'kernel_size': 2,
             'kernel_size_block': 2,
@@ -19,7 +18,6 @@ class Conv1DPredictor(KerasPredictor):
 
     def _get_hp_search_space(self):
         hp = super()._get_hp_search_space()
-        hp.Float('wr', 1e-7, 1e-4, sampling='log')
         hp.Int('filters', 10, 40, step=2, sampling='uniform')
         hp.Choice('kernel_size', [2, 3])
         hp.Choice('kernel_size_block', [2, 3])
