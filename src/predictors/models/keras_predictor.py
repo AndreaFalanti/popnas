@@ -12,6 +12,7 @@ import tensorflow as tf
 from sklearn.model_selection import KFold
 from tensorflow.keras import losses, optimizers, metrics, callbacks
 from tensorflow.keras.utils import plot_model
+from tensorflow_addons import metrics as tfa_metrics
 from tensorflow_addons import optimizers as tfa_optimizers
 
 from search_space import SearchSpace, parse_cell_strings
@@ -69,8 +70,8 @@ class KerasPredictor(Predictor, ABC):
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
         return {
-            'epochs': 60,
-            'lr': 0.006,
+            'epochs': 80,
+            'lr': 0.005,
             'wd': 5e-4,
             'use_wr': False,
             'wr': 0
@@ -120,7 +121,7 @@ class KerasPredictor(Predictor, ABC):
     def _get_compilation_parameters(self, lr: float, wd: float,
                                     training_steps: int) -> 'tuple[losses.Loss, optimizers.Optimizer, list[metrics.Metric]]':
         loss = losses.MeanSquaredError()
-        train_metrics = [metrics.MeanAbsolutePercentageError()]
+        train_metrics = [metrics.MeanAbsolutePercentageError(), tfa_metrics.SpearmansRank(name='spearmans_rank')]
         lr = optimizers.schedules.CosineDecay(lr, decay_steps=training_steps)
         wd = optimizers.schedules.CosineDecay(wd, decay_steps=training_steps)
         optimizer = tfa_optimizers.AdamW(learning_rate=lr, weight_decay=wd)
