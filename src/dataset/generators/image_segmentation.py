@@ -85,16 +85,19 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                     # TODO: stratification removed since not working properly on 2D labels. Find a way to add it.
                     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=self.val_size, random_state=SEED)
 
-                train_ds = generate_possibly_ragged_dataset(x_train, y_train)
-                val_ds = generate_possibly_ragged_dataset(x_val, y_val)
+                train_ds, _ = generate_possibly_ragged_dataset(x_train, y_train)
+                val_ds, val_ds_is_ragged = generate_possibly_ragged_dataset(x_val, y_val)
             # TFDS dataset case
             else:
                 train_ds, val_ds, info = generate_train_val_datasets_from_tfds(self.dataset_name, self.samples_limit, self.val_size,
                                                                                self.tfds_feature_keys)
-                x_feature, y_feature = self.tfds_feature_keys
+
                 # even if the image shape is fixed, random crops at train time are smaller, so HW are kept None
-                # image_shape = info.features[x_feature].shape
+                # still, it is possible to batch the validation dataset, if the images have the same dimensions
+                x_feature, y_feature = self.tfds_feature_keys
+                val_ds_is_ragged = any(dim is None for dim in info.features[x_feature].shape)
                 image_shape = (None, None, 3)
+
                 # TODO: no way of determining classes in segmentation labels, without scanning the whole dataset... lets trust the user
                 classes = self.dataset_classes_count
 
@@ -104,8 +107,10 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
                                                              use_sample_weights=self.use_sample_weights)
-            # since images can have different sizes, it's not possible to batch multiple images together (batch_size = 1)
-            val_ds, val_batches = self._finalize_dataset(val_ds, 1, data_preprocessor, shard_policy=shard_policy)
+            # use a batch_size = 1 if the validation dataset is ragged,
+            # otherwise use half batch size (since actual images could be much bigger than crops)
+            val_batch_size = 1 if val_ds_is_ragged else self.batch_size // 2
+            val_ds, val_batches = self._finalize_dataset(val_ds, val_batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = data_preprocessor.preprocessor_model
@@ -121,21 +126,28 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # Custom dataset, loaded from numpy npz files
         if self.dataset_path is not None:
             x_test, y_test = load_npz(os.path.join(self.dataset_path, 'test.npz'), possibly_ragged=True)
-            test_ds = generate_possibly_ragged_dataset(x_test, y_test)
+            test_ds, test_ds_is_ragged = generate_possibly_ragged_dataset(x_test, y_test)
 
             classes = self.dataset_classes_count
-            # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
             image_shape = (None, None, 3)
         # TFDS dataset case
         else:
             test_ds, info = generate_dataset_from_tfds(self.dataset_name, 'test', self.samples_limit, self.tfds_feature_keys)
+
+            # even if the image shape is fixed, random crops at train time are smaller, so HW are kept None
+            # still, it is possible to batch the validation dataset, if the images have the same dimensions
+            x_feature, y_feature = self.tfds_feature_keys
+            test_ds_is_ragged = any(dim is None for dim in info.features[x_feature].shape)
             image_shape = (None, None, 3)
+
             classes = self.dataset_classes_count
 
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = self.build_preprocessor()
-        # since images can have different sizes, it's not possible to batch multiple images together (batch_size = 1)
-        test_ds, batches = self._finalize_dataset(test_ds, 1, data_preprocessor, shard_policy=shard_policy)
+        # use a batch_size = 1 if the test dataset is ragged,
+        # otherwise use half batch size (since actual images could be much bigger than crops)
+        test_batch_size = 1 if test_ds_is_ragged else self.batch_size // 2
+        test_ds, batches = self._finalize_dataset(test_ds, test_batch_size, data_preprocessor, shard_policy=shard_policy)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches
@@ -156,7 +168,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 y_train = np.concatenate((y_train, y_val), axis=0)
 
             x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
-            train_ds = generate_possibly_ragged_dataset(x_train, y_train)
+            train_ds, _ = generate_possibly_ragged_dataset(x_train, y_train)
 
             classes = self.dataset_classes_count
             # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)

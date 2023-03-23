@@ -49,15 +49,22 @@ def generate_tf_dataset_from_numpy_ragged_array(x_arr: np.ndarray, y_arr: np.nda
     return tf.data.Dataset.from_tensor_slices((x_ragged, y_ragged)).map(lambda x, y: (x.to_tensor(), y.to_tensor()))
 
 
-def generate_possibly_ragged_dataset(x: np.ndarray, y: np.ndarray) -> tf.data.Dataset:
+def generate_possibly_ragged_dataset(x: np.ndarray, y: np.ndarray) -> tuple[tf.data.Dataset, bool]:
     '''
     If the array type is *object*, generate a ragged dataset, otherwise generate a normal one.
     A ragged dataset can contain samples of different dimensions.
+
+    Args:
+        x: samples
+        y: labels
+
+    Returns:
+        the TF dataset object, plus a flag indicating if the dataset is ragged or not
     '''
     if x.dtype == np.object:
-        return generate_tf_dataset_from_numpy_ragged_array(x, y, dtype=None)
+        return generate_tf_dataset_from_numpy_ragged_array(x, y, dtype=None), True
     else:
-        return tf.data.Dataset.from_tensor_slices((x, y))
+        return tf.data.Dataset.from_tensor_slices((x, y)), False
 
 
 def generate_train_val_datasets_from_tfds(dataset_name: str, samples_limit: Optional[int], val_size: Optional[float],
