@@ -1,8 +1,6 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
-from scipy.stats import spearmanr
-from tensorflow.keras.losses import Loss, MeanSquaredError
-from tensorflow.keras.losses import Reduction
+from tensorflow.keras.losses import Loss, MeanSquaredError, Reduction
 
 
 @tf.function
@@ -49,27 +47,20 @@ def spearman_correlation_loss(y_true, y_pred):
     return sp
 
 
-# already implemented, but would run in eager mode. Also, it seems to not work properly.
-def get_spearman_rankcor(y_true, y_pred):
-    return (tf.py_function(spearmanr, [tf.cast(y_pred, tf.float32),
-                                       tf.cast(y_true, tf.float32)], Tout=tf.float32))
-
-
 class Spearman(Loss):
     def call(self, y_true, y_pred):
         return spearman_correlation_loss(y_true, y_pred)
 
 
 class MSEWithSpearman(Loss):
-
     ''' Mean squared error loss, rescaled with a factor based on the spearman correlation coefficient computed on the batch. '''
-
     def __init__(self, spearman_weight: float = 1.0, reduction=Reduction.AUTO, name=None):
         super().__init__(reduction, name)
         self.spearman_weight = spearman_weight
+        self.mse_loss = MeanSquaredError()
 
     def call(self, y_true, y_pred):
-        mse = MeanSquaredError().call(y_true, y_pred)
+        mse = self.mse_loss.call(y_true, y_pred)
         spearman_loss = spearman_correlation_loss(y_true, y_pred)   # is in [0, 2] interval
 
         # multiply mse based on the spearman correlation
