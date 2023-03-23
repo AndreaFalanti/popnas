@@ -26,7 +26,7 @@ class Conv1DPredictor(KerasPredictor):
         return hp
 
     def _build_model(self, config: dict):
-        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+        weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # two inputs: one tensor for cell inputs, one for cell operators
         inputs = layers.Input(shape=(self.search_space.B, 2))

@@ -38,7 +38,7 @@ class AttentionRNNPredictor(KerasPredictor):
         }
         rnn = supported_rnn_classes[config['rnn_type']]
 
-        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+        weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
         embedding_reg = regularizers.l2(config['er']) if config['use_er'] else None
 
         # two inputs: one tensor for cell inputs, one for cell operators

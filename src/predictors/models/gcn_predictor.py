@@ -11,7 +11,6 @@ class GCNPredictor(SpektralPredictor):
 
     def _get_default_hp_config(self):
         return dict(super()._get_default_hp_config(), **{
-            'lr': 1e-3,
             'f1': 30,
             'f2': 60,
             'f3': 120,
@@ -19,7 +18,6 @@ class GCNPredictor(SpektralPredictor):
         })
 
     def _get_hp_search_space(self):
-        hp = super()._get_hp_search_space()
         hp.Float('lr', 1e-4, 1e-2, sampling='log')
         hp.Int('f1', 20, 150, step=10, sampling='linear')
         hp.Int('f2', 20, 150, step=10, sampling='linear')
@@ -29,7 +27,7 @@ class GCNPredictor(SpektralPredictor):
         return hp
 
     def _build_model(self, config: dict):
-        weight_reg = regularizers.l2(config['wr']) if config['wr'] > 0 else None
+        weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # None refers to num_nodes, since they can vary between graphs
         node_features = layers.Input(shape=(None, self.num_node_features))
