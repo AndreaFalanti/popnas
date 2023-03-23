@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 
 import log_service
@@ -32,20 +34,22 @@ class PredictorsHandler:
 
         score_csv_field = score_metric.results_csv_column
         predictors_log_path = log_service.build_path('predictors')
-        catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
-        # amllibrary_config_path = os.path.join('configs', 'regressors_hyperopt.ini')
+        # catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
+        amllibrary_config_path = os.path.join('configs', 'regressors_hyperopt.ini')
 
         self._logger = log_service.get_logger(__name__)
         self._logger.info('Initializing predictors...')
 
         # initialize the score predictors to be used
-        self._acc_predictor = AttentionRNNPredictor(search_space, score_csv_field, score_domain, train_strategy,
-                                                    self._logger, predictors_log_path, override_logs=False, save_weights=True)
+        self._acc_predictor = GINPredictor(search_space, score_csv_field, score_domain, train_strategy,
+                                           self._logger, predictors_log_path, override_logs=False, save_weights=True)
 
         # initialize the time predictors to be used
-        self._time_predictor = None if pnas_mode else \
-            CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
+        # to use CatBoost: CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
         # example for aMLLibrary: AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, override_logs=False)
+        self._time_predictor = None if pnas_mode else \
+            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path, override_logs=False)
+
 
         self._logger.info('Predictors generated successfully')
 
