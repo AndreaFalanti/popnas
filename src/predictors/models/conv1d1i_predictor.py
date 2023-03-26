@@ -27,20 +27,20 @@ class Conv1D1IPredictor(KerasPredictor):
         weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # one input: a series of blocks
-        block_series = layers.Input(shape=(self.search_space.B, 4))
+        block_series = layers.Input(shape=(self.search_space.B, 4), dtype=self.dtype)
 
         first_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu',
-                                   kernel_regularizer=weight_reg, padding='same')(block_series)
+                                   kernel_regularizer=weight_reg, padding='same', dtype=self.dtype)(block_series)
         second_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu',
-                                    kernel_regularizer=weight_reg, padding='same')(first_conv)
+                                    kernel_regularizer=weight_reg, padding='same', dtype=self.dtype)(first_conv)
 
         final_conv = layers.Conv1D(config['filters'] * 2, config['kernel_size'], activation='relu',
-                                   kernel_regularizer=weight_reg, strides=2)(second_conv)
+                                   kernel_regularizer=weight_reg, strides=2, dtype=self.dtype)(second_conv)
 
         flatten = layers.Flatten()(final_conv)
-        sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
-        score = layers.Dense(1, activation=None, kernel_regularizer=weight_reg)(sig_dense)
-        out = layers.Activation(self.output_activation)(score)
+        sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg, dtype=self.dtype)(flatten)
+        score = layers.Dense(1, activation=None, kernel_regularizer=weight_reg, dtype=self.dtype)(sig_dense)
+        out = layers.Activation(self.output_activation, dtype=self.dtype)(score)
 
         return Model(inputs=block_series, outputs=out)
 

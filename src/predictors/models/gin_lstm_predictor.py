@@ -28,14 +28,17 @@ class GINLSTMPredictor(SpektralPredictor):
         weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # None refers to num_nodes, since they can vary between graphs
-        node_features = layers.Input(shape=(None, self.num_node_features))
-        adj_matrix = layers.Input(shape=(None, None))
+        node_features = layers.Input(shape=(None, self.num_node_features), dtype=self.dtype)
+        adj_matrix = layers.Input(shape=(None, None), dtype=self.dtype)
 
-        gconv1 = g_layers.GINConvBatch(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg)([node_features, adj_matrix])
-        gconv2 = g_layers.GINConvBatch(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv1, adj_matrix])
-        gconv3 = g_layers.GINConvBatch(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv2, adj_matrix])
-        lstm = layers.Bidirectional(layers.LSTM(config['lstm_units']))(gconv3)
-        score = layers.Dense(1, kernel_regularizer=weight_reg)(lstm)
-        out = layers.Activation(self.output_activation)(score)
+        gconv1 = g_layers.GINConvBatch(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                       dtype=self.dtype)([node_features, adj_matrix])
+        gconv2 = g_layers.GINConvBatch(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                       dtype=self.dtype)([gconv1, adj_matrix])
+        gconv3 = g_layers.GINConvBatch(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                       dtype=self.dtype)([gconv2, adj_matrix])
+        lstm = layers.Bidirectional(layers.LSTM(config['lstm_units'], dtype=self.dtype))(gconv3)
+        score = layers.Dense(1, kernel_regularizer=weight_reg, dtype=self.dtype)(lstm)
+        out = layers.Activation(self.output_activation, dtype=self.dtype)(score)
 
         return Model(inputs=[node_features, adj_matrix], outputs=out)

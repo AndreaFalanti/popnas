@@ -30,16 +30,19 @@ class GCNPredictor(SpektralPredictor):
         weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # None refers to num_nodes, since they can vary between graphs
-        node_features = layers.Input(shape=(None, self.num_node_features))
-        adj_matrix = layers.Input(shape=(None, None))
+        node_features = layers.Input(shape=(None, self.num_node_features), dtype=self.dtype)
+        adj_matrix = layers.Input(shape=(None, None), dtype=self.dtype)
 
-        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg)([node_features, adj_matrix])
-        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv1, adj_matrix])
-        gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg)([gconv2, adj_matrix])
+        gconv1 = g_layers.GCNConv(config['f1'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                  dtype=self.dtype)([node_features, adj_matrix])
+        gconv2 = g_layers.GCNConv(config['f2'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                  dtype=self.dtype)([gconv1, adj_matrix])
+        gconv3 = g_layers.GCNConv(config['f3'], activation=activations.swish, kernel_regularizer=weight_reg,
+                                  dtype=self.dtype)([gconv2, adj_matrix])
         # global_feat = ExtractLastNodeFeatures()(gconv3)
-        global_feat = g_layers.GlobalAvgPool()(gconv3)
-        dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg)(global_feat)
-        score = layers.Dense(1, kernel_regularizer=weight_reg)(dense)
-        out = layers.Activation(self.output_activation)(score)
+        global_feat = g_layers.GlobalAvgPool(dtype=self.dtype)(gconv3)
+        dense = layers.Dense(config['dense_units'], activation=activations.swish, kernel_regularizer=weight_reg, dtype=self.dtype)(global_feat)
+        score = layers.Dense(1, kernel_regularizer=weight_reg, dtype=self.dtype)(dense)
+        out = layers.Activation(self.output_activation, dtype=self.dtype)(score)
 
         return Model(inputs=[node_features, adj_matrix], outputs=out)

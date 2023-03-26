@@ -42,28 +42,29 @@ class AttentionRNNPredictor(KerasPredictor):
         embedding_reg = regularizers.l2(config['er']) if config['use_er'] else None
 
         # two inputs: one tensor for cell inputs, one for cell operators
-        inputs = layers.Input(shape=(self.search_space.B, 2))
-        ops = layers.Input(shape=(self.search_space.B, 2))
+        inputs = layers.Input(shape=(self.search_space.B, 2), dtype=self.dtype)
+        ops = layers.Input(shape=(self.search_space.B, 2), dtype=self.dtype)
 
         # input dim is the max integer value present in the embedding + 1.
         inputs_embed = layers.Embedding(input_dim=self.search_space.inputs_embedding_max, output_dim=config['embedding_dim'],
-                                        embeddings_regularizer=embedding_reg, mask_zero=True)(inputs)
+                                        embeddings_regularizer=embedding_reg, mask_zero=True, dtype=self.dtype)(inputs)
         ops_embed = layers.Embedding(input_dim=self.search_space.operator_embedding_max, output_dim=config['embedding_dim'],
-                                     embeddings_regularizer=embedding_reg, mask_zero=True)(ops)
+                                     embeddings_regularizer=embedding_reg, mask_zero=True, dtype=self.dtype)(ops)
 
-        embed = layers.Concatenate()([inputs_embed, ops_embed])
+        embed = layers.Concatenate(dtype=self.dtype)([inputs_embed, ops_embed])
         # pass from 4D (None, B, 2, 2 * embedding_dim) to 3D (None, B, 4 * embedding_dim),
         # indicating [batch_size, serie_length, features(whole block embedding)]
         embed = layers.Reshape((self.search_space.B, 4 * config['embedding_dim']))(embed)
 
-        attention_q = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu')(embed)
-        attention_k = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu')(embed)
-        attention = layers.Attention()([attention_q, attention_k])
+        attention_q = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu', dtype=self.dtype)(embed)
+        attention_k = layers.Conv1D(config['conv_filters'], config['conv_kernel'], padding='same', activation='relu', dtype=self.dtype)(embed)
+        attention = layers.Attention(dtype=self.dtype)([attention_q, attention_k])
 
         # many-to-one, so must have return_sequences = False (it is by default)
-        lstm = layers.Bidirectional(rnn(config['cells'], kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg))(attention)
-        score = layers.Dense(1, kernel_regularizer=weight_reg)(lstm)
-        out = layers.Activation(self.output_activation)(score)
+        lstm = layers.Bidirectional(rnn(config['cells'], kernel_regularizer=weight_reg, recurrent_regularizer=weight_reg,
+                                        dtype=self.dtype))(attention)
+        score = layers.Dense(1, kernel_regularizer=weight_reg, dtype=self.dtype)(lstm)
+        out = layers.Activation(self.output_activation, dtype=self.dtype)(score)
 
         return Model(inputs=(inputs, ops), outputs=out)
 

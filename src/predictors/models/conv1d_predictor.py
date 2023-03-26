@@ -29,22 +29,24 @@ class Conv1DPredictor(KerasPredictor):
         weight_reg = regularizers.l2(config['wr']) if config['use_wr'] else None
 
         # two inputs: one tensor for cell inputs, one for cell operators
-        inputs = layers.Input(shape=(self.search_space.B, 2))
-        ops = layers.Input(shape=(self.search_space.B, 2))
+        inputs = layers.Input(shape=(self.search_space.B, 2), dtype=self.dtype)
+        ops = layers.Input(shape=(self.search_space.B, 2), dtype=self.dtype)
 
-        inputs_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg)(inputs)
-        ops_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg)(ops)
+        inputs_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg,
+                                         dtype=self.dtype)(inputs)
+        ops_temp_conv = layers.Conv1D(config['filters'], config['kernel_size'], activation='relu', kernel_regularizer=weight_reg,
+                                      dtype=self.dtype)(ops)
 
         # indicating [batch_size, serie_length, features(whole block embedding)]
-        block_serie = layers.Concatenate()([inputs_temp_conv, ops_temp_conv])
+        block_serie = layers.Concatenate(dtype=self.dtype)([inputs_temp_conv, ops_temp_conv])
 
         block_temp_conv = layers.Conv1D(config['filters'] * 2, config['kernel_size_block'],
-                                        activation='relu', kernel_regularizer=weight_reg)(block_serie)
+                                        activation='relu', kernel_regularizer=weight_reg, dtype=self.dtype)(block_serie)
 
         flatten = layers.Flatten()(block_temp_conv)
-        sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg)(flatten)
-        score = layers.Dense(1, kernel_regularizer=weight_reg)(sig_dense)
-        out = layers.Activation(self.output_activation)(score)
+        sig_dense = layers.Dense(config['dense_units'], activation='sigmoid', kernel_regularizer=weight_reg, dtype=self.dtype)(flatten)
+        score = layers.Dense(1, kernel_regularizer=weight_reg, dtype=self.dtype)(sig_dense)
+        out = layers.Activation(self.output_activation, dtype=self.dtype)(score)
 
         return Model(inputs=(inputs, ops), outputs=out)
 

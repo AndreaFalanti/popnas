@@ -66,6 +66,8 @@ class KerasPredictor(Predictor, ABC):
         self._logger.debug('Using %s as final activation, based on y domain provided', self.output_activation)
 
         self._model_log_folder = None  # type: Optional[str]
+        # set the dtype in all Keras layers to avoid mixed precision, which is very harmful for predictors
+        self.dtype = 'float64'
 
     @abstractmethod
     def _get_default_hp_config(self) -> 'dict[str, Any]':
@@ -94,6 +96,18 @@ class KerasPredictor(Predictor, ABC):
 
     @abstractmethod
     def _build_model(self, config: dict) -> keras.Model:
+        '''
+        Define the model structure through the Keras interface (either sequential or functional mode).
+
+        NOTE: some predictors seem to perform badly when using FP16, therefore it is advised to set the dtype to self.dtype (float64) in each layer,
+        otherwise make sure that the predictor converges also with reduced precision.
+
+        Args:
+            config: dictionary with hyperparameters
+
+        Returns:
+            the Keras model, not compiled yet
+        '''
         pass
 
     @abstractmethod
