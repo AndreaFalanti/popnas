@@ -160,7 +160,7 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
 
         # apply spatial pyramid pooling on encoder bottleneck
         aspp = AtrousSpatialPyramidPooling(filters, dilation_rates=(3, 6, 12), filters_ratio=0.5,
-                                           weight_reg=self.l2_weight_reg)(cell_inputs[-1].tensor)
+                                           weight_reg=self.l2_weight_reg, activation_f=self.activation_f)(cell_inputs[-1].tensor)
         encoder_out = WrappedTensor(aspp, cell_inputs[-1].shape)
 
         # DECODER part (fixed)
