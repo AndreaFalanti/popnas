@@ -250,10 +250,6 @@ Here it is presented a list of the configuration sections and fields, with a bri
   (e.g., {"1": 0, "2": 255} will convert labels=1 to 0 and labels=2 to 255).
 - **data_augmentation**: dictionary with parameters related to data augmentation.
   - **enabled**: _true_ for using data augmentation, _false_ otherwise.
-  - **perform_on_gpu**: perform data augmentation directly on GPU (through Keras experimental layers).
-    Usually advised only if CPU is very slow, since CPU prepares the images while the GPU trains the network
-    (asynchronous prefetch), instead performing data augmentation on the GPU will make the process sequential,
-    always causing delays even if it's faster to perform on GPU.
 - ...extra parameters depending on dataset type, see next sections.
 
 **Dataset(_image_classification_ only)**:

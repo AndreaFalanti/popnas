@@ -138,3 +138,26 @@ Add new functionalities and configuration options. Refactor how TFDS datasets ar
 - Change how the architecture derived from the empty cell of DeepLab-like models is built, following the macro-architecture
   of other networks using non-empty cells.
 - Fix ImagePreprocessing padding being applied when not necessary.
+
+### v3.7.0
+Improve the predictors and fix performance problems in image classification data augmentation due to Keras issues.
+
+- Fix SpektralPredictors not being able to work on batches during predict.
+- Adapt KerasPredictors to use learning rate and weight decay schedulers.
+- Change KerasPredictor default optimizer to AdamW with learning rate and weight decay scheduled though cosine decay.
+  Weight regularization is set to 0 by default, since it has been "replaced" by weight decay which seems to perform similar or better.
+- Tune the default hyperparameters of multiple predictors and extend the default epochs of all KerasPredictors.
+- Fix predictors dtype to FP64 in all layers, since they seem to benefit from the finer precision.
+  Furthermore, mixed precision caused instability issues in predictors, so fixing the precision solves also this issue.
+- Add EnsemblePredictor, which acts as a wrapper of multiple predictors to build a heterogeneous ensemble of multiple models.
+- Add experimental GIN-LSTM Predictor and experimental losses aimed to improve ranking among predictions.
+  Experimental results do not indicate improvements, so they are not used right now.
+- Change POPNAS default predictors: the accuracy predictor is now implemented with GIN, while the time predictor with a SVR.
+- Change how the data augmentation is performed in image classification tasks.
+  The Keras model for data augmentation has been replaced with TF functions, making an upscale + random crop to replace the random translation.
+  This is not equivalent to translation, but some paper already used this technique and TF functions are vectorized correctly
+  (contrary to the Keras ones), which makes them much faster to execute.
+- Fix ASPP layer not using the activation function set in config file (was fixed to Swish).
+- Fix the script for running NATS-Bench.
+- Change the base docker image from official TF image to the one provided by NVIDIA (same TF version).
+  There was a "bus error" issue when using the previous image in Docker in multi-GPU settings, the new image instead seems to work fine.
