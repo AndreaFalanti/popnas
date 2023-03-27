@@ -28,7 +28,6 @@ class ResizeDict:
 @dataclass
 class DataAugmentationDict:
     enabled: bool
-    perform_on_gpu: bool
     use_cutout: bool = False
 
 

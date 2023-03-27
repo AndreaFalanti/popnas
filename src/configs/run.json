@@ -59,8 +59,7 @@
         "balance_class_losses": false,
         "data_augmentation": {
             "enabled": true,
-            "use_cutout": false,
-            "perform_on_gpu": false
+            "use_cutout": false
         }
     },
     "others": {

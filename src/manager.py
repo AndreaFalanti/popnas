@@ -10,7 +10,6 @@ from tensorflow.keras.utils import plot_model
 
 import file_writer as fw
 import log_service
-from dataset.augmentation import get_image_data_augmentation_model
 from dataset.generators.factory import dataset_generator_factory
 from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
@@ -39,7 +38,6 @@ class NetworkManager:
 
         self.dataset_folds_count = dataset_config.folds
         self.dataset_classes_count = dataset_config.classes_count
-        self.augment_on_gpu = dataset_config.data_augmentation.enabled and dataset_config.data_augmentation.perform_on_gpu
 
         self.epochs = cnn_config.epochs
         self.train_strategy = train_strategy
@@ -67,7 +65,6 @@ class NetworkManager:
 
         self.model_gen = model_generator_factory(dataset_config, cnn_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
-                                                 data_augmentation_model=get_image_data_augmentation_model() if self.augment_on_gpu else None,
                                                  preprocessing_model=preprocessing_model,
                                                  save_weights=others_config.save_children_weights)
         self.TrainingResults = self.model_gen.get_results_processor_class()

@@ -313,14 +313,10 @@
                         },
                         "use_cutout": {
                             "type": "boolean"
-                        },
-                        "perform_on_gpu": {
-                            "type": "boolean"
                         }
                     },
                     "required": [
-                        "enabled",
-                        "perform_on_gpu"
+                        "enabled"
                     ]
                 }
             },

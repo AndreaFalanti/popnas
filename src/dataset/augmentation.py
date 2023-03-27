@@ -9,14 +9,12 @@ SEED = 1234
 # TODO: not used anymore due to Keras performance issues due to not supporting vectorization correctly at the moment
 def get_image_data_augmentation_model():
     '''
-    Keras model that can be used in both CPU or GPU for data augmentation.
-    Follow similar augmentation techniques used in other papers, which usually are:
+    Keras model for data augmentation that can be executed either on CPU or GPU.
+    Follow similar augmentation techniques used in other image classification papers, which are:
 
-    - horizontal flip
-
-    - 4px translate on both height and width [fill=reflect] (sometimes upscale to 40x40, with random crop to original 32x32)
-
-    - whitening (not always used, here it's not performed)
+    - random horizontal flip
+    - random translation on both height and width [fill=reflect] (sometimes upscale and then random crop to original dimension)
+    - whitening (not always used, here it is not performed)
     '''
     return Sequential([
         layers.RandomFlip('horizontal'),

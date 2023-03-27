@@ -151,8 +151,6 @@ class BaseDatasetGenerator(ABC):
         self.class_labels_remapping_dict = dataset_config.class_labels_remapping
 
         self.use_data_augmentation = dataset_config.data_augmentation.enabled
-        self.augment_on_gpu = dataset_config.data_augmentation.perform_on_gpu
-
         self.optimize_for_xla_compilation = optimize_for_xla_compilation
 
     @abstractmethod
@@ -224,9 +222,8 @@ class BaseDatasetGenerator(ABC):
         if batch_size is not None and not self.supports_early_batching():
             ds = ds.batch(batch_size, num_parallel_calls=AUTOTUNE)
 
-        # if data augmentation is performed on CPU, map it before prefetch
         # keras augmentations should always work on batches
-        if keras_data_augmentation is not None and not self.augment_on_gpu:
+        if keras_data_augmentation is not None:
             ds = ds.map(lambda x, y: (keras_data_augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
 
         # shuffle batches at each epoch

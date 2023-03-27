@@ -61,8 +61,7 @@
         "normalize": true,
         "rescale": false,
         "data_augmentation": {
-            "enabled": false,
-            "perform_on_gpu": false
+            "enabled": false
         }
     },
     "others": {

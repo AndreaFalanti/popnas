@@ -6,7 +6,6 @@ from tensorflow.keras import callbacks
 from tensorflow.keras.utils import plot_model
 
 import log_service
-from dataset.augmentation import get_image_data_augmentation_model
 from dataset.generators.factory import dataset_generator_factory
 from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks.training_time import TrainingTimeCallback
@@ -43,7 +42,6 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     ds_config = config.dataset
 
     multi_output = arc_config.multi_output
-    augment_on_gpu = ds_config.data_augmentation.perform_on_gpu
     score_metric_name = config.search_strategy.score_metric
 
     # override config with command line parameters
@@ -65,7 +63,6 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     with train_strategy.scope():
         model_gen = model_generator_factory(ds_config, cnn_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
-                                            data_augmentation_model=get_image_data_augmentation_model() if augment_on_gpu else None,
                                             preprocessing_model=preprocessing_model)
 
     keras_metrics = model_gen.get_results_processor_class().keras_metrics_considered()

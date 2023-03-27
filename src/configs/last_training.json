@@ -16,8 +16,7 @@
         "samples": null,
         "data_augmentation": {
             "enabled": true,
-            "use_cutout": true,
-            "perform_on_gpu": false
+            "use_cutout": true
         }
     },
     "others": {
