@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras import datasets, Sequential
 from tensorflow.keras.utils import image_dataset_from_directory
 
-from dataset.augmentation import get_image_data_augmentation_model, get_image_classification_tf_data_aug
+from dataset.augmentation import get_image_classification_tf_data_aug
 from dataset.generators.base import BaseDatasetGenerator, AutoShardPolicy, SEED, DatasetsFold, generate_dataset_from_tfds, \
     generate_train_val_datasets_from_tfds
 from dataset.preprocessing import ImagePreprocessor
@@ -26,6 +26,22 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
     def supports_early_batching(self) -> bool:
         return True
+
+    def build_training_preprocessor(self, num_classes: int, input_size: 'tuple[int, int]', upsample_factor: float):
+        '''
+        Build the ImagePreprocessor for the training split of image classification tasks.
+        It differs from the preprocessors of other splits because it upsamples the image by the specified factor, so that the data augmentation
+        can be performed through random cropping (the pipeline acts as a zoom).
+
+        Args:
+            num_classes: the number of classes in the dataset
+            input_size: image size without channel dimension (HW only)
+            upsample_factor: factor > 1 to rescale the image
+        '''
+        # upsample image of upsample_factor in both dimensions, so that random crop to original size can be used as data augmentation
+        resize_dim = tuple(int(dim * upsample_factor) for dim in input_size)
+        return ImagePreprocessor(resize_dim, rescaling=(1. / 255, 0),
+                                 to_one_hot=num_classes, remap_classes=self.class_labels_remapping_dict)
 
     def build_preprocessor(self, num_classes: int):
         '''
@@ -68,9 +84,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
-        keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
-        tf_aug = get_image_classification_tf_data_aug() if self.use_data_augmentation and self.use_cutout else None
-
+        keras_aug = None
         preprocessing_model = None
 
         # TODO: folds were implemented only in Keras datasets, later i have externalized the logic to support the other dataset format. Still,
@@ -153,14 +167,17 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 classes = info.features['label'].num_classes
 
             # finalize dataset generation, common logic to all dataset formats
+            image_res = image_shape[0:2]
+            train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125)
             data_preprocessor = self.build_preprocessor(classes)
-            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
+            tf_aug = get_image_classification_tf_data_aug(image_res, self.use_cutout) if self.use_data_augmentation else None
+            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, train_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
             val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
-            preprocessing_model = data_preprocessor.preprocessor_model
+            preprocessing_model = train_preprocessor.preprocessor_model
 
         self._logger.info('Dataset folds built successfully')
 
@@ -217,9 +234,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
         return test_ds, classes, image_shape, batches
 
     def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int, Optional[Sequential]]':
-        keras_aug = get_image_data_augmentation_model() if self.use_data_augmentation else None
-        tf_aug = get_image_classification_tf_data_aug() if self.use_data_augmentation and self.use_cutout else None
-
+        keras_aug = None
         shard_policy = AutoShardPolicy.DATA
 
         # Custom dataset, loaded with Keras utilities
@@ -270,10 +285,12 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             classes = info.features['label'].num_classes
 
         # finalize dataset generation, common logic to all dataset formats
-        data_preprocessor = self.build_preprocessor(classes)
-        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
+        image_res = image_shape[0:2]
+        train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125)
+        tf_aug = get_image_classification_tf_data_aug(image_res, self.use_cutout) if self.use_data_augmentation else None
+        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, train_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
 
         self._logger.info('Final training dataset built successfully')
-        return train_ds, classes, image_shape, train_batches, data_preprocessor.preprocessor_model
+        return train_ds, classes, image_shape, train_batches, train_preprocessor.preprocessor_model

@@ -6,6 +6,7 @@ from tensorflow.keras import layers
 SEED = 1234
 
 
+# TODO: not used anymore due to Keras performance issues due to not supporting vectorization correctly at the moment
 def get_image_data_augmentation_model():
     '''
     Keras model that can be used in both CPU or GPU for data augmentation.
@@ -25,9 +26,31 @@ def get_image_data_augmentation_model():
     ], name='data_augmentation')
 
 
-def get_image_classification_tf_data_aug():
+def get_image_classification_tf_data_aug(crop_size: 'tuple[int, int]', use_cutout: bool):
+    '''
+    Perform a random crop to original image size (from upsampled images), random horizontal flip,
+    and random cutout (if enabled, 12.5% of image size).
+    '''
+    @tf.function
     def ds_mappable_f(x, y):
-        return tfa.image.random_cutout(x, mask_size=(8, 8), constant_values=0), y
+        crop_x_size, crop_y_size = crop_size
+
+        # Get the shape of the image and mask, and the respective crop targets
+        # the first dimension is batch, since image classification datasets support early batching
+        shape = tf.shape(x)
+        h, w = shape[1], shape[2]
+
+        # Randomly generate the crop start point
+        crop_y_start = tf.random.uniform(shape=(), minval=0, maxval=h - crop_y_size + 1, dtype=tf.int32)
+        crop_x_start = tf.random.uniform(shape=(), minval=0, maxval=w - crop_x_size + 1, dtype=tf.int32)
+
+        x = tf.image.crop_to_bounding_box(x, crop_y_start, crop_x_start, crop_y_size, crop_x_size)
+        x = tf.image.random_flip_left_right(x)
+        if use_cutout:
+            cutout_size = tf.cast(tf.cast(h, dtype='float32') * 0.125, dtype='int32')
+            x = tfa.image.random_cutout(x, mask_size=(cutout_size, cutout_size), constant_values=0)
+
+        return x, y
 
     return ds_mappable_f
 

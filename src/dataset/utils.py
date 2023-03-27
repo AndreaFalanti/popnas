@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from dataset.augmentation import get_image_segmentation_tf_data_aug_xy
+from dataset.augmentation import get_image_classification_tf_data_aug
 
 
 def test_data_augmentation(ds: tf.data.Dataset):
@@ -18,11 +18,12 @@ def test_data_augmentation(ds: tf.data.Dataset):
     # switch to an interactive matplotlib backend
     plt.switch_backend('TkAgg')
 
-    # data_augmentation_model = get_image_data_augmentation_model()
-    data_aug = get_image_segmentation_tf_data_aug_xy((112, 112))
+    # data_aug = get_image_segmentation_tf_data_aug_xy((112, 112))
+    data_aug = get_image_classification_tf_data_aug((64, 64), True)
 
     # get a batch
-    images, labels, weights = next(iter(ds))
+    images, labels = next(iter(ds))
+    # images, labels, weights = next(iter(ds))
 
     # display 8 transformations of the first 3 images belonging to the first training batch
     for j in range(3):
@@ -33,16 +34,24 @@ def test_data_augmentation(ds: tf.data.Dataset):
         # plt.imshow(label[:, :, 0])
         plt.show()
 
-        for i in range(0, 8, 2):
-            # augmented_image = data_augmentation_model(image)
-            augmented_image, augmented_mask = data_aug(image, label)
-            _ = plt.subplot(4, 2, i + 1)
-            plt.imshow(augmented_image)
+        # classification
+        for i in range(9):
+            # classification data aug work on batches, so add a fictitious axis
+            augmented_image, label = data_aug(np.expand_dims(image, axis=0), np.expand_dims(label, axis=0))
+            _ = plt.subplot(3, 3, i + 1)
+            plt.imshow(augmented_image[0])
             plt.axis('off')
 
-            _ = plt.subplot(4, 2, i + 2)
-            plt.imshow(augmented_mask[:, :, 0])
-            plt.axis('off')
+        # segmentation
+        # for i in range(0, 8, 2):
+        #     augmented_image, augmented_mask = data_aug(image, label)
+        #     _ = plt.subplot(4, 2, i + 1)
+        #     plt.imshow(augmented_image)
+        #     plt.axis('off')
+        #
+        #     _ = plt.subplot(4, 2, i + 2)
+        #     plt.imshow(augmented_mask[:, :, 0])
+        #     plt.axis('off')
 
         plt.show()
     print('Data augmentation debug shown')
