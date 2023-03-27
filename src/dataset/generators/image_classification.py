@@ -27,15 +27,15 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
     def supports_early_batching(self) -> bool:
         return True
 
-    def build_preprocessor(self, onehot_classes: Optional[int]):
+    def build_preprocessor(self, num_classes: int):
         '''
         Build the ImagePreprocessor for image classification tasks.
 
         Args:
-            onehot_classes: leave it to None if labels are already in one-hot, otherwise provide the number of classes.
+            num_classes: the number of classes in the dataset
         '''
         return ImagePreprocessor(self.resize_dim, rescaling=(1. / 255, 0),
-                                 to_one_hot=onehot_classes, remap_classes=self.class_labels_remapping_dict)
+                                 to_one_hot=num_classes, remap_classes=self.class_labels_remapping_dict)
 
     def __load_keras_dataset_images(self):
         '''
@@ -85,38 +85,31 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 if self.resize_dim is None:
                     raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-                # TODO: samples limit is applied but in a naive way, since unbatching breaks the dataset cardinality.
-                #  Stratification is done due stochasticity, which is not good for low amount of samples.
-                #  Anyway not a big problem since in "real" runs you would not limit the samples deliberately.
-                # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
                 if self.val_size is None:
-                    train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
-                                                            image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
-                    val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
-                                                          image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+                    train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='int',
+                                                            image_size=self.resize_dim, batch_size=None, seed=SEED)
+                    val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='int',
+                                                          image_size=self.resize_dim, batch_size=None, seed=SEED)
 
                     # limit only train dataset, if limit is set
                     if self.samples_limit is not None:
-                        self._logger.info('Limiting training dataset to %d batches', self.samples_limit // self.batch_size)
-                        train_ds = train_ds.take(self.samples_limit // self.batch_size)
+                        train_ds = train_ds.take(self.samples_limit)
                 # extract a validation split from training samples
                 else:
                     # TODO: find a way to make the split stratified (Stratification is done due stochasticity right now)
                     train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), validation_split=self.val_size,
-                                                            subset='training', label_mode='categorical',
-                                                            image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+                                                            subset='training', label_mode='int',
+                                                            image_size=self.resize_dim, batch_size=None, seed=SEED)
                     val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), validation_split=self.val_size,
-                                                          subset='validation', label_mode='categorical',
-                                                          image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+                                                          subset='validation', label_mode='int',
+                                                          image_size=self.resize_dim, batch_size=None, seed=SEED)
 
                     # limit both datasets, so that the sum of samples is the declared one
                     if self.samples_limit is not None:
-                        training_samples = math.ceil(self.samples_limit * (1 - self.val_size) // self.batch_size)
-                        val_samples = math.floor(self.samples_limit * self.val_size // self.batch_size)
+                        training_samples = math.ceil(self.samples_limit * (1 - self.val_size))
+                        val_samples = math.floor(self.samples_limit * self.val_size)
 
-                        self._logger.info('Limiting training dataset to %d batches', training_samples)
                         train_ds = train_ds.take(training_samples)
-                        self._logger.info('Limiting validation dataset to %d batches', val_samples)
                         val_ds = val_ds.take(val_samples)
 
                 shard_policy = AutoShardPolicy.FILE
@@ -160,15 +153,11 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
                 classes = info.features['label'].num_classes
 
             # finalize dataset generation, common logic to all dataset formats
-            # avoid categorical for custom datasets, since already done
-            using_custom_ds = self.dataset_path is not None
-            data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
-            # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
-            batch_len = None if using_custom_ds else self.batch_size
-            train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
+            data_preprocessor = self.build_preprocessor(classes)
+            train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
-            val_ds, val_batches = self._finalize_dataset(val_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
+            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = data_preprocessor.preprocessor_model
@@ -186,11 +175,9 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             if self.resize_dim is None:
                 raise ValueError('Image must have a set resize dimension to use a custom dataset')
 
-            # TODO: new tf versions make batching optional, making possible to batch the dataset in finalize like the others.
-            test_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_test'), label_mode='categorical',
-                                                   image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+            test_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_test'), label_mode='int',
+                                                   image_size=self.resize_dim, batch_size=None, seed=SEED)
 
-            # TODO: sharding should be set to FILE here? or not?
             shard_policy = AutoShardPolicy.FILE
 
             classes = self.dataset_classes_count
@@ -223,12 +210,8 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             classes = info.features['label'].num_classes
 
         # finalize dataset generation, common logic to all dataset formats
-        # avoid categorical for custom datasets, since already done
-        using_custom_ds = self.dataset_path is not None
-        data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
-        # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
-        batch_len = None if using_custom_ds else self.batch_size
-        test_ds, batches = self._finalize_dataset(test_ds, batch_len, data_preprocessor, shard_policy=shard_policy)
+        data_preprocessor = self.build_preprocessor(classes)
+        test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches
@@ -244,13 +227,13 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             if self.resize_dim is None:
                 raise ValueError('Images must have a set resize dimension to use a custom dataset')
 
-            train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='categorical',
-                                                    image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+            train_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_training'), label_mode='int',
+                                                    image_size=self.resize_dim, batch_size=None, seed=SEED)
 
             # if val_size is None, it means that a validation split is present, merge the two datasets
             if self.val_size is None:
-                val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='categorical',
-                                                      image_size=self.resize_dim, batch_size=self.batch_size, seed=SEED)
+                val_ds = image_dataset_from_directory(os.path.join(self.dataset_path, 'keras_validation'), label_mode='int',
+                                                      image_size=self.resize_dim, batch_size=None, seed=SEED)
                 train_ds = train_ds.concatenate(val_ds)
 
             shard_policy = AutoShardPolicy.FILE
@@ -287,12 +270,8 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             classes = info.features['label'].num_classes
 
         # finalize dataset generation, common logic to all dataset formats
-        # avoid categorical for custom datasets, since already done
-        using_custom_ds = self.dataset_path is not None
-        data_preprocessor = self.build_preprocessor(None if using_custom_ds else classes)
-        # TODO: remove when updating TF to new version, since custom dataset is not forced to be batched
-        batch_len = None if using_custom_ds else self.batch_size
-        train_ds, train_batches = self._finalize_dataset(train_ds, batch_len, data_preprocessor,
+        data_preprocessor = self.build_preprocessor(classes)
+        train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
 
