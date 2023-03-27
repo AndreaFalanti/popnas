@@ -37,7 +37,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
 
-    cnn_config = config.training_hyperparameters
+    train_config = config.training_hyperparameters
     arc_config = config.architecture_hyperparameters
     ds_config = config.dataset
 
@@ -47,7 +47,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # override config with command line parameters
     arc_config.motifs = m
     arc_config.normal_cells_per_motif = n
-    cnn_config.filters = f
+    train_config.filters = f
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -61,7 +61,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # test_data_augmentation(train_ds)
 
     with train_strategy.scope():
-        model_gen = model_generator_factory(ds_config, cnn_config, arc_config, train_batches,
+        model_gen = model_generator_factory(ds_config, train_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             preprocessing_model=preprocessing_model)
 
@@ -109,7 +109,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     plot_model(model, to_file=os.path.join(save_path, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
     hist = model.fit(x=train_ds,
-                     epochs=cnn_config.epochs,
+                     epochs=train_config.epochs,
                      steps_per_epoch=train_batches,
                      class_weight=balanced_class_weights,
                      callbacks=train_callbacks)  # type: callbacks.History
@@ -117,7 +117,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     training_time = time_cb.get_total_time()
     results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
                                                                                    output_names, using_val=False)
-    log_training_results_summary(logger, best_epoch, cnn_config.epochs, training_time, best_training_score, score_metric_name)
+    log_training_results_summary(logger, best_epoch, train_config.epochs, training_time, best_training_score, score_metric_name)
     log_training_results_dict(logger, results_dict)
 
     logger.info('Saving TF model')

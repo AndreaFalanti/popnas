@@ -27,8 +27,8 @@ class NetworkManager:
     Helper class to manage the generation of subnetwork training given a dataset
     '''
 
-    def __init__(self, dataset_config: DatasetConfig, cnn_config: TrainingHyperparametersConfig, arc_config: ArchitectureHyperparametersConfig, others_config: OthersConfig,
-                 score_objective: str, train_strategy: tf.distribute.Strategy):
+    def __init__(self, dataset_config: DatasetConfig, train_config: TrainingHyperparametersConfig, arc_config: ArchitectureHyperparametersConfig,
+                 others_config: OthersConfig, score_objective: str, train_strategy: tf.distribute.Strategy):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -39,7 +39,7 @@ class NetworkManager:
         self.dataset_folds_count = dataset_config.folds
         self.dataset_classes_count = dataset_config.classes_count
 
-        self.epochs = cnn_config.epochs
+        self.epochs = train_config.epochs
         self.train_strategy = train_strategy
         self.execution_steps = get_optimized_steps_per_execution(self.train_strategy)
 
@@ -63,7 +63,7 @@ class NetworkManager:
         self.balanced_class_weights = [generate_balanced_weights_for_classes(train_ds) for train_ds, _ in self.dataset_folds] \
             if dataset_config.balance_class_losses else [None] * len(self.dataset_folds)
 
-        self.model_gen = model_generator_factory(dataset_config, cnn_config, arc_config, self.train_batches,
+        self.model_gen = model_generator_factory(dataset_config, train_config, arc_config, self.train_batches,
                                                  output_classes_count=self.dataset_classes_count, input_shape=input_shape,
                                                  preprocessing_model=preprocessing_model,
                                                  save_weights=others_config.save_children_weights)

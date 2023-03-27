@@ -48,7 +48,7 @@ class Popnas:
         ds_config = run_config.dataset
 
         # CNN models hyperparameters
-        cnn_config = run_config.training_hyperparameters
+        train_config = run_config.training_hyperparameters
 
         # CNN architecture parameters
         arc_config = run_config.architecture_hyperparameters
@@ -92,8 +92,8 @@ class Popnas:
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)
 
         # create the Network Manager
-        self.nn_manager = NetworkBenchManager(ds_config) if benchmarking else \
-            NetworkManager(ds_config, cnn_config, arc_config, others_config, self.score_metric_name, train_strategy)
+        self.nn_manager = NetworkBenchManager(ds_config, train_config, arc_config) if benchmarking else \
+            NetworkManager(ds_config, train_config, arc_config, others_config, self.score_metric_name, train_strategy)
 
         # extract targeted network metrics for plot purposes
         results_processor = self.nn_manager.model_gen.get_results_processor_class()

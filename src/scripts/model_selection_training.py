@@ -113,7 +113,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
 
-    cnn_config = config.training_hyperparameters
+    train_config = config.training_hyperparameters
     arc_config = config.architecture_hyperparameters
     ds_config = config.dataset
 
@@ -138,7 +138,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
 
     # create a model generator instance
     with train_strategy.scope():
-        model_gen = model_generator_factory(ds_config, cnn_config, arc_config, train_batches,
+        model_gen = model_generator_factory(ds_config, train_config, arc_config, train_batches,
                                             output_classes_count=classes_count, input_shape=input_shape,
                                             preprocessing_model=preprocessing_model)
 
@@ -203,7 +203,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         plot_model(model, to_file=os.path.join(model_folder, 'model.pdf'), show_shapes=True, show_layer_names=True)
 
         hist = model.fit(x=train_dataset,
-                         epochs=cnn_config.epochs,
+                         epochs=train_config.epochs,
                          steps_per_epoch=train_batches,
                          validation_data=validation_dataset,
                          validation_steps=val_batches,
@@ -213,7 +213,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         training_time = time_cb.get_total_time()
         results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
                                                                                        output_names, using_val=True)
-        log_training_results_summary(logger, best_epoch, cnn_config.epochs, training_time, best_training_score, score_metric_name)
+        log_training_results_summary(logger, best_epoch, train_config.epochs, training_time, best_training_score, score_metric_name)
         log_training_results_dict(logger, results_dict)
 
         model_logger.info('Converting trained model to ONNX')
