@@ -1,7 +1,8 @@
 import benchmarking
 import log_service
+from models.generators.factory import model_generator_factory
 from search_space import CellSpecification
-from utils.config_dataclasses import DatasetConfig
+from utils.config_dataclasses import *
 
 
 class GraphProxy:
@@ -32,7 +33,7 @@ class NetworkBenchManager:
     It keeps the same public interface as NetworkManager.
     '''
 
-    def __init__(self, dataset_config: DatasetConfig):
+    def __init__(self, dataset_config: DatasetConfig, train_config: TrainingHyperparametersConfig, arc_config: ArchitectureHyperparametersConfig):
         '''
         Manager which is tasked with creating subnetworks, training them on a dataset, and retrieving
         rewards in the term of accuracy, which is passed to the controller RNN.
@@ -40,9 +41,14 @@ class NetworkBenchManager:
         '''
         self._logger = log_service.get_logger(__name__)
 
-        # self.epochs = cnn_config.epochs
+        # self.epochs = train_config.epochs
         self.dataset_name = dataset_config.name
         self.nas_bench = benchmarking.NATSbench(dataset_config.path)
+
+        # fictitious model generator with fictitious parameters, not used in actual training since we have the bench results.
+        # it is required since some modules use the model generator, e.g., the predictors handler to generate the features.
+        self.model_gen = model_generator_factory(dataset_config, train_config, arc_config, training_steps_per_epoch=123,
+                                                 output_classes_count=123, input_shape=(32, 32, 3))
 
         # make possible for the controller to retrieve params
         self.graph_gen = GraphGeneratorProxy(self.nas_bench)

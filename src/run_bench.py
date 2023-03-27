@@ -1,4 +1,5 @@
 import argparse
+import dataclasses
 import json
 import os.path
 import sys
@@ -36,28 +37,27 @@ def generate_popnas_bench_config(dataset_name: str, bench_path: str):
             'score_metric': 'accuracy',
             'additional_pareto_objectives': ['time', 'params']
         },
-        'cnn_hp': {
+        'training_hyperparameters': {
             'epochs': 200,
             'learning_rate': 0.01,
-            'filters': 24,
-            'weight_reg': 5e-4,
+            'weight_decay': 5e-4,
             'use_adamW': True,
-            'drop_path_prob': 0.0,
-            'cosine_decay_restart': {
-                'enabled': True,
-                'period_in_epochs': 3,
-                't_mul': 2.0,
-                'm_mul': 1.0,
-                'alpha': 0.0
-            },
-            'softmax_dropout': 0.0
+            'drop_path': 0.0,
+            'softmax_dropout': 0.0,
+            'optimizer': {
+                'type': 'adamW',
+                'scheduler': 'cdr: 3 period'
+            }
         },
-        'architecture_parameters': {
+        'architecture_hyperparameters': {
+            'filters': 24,
             'motifs': 3,
             'normal_cells_per_motif': 5,
             'block_join_operator': 'add',
             'lookback_reshape': True,
             'concat_only_unused_blocks': True,
+            "residual_cells": False,
+            "se_cell_output": False,
             'multi_output': False
         },
         'dataset': {
@@ -73,21 +73,16 @@ def generate_popnas_bench_config(dataset_name: str, bench_path: str):
             'folds': 1,
             'samples': None,
             'balance_class_losses': False,
-            'resize': {
-                'enabled': False,
-                'width': 224,
-                'height': 224
-            },
             'data_augmentation': {
                 'enabled': True,
-                'perform_on_gpu': False
+                'use_cutout': False
             }
         },
         'others': {
             'accuracy_predictor_ensemble_units': 5,
             'predictions_batch_size': 1024,
             'save_children_weights': False,
-            'save_children_as_onnx': False,
+            'save_children_models': False,
             'pnas_mode': False,
             'train_strategy': 'GPU'
         }
@@ -145,7 +140,7 @@ def main():
 
             # copy config (with args override) for possible run restore
             with open(log_service.build_path('restore', 'run.json'), 'w') as f:
-                json.dump(run_config, f, indent=4)
+                json.dump(dataclasses.asdict(run_config), f, indent=4)
 
             # handle uncaught exception in a special log file
             sys.excepthook = log_service.make_exception_handler(log_service.create_critical_logger())
