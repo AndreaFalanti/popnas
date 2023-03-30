@@ -161,3 +161,6 @@ Improve the predictors and fix performance problems in image classification data
 - Fix the script for running NATS-Bench.
 - Change the base docker image from official TF image to the one provided by NVIDIA (same TF version).
   There was a "bus error" issue when using the previous image in Docker in multi-GPU settings, the new image instead seems to work fine.
+
+### 3.7.1
+Small refactors on json config default paths, rename aMLLibrary config file and fix its relative path in predictor initializer.
