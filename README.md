@@ -150,7 +150,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
   (except the first step, which trains all possible cells composed by a single block).
 - **max_exploration_children**: defines the maximum number of cells the algorithm can train in the exploration step.
 - **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
-  Currently supported: [accuracy, f1_score].
+  Currently supported: [accuracy, f1_score, mean_iou].
 - **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
   the selection of the neural network architectures to train. Currently supported values: [time, params].
   POPNAS requires at least one of them.
@@ -266,8 +266,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - **predictions_batch_size**: defines the batch size used when performing both time and accuracy predictions in the controller
   update step (predictions about cell expansions for blocks b+1). Incrementing it should decrease the prediction time
   linearly, up to a certain point, defined by hardware resources used.
-- **save_children_weights**: if _true_, best weights of each child neural network are saved in log folder.
-- **save_children_as_onnx**: if _true_, each child neural network will be serialized and saved as ONNX format.
+- **save_children_weights**: if _true_, the best weights of each sampled neural network will be saved in log folder.
+- **save_children_models**: if _true_, each sampled neural network will be serialized and saved both as ONNX and TF format.
 - **pnas_mode**: if _true_, the algorithm will not use most of the improvements introduced by POPNAS, mainly the
   temporal regressor, Pareto optimality and exploration step, making the search process very similar to PNAS.
 - **train_strategy**: defines the type of device and distribution strategy used for training the architectures sampled by the algorithm.
