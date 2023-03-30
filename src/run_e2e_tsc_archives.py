@@ -66,7 +66,7 @@ def main():
     parser.add_argument('-p', metavar='PICKLE_FILE', type=str, help='path of pickle file containing the metadata of the datasets to process',
                         required=True)
     parser.add_argument('-name', metavar='RUN_NAME', type=str, help='name used for log folder', required=True)
-    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json for NAS', default=None)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json for NAS', default=os.path.join('configs', 'run_ts.json'))
     parser.add_argument('-jms', metavar='JSON_PATH_MODEL_SEARCH', type=str, help='path to config json for model search', default=None)
     parser.add_argument('-jlt', metavar='JSON_PATH', type=str, help='path to config json for last training', default=None)
     parser.add_argument('-params', metavar='PARAMS RANGE', type=str,
@@ -86,8 +86,7 @@ def main():
         print('Root log folder already present. This worker will insert the experiments about the new datasets processed to that run.')
 
     print('Reading base configuration')
-    json_path = os.path.join('configs', 'run_ts.json') if args.j is None else args.j
-    with open(json_path, 'r') as f:
+    with open(args.j, 'r') as f:
         base_config = json.load(f)
 
     for ds_meta in datasets_metadata:

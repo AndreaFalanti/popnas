@@ -49,9 +49,7 @@ def initialize_search_config_and_logs(log_folder_name: str, json_config_path: st
         run_config = read_json_config(log_service.build_path('restore', 'run.json'))
     else:
         log_service.initialize_log_folders(log_folder_name)
-
-        json_path = os.path.join('configs', 'run.json') if json_config_path is None else json_config_path
-        run_config = read_json_config(json_path)
+        run_config = read_json_config(json_config_path)
 
         # copy config for possible run restore and post-search scripts
         with open(log_service.build_path('restore', 'run.json'), 'w') as f:

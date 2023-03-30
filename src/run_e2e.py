@@ -16,7 +16,7 @@ from utils.nn_utils import initialize_train_strategy
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-r', metavar='RESTORE_FOLDER', type=str, help='path of log folder to restore', default=None)
-    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json for NAS', default=None)
+    parser.add_argument('-j', metavar='JSON_PATH', type=str, help='path to config json for NAS', default=os.path.join('configs', 'run.json'))
     parser.add_argument('-jms', metavar='JSON_PATH_MODEL_SEARCH', type=str, help='path to config json for model search', default=None)
     parser.add_argument('-jlt', metavar='JSON_PATH', type=str, help='path to config json for last training', default=None)
     parser.add_argument('-k', metavar='NUM_TOP_MODELS', type=int, help='number of top models to consider in model selection', default=5)
