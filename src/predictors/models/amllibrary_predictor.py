@@ -7,8 +7,8 @@ from typing import Union, Tuple, Sequence
 import numpy as np
 import pandas as pd
 import psutil
-
 from aMLLibrary import sequence_data_processing, regressor
+
 from utils.feature_analysis import save_feature_analysis_plots
 from utils.func_utils import strip_unused_amllibrary_config_sections
 from utils.stream_to_logger import StreamToLogger
@@ -58,7 +58,6 @@ class AMLLibraryPredictor(Predictor):
         config.optionxform = str
 
         config.read(self.config_path)
-
         strip_unused_amllibrary_config_sections(config, self.techniques)
 
         # value in .ini must be a single string of format ['technique1', 'technique2', ...]

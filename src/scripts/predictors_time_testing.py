@@ -47,7 +47,7 @@ def main():
     logger = create_logger(__name__, log_path)
 
     csv_path = os.path.join(args.p, 'csv')
-    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'regressors_hyperopt.ini')
+    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'amllibrary.ini')
     training_time_csv_path = os.path.join(csv_path, 'training_time.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_time.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')

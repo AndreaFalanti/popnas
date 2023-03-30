@@ -56,7 +56,7 @@ def main():
     score_metric = next(m for m in keras_metrics if m.name == metric)
 
     csv_path = os.path.join(args.p, 'csv')
-    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'regressors_hyperopt.ini')
+    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'amllibrary.ini')
     training_acc_csv_path = os.path.join(csv_path, 'training_score.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_acc.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')

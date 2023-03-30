@@ -35,7 +35,9 @@ class PredictorsHandler:
         score_csv_field = score_metric.results_csv_column
         predictors_log_path = log_service.build_path('predictors')
         # catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
-        amllibrary_config_path = os.path.join('configs', 'regressors_hyperopt.ini')
+        amllibrary_config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'amllibrary.ini')
+        if not os.path.exists(amllibrary_config_path):
+            raise FileNotFoundError('aMLLibrary configuration file not found')
 
         self._logger = log_service.get_logger(__name__)
         self._logger.info('Initializing predictors...')
