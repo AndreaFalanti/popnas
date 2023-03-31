@@ -147,7 +147,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
         return model, self._get_output_names()
 
     def _get_loss_function(self) -> losses.Loss:
-        return losses.CategoricalCrossentropy()
+        return losses.CategoricalCrossentropy(label_smoothing=self.label_smoothing)
 
     def _get_metrics(self) -> 'list[metrics.Metric]':
         return ['accuracy', tfa.metrics.F1Score(num_classes=self.output_classes_count, average='macro'), metrics.TopKCategoricalAccuracy(k=5)]

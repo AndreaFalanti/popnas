@@ -54,6 +54,7 @@ class TrainingHyperparametersConfig:
     drop_path: float
     softmax_dropout: float
     optimizer: OptimizerDict
+    label_smoothing: float = 0.0
 
 
 @dataclass

@@ -78,6 +78,7 @@ class BaseModelGenerator(ABC):
         self.drop_path_keep_prob = 1.0 - train_hp.drop_path
         self.dropout_prob = train_hp.softmax_dropout  # dropout probability on final softmax
         self.optimizer_config = train_hp.optimizer
+        self.label_smoothing = train_hp.label_smoothing
         self.filters_ratio = self.filters / self.input_shape[-1]  # the filters expansion ratio applied between input and first layer
 
         self.save_weights = save_weights

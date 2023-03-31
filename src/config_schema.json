@@ -82,6 +82,11 @@
                     "minimum": 0,
                     "maximum": 1
                 },
+                "softmax_dropout": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
                 "optimizer": {
                     "type": "object",
                     "properties": {
@@ -121,10 +126,11 @@
                         "type"
                     ]
                 },
-                "softmax_dropout": {
+                "label_smoothing": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 1
+                    "maximum": 1,
+                    "default": 0
                 }
             },
             "required": [
@@ -132,8 +138,8 @@
                 "learning_rate",
                 "weight_decay",
                 "drop_path",
-                "optimizer",
-                "softmax_dropout"
+                "softmax_dropout",
+                "optimizer"
             ]
         },
         "architecture_hyperparameters": {
