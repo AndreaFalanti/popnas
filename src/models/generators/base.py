@@ -2,7 +2,7 @@ import os.path
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Type, NamedTuple
+from typing import Optional, Type, NamedTuple, Union
 
 import tensorflow as tf
 from tensorflow.keras import layers, regularizers, optimizers, activations, losses, metrics, callbacks, Model, Sequential
@@ -611,13 +611,14 @@ class BaseModelGenerator(ABC):
     def _get_metrics(self) -> 'list[metrics.Metric]':
         raise NotImplementedError()
 
-    def define_training_hyperparams_and_metrics(self) -> 'tuple[losses.Loss, Optional[dict[str, float]], optimizers.Optimizer, list[metrics.Metric]]':
+    def define_training_hyperparams_and_metrics(self) -> 'tuple[Union[losses.Loss, dict[str, losses.Loss]], Optional[dict[str, float]],' \
+                                                         ' optimizers.Optimizer, list[metrics.Metric]]':
         '''
         Get elements to finalize the training procedure of the network and compile the model.
         Mainly, returns a suited loss function and optimizer for the model, plus the metrics to analyze during training.
 
         Returns:
-            loss function, loss weights for each output, optimizer, and a list of metrics to compute during training.
+            loss function for each output, loss weights for each output, optimizer, and a list of metrics to compute during training.
         '''
         if self.multi_output and len(self.output_layers) > 1:
             output_name = self.get_output_layers_name()
@@ -632,7 +633,7 @@ class BaseModelGenerator(ABC):
             loss = self._get_loss_function()
             loss_weights = None
 
-        # accuracy is better as string, since it automatically converted to binary or categorical based on loss
+        # accuracy is better as a string, since it is automatically converted to binary or categorical based on loss
         model_metrics = self._get_metrics()
 
         optimizer = instantiate_optimizer_and_schedulers(self.optimizer_config, self.lr, self.wd, self.training_steps_per_epoch, self.epochs)

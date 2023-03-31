@@ -158,15 +158,16 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
     return ms_config, train_strategy
 
 
-def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'):
+def prune_excessive_outputs(mo_model: Model, mo_losses: 'dict[str, losses.Loss]', mo_loss_weights: 'dict[str, float]'):
     '''
     Build a new model using only a secondary output at 2/3 of cells (drop other outputs from multi-output model).
     Args:
         mo_model: a multi-output model
+        mo_losses: dictionary associating an output name to a loss
         mo_loss_weights: loss weights associated with each output
 
     Returns:
-        the new model, the new loss weights and the new output names
+        the new model, the new losses, the new loss weights and the new output names
     '''
     last_output_index = len(mo_model.outputs) - 1
     secondary_output_index = round(last_output_index * 0.66)
@@ -180,24 +181,21 @@ def prune_excessive_outputs(mo_model: Model, mo_loss_weights: 'dict[str, float]'
         output_names[0]: 0.25,
         output_names[1]: 0.75
     }
+    mo_losses = {k: v for k, v in mo_losses.items() if k in output_names}
 
-    return model, loss_weights, output_names
+    return model, mo_losses, loss_weights, output_names
 
 
 def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy, enable_xla: bool):
     '''
     Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
     '''
-    loss, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
-
-    # enable label smoothing
-    loss = losses.CategoricalCrossentropy(label_smoothing=0.1)
-
+    mo_losses, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
     # remove unnecessary exits and recalibrate loss weights
-    model, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_loss_weights)
+    model, mo_losses, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_losses, mo_loss_weights)
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
-    model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=train_metrics,
+    model.compile(optimizer=optimizer, loss=mo_losses, loss_weights=loss_weights, metrics=train_metrics,
                   steps_per_execution=execution_steps, jit_compile=enable_xla)
     return model, output_names
 
