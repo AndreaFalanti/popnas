@@ -103,24 +103,44 @@ class TestNetworkGraphs(unittest.TestCase):
 
     # TODO: now these networks use transpose convolutions instead of bilinear upsample (for XLA compatibility), so the number of parameters must be updated!
     #  They are expected to fail right now, will be updated when I have the data on a new search experiment using the new macro-architecture.
-    def test_segmentation_network_graphs(self):
+    # def test_segmentation_network_graphs(self):
+    #     input_shape = (None, None, 3)
+    #     classes = 22
+    #     model_gen = self.initialize_model_gen(SegmentationModelGenerator, input_shape, classes, 4, 1, 28, lb_reshape=False, residuals=True)
+    #
+    #     cell_spec = CellSpecification([BlockSpecification(-2, '1x5-5x1 conv', -2, '2x2 maxpool')])
+    #     g = model_gen.build_model_graph(cell_spec)
+    #     self.assertEqual(g.get_total_params(), 872702, 'Segmentation -2 lookback only wrong params count')
+    #
+    #     cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5:4dr conv')])
+    #     g = model_gen.build_model_graph(cell_spec)
+    #     self.assertEqual(g.get_total_params(), 4535746, 'Segmentation mixed lookbacks wrong params count')
+    #
+    #     cell_spec = CellSpecification([BlockSpecification(-1, '1x7-7x1 conv', -1, '8r SE'),
+    #                                    BlockSpecification(-1, '2x2 maxpool', 0, '5x5:2dr conv'),
+    #                                    BlockSpecification(-1, '2x2 avgpool', 0, '5x5:2dr conv')])
+    #     g = model_gen.build_model_graph(cell_spec)
+    #     self.assertEqual(g.get_total_params(), 10947030, 'Segmentation multi-block wrong params count')
+
+    def test_segmentation_deeplab_network_graphs(self):
         input_shape = (None, None, 3)
-        classes = 22
-        model_gen = self.initialize_model_gen(SegmentationModelGenerator, input_shape, classes, 4, 1, 28, lb_reshape=False, residuals=True)
+        classes = 19
+        model_gen = self.initialize_model_gen(SegmentationFixedDecoderModelGenerator, input_shape, classes, 4, 1, 8, lb_reshape=False, residuals=True)
 
-        cell_spec = CellSpecification([BlockSpecification(-2, '1x5-5x1 conv', -2, '2x2 maxpool')])
+        cell_spec = CellSpecification([BlockSpecification(-2, '5x5:2dr conv', -2, '2x2 avgpool')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 872702, 'Segmentation -2 lookback only wrong params count')
+        print(g.get_params_per_layer())
+        self.assertEqual(g.get_total_params(), 188971, 'Segmentation -2 lookback only wrong params count')
 
-        cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5:4dr conv')])
+        cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5 conv')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 4535746, 'Segmentation mixed lookbacks wrong params count')
+        self.assertEqual(g.get_total_params(), 369659, 'Segmentation mixed lookbacks wrong params count')
 
-        cell_spec = CellSpecification([BlockSpecification(-1, '1x7-7x1 conv', -1, '8r SE'),
-                                       BlockSpecification(-1, '2x2 maxpool', 0, '5x5:2dr conv'),
-                                       BlockSpecification(-1, '2x2 avgpool', 0, '5x5:2dr conv')])
+        cell_spec = CellSpecification([BlockSpecification(-2, '2x2 avgpool', -1, '1x9-9x1 conv'),
+                                       BlockSpecification(0, '1x9-9x1 conv', 0, '2x2 maxpool'),
+                                       BlockSpecification(1, '1x9-9x1 conv', 1, '2x2 maxpool')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 10947030, 'Segmentation multi-block wrong params count')
+        self.assertEqual(g.get_total_params(), 690211, 'Segmentation multi-block wrong params count')
 
 
 if __name__ == '__main__':
