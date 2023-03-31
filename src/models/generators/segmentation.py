@@ -168,7 +168,7 @@ class SegmentationModelGenerator(BaseModelGenerator):
                 net.build_cell()
 
         # add output layers
-        final_cell_out = net.lookback_nodes[-1]
+        final_cell_out = net.get_graph_output_node()
         output_shape = final_cell_out.shape[:-1] + [self.output_classes_count]
         v_attributes = {
             'name': ['out_pointwise_conv'],

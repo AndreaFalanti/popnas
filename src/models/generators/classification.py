@@ -91,7 +91,7 @@ class ClassificationModelGenerator(BaseModelGenerator):
                 net.build_cell()
 
         # add output layers
-        final_cell_out = net.lookback_nodes[-1]
+        final_cell_out = net.get_graph_output_node()
         output_filters = final_cell_out.shape[-1]
         v_attributes = {
             'name': ['GAP', 'dense_softmax'],

@@ -38,6 +38,10 @@ class NetworkGraph:
 
         self.cell_index = 0
 
+    def get_graph_output_node(self):
+        ''' Returns the output node that terminates the graph. Can be useful when the graph has to be extended after the last cell. '''
+        return self.lookback_nodes[-1]
+
     # TODO: if speed is slow, return the info about vertices and edges, accumulate them,
     #  and then create the graph in a single shot into another function
     def build_cell(self):
@@ -57,12 +61,12 @@ class NetworkGraph:
         return sum(self.g.vs['params'])
 
     def get_params_per_cell(self):
-        return [sum(self.g.vs.select(cell_index=i)['params']) for i in range(0, self.last_cell_index + 1)]
+        return [sum(self.g.vs.select(cell_index=i)['params']) for i in [range(0, self.last_cell_index + 1), -1]]
 
     def get_params_per_layer(self):
         ''' Grouped by cell for more readability. '''
         return [list(zip(self.g.vs.select(cell_index=i)['name'], self.g.vs.select(cell_index=i)['params']))
-                for i in range(0, self.last_cell_index + 1)]
+                for i in [range(0, self.last_cell_index + 1), -1]]
 
     def get_params_up_through_cell_index(self, c_index: int):
         ''' Cell index is inclusive. '''
