@@ -72,3 +72,15 @@ def compute_cvt_params(kernel: 'tuple[Union[str, int], ...]', heads: int, blocks
     ct_block_params = q_conv_params + kv_conv_params + bn_params + conv_out + mlp_params
 
     return embed_conv_params + layer_norm_params + ct_block_params * blocks
+
+
+def compute_aspp_params(filters_in: int, filters_ratio: float):
+    filters_out = filters_in
+    branch_filters = int(filters_in * filters_ratio)
+
+    pw_params = compute_conv_params((1, 1), filters_in, branch_filters)
+    dilated_convs_params = compute_conv_params((3, 3), filters_in, branch_filters) * 3
+    image_pooling_params = compute_conv_params((1, 1), filters_in, branch_filters)      # only the pointwise conv has params
+    bottleneck_params = compute_conv_params((1, 1), 5 * branch_filters, filters_out)
+
+    return pw_params + dilated_convs_params + image_pooling_params + bottleneck_params
