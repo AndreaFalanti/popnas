@@ -6,7 +6,9 @@ from tensorflow.keras import layers, metrics, Model, losses
 
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.graphs.network_graph import NetworkGraph
+from models.graphs.units import TensorNode
 from models.operators.layers import AtrousSpatialPyramidPooling, Convolution, PoolingConv, Pooling
+from models.operators.params_utils import compute_aspp_params, compute_conv_params
 from models.results import BaseTrainingResults, SegmentationTrainingResults
 from search_space import CellSpecification
 from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
@@ -65,6 +67,22 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
 
         return output_shapes
 
+    def _compute_decoder_upsample_factors(self):
+        '''
+        Inspired by DeepLab, upsample progressively with steps of factor 4.
+        When using an odd number of reductions, the last upsample will have a 2x upsample.
+
+        Returns:
+            list with a number of elements equal to the needed decoder units + last upsample, indicating their upsample factor
+        '''
+        reductions = self.motifs - 1
+        upscale_factors = [4] * (reductions // 2)
+        # use 2x as last upsample when using an odd number of reductions
+        if reductions % 2 == 1:
+            upscale_factors.append(2)
+
+        return upscale_factors
+
     def get_output_layers_name(self) -> str:
         return 'pointwise_softmax'
 
@@ -112,7 +130,76 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
                 encoder_concat_nodes.append(net.lookback_nodes[-1])
                 net.build_cell()
 
-        # TODO: ASPP, decoder and output
+        # Add the fixed part after last cell: ASPP, decoder and output
+        final_cell_out = net.get_graph_output_node()
+        final_filters = int(final_cell_out.shape[-1])
+
+        # ASPP
+        v_attributes = {
+            'name': ['ASPP'],
+            'op': ['ASPP'],
+            'cell_index': [-1],
+            'block_index': [-1],
+            'params': [compute_aspp_params(final_filters, 0.5)]
+        }
+        net.g.add_vertices(1, v_attributes)
+
+        edges = [(final_cell_out.name, 'ASPP')]
+        edge_attributes = {
+            'tensor_shape': [str(final_cell_out.shape)]
+        }
+        net.g.add_edges(edges, edge_attributes)
+
+        # DECODER
+        upscale_factors = self._compute_decoder_upsample_factors()
+        current_node = TensorNode('ASPP', final_cell_out.shape)
+        for i, upsample_factor in enumerate(upscale_factors[:-1]):
+            encoder_target_node = encoder_concat_nodes[-2 * (i + 1)]
+            encoder_pw_shape = elementwise_mult(encoder_target_node.shape, [1, 1, 0.5])
+            output_shape = elementwise_mult(final_cell_out.shape, [4, 4, 1])
+            concat_shape = elementwise_mult(final_cell_out.shape, [4, 4, 1.125])
+
+            decoder_unit_suffix = f'_D{i}'
+            v_attributes = {
+                'name': [f'upsample{decoder_unit_suffix}', f'pw_encoder{decoder_unit_suffix}',
+                         f'encoder_concat{decoder_unit_suffix}', f'conv{decoder_unit_suffix}'],
+                'op': ['upsample', '1x1 conv', 'concat', '3x3 conv'],
+                'cell_index': [-1] * 4,
+                'block_index': [-1] * 4,
+                'params': [0, self.op_instantiator.get_op_params('1x1 conv', encoder_target_node.shape, encoder_pw_shape),
+                           0, self.op_instantiator.get_op_params('3x3 conv', concat_shape, output_shape)]
+            }
+            net.g.add_vertices(4, v_attributes)
+
+            edges = [(current_node.name, f'upsample{decoder_unit_suffix}'),
+                     (encoder_target_node.name, f'pw_encoder{decoder_unit_suffix}'),
+                     (f'upsample{decoder_unit_suffix}', f'encoder_concat{decoder_unit_suffix}'),
+                     (f'pw_encoder{decoder_unit_suffix}', f'encoder_concat{decoder_unit_suffix}'),
+                     (f'encoder_concat{decoder_unit_suffix}', f'conv{decoder_unit_suffix}')]
+            edge_attributes = {
+                'tensor_shape': [str(final_cell_out.shape), str(encoder_pw_shape), str(output_shape),
+                                 str(encoder_target_node.shape), str(concat_shape)]
+            }
+            net.g.add_edges(edges, edge_attributes)
+
+            current_node = TensorNode(f'conv{decoder_unit_suffix}', output_shape)
+
+        # OUTPUT
+        v_attributes = {
+            'name': ['out_pointwise_conv'],
+            'op': ['1x1 conv'],
+            'cell_index': [-1],
+            'block_index': [-1],
+            'params': [compute_conv_params((1, 1), final_filters, self.output_classes_count, bn=False)]
+        }
+        net.g.add_vertices(1, v_attributes)
+
+        # add edges from inputs to operator layers, plus from operator layers to add
+        edges = [(final_cell_out.name, 'out_pointwise_conv')]
+        edge_attributes = {
+            'tensor_shape': [str(current_node.shape)]
+        }
+        net.g.add_edges(edges, edge_attributes)
 
         return net
 
@@ -164,12 +251,7 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
         encoder_out = WrappedTensor(aspp, cell_inputs[-1].shape)
 
         # DECODER part (fixed)
-        # Inspired by DeepLab, upsample progressively with steps of factor 4
-        reductions = self.motifs - 1
-        upscale_factors = [4] * (reductions // 2)
-        # when using an odd number of reductions, the last upsample will have a 2x upsample
-        if reductions % 2 == 1:
-            upscale_factors.append(2)
+        upscale_factors = self._compute_decoder_upsample_factors()
 
         # leave out the last upsample factor, which does not require a decoder unit
         decoder_out = encoder_out
