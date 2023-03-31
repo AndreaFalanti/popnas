@@ -6,7 +6,8 @@
         "optimizer": {
             "type": "adamW",
             "scheduler": "cd"
-        }
+        },
+        "label_smoothing": 0.1
     },
     "architecture_hyperparameters": {
         "multi_output": true

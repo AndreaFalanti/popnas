@@ -177,6 +177,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
   - **lookahead**: optional object which can enable the lookahead mechanism when defined.
     - **sync_period**: integer defining the number of steps before syncing slow weights.
     - **slow_step_size**: float value indicating the ratio for updating the slow weights.
+- **label_smoothing**: float between 0 and 1, can be applied in CategoricalCrossentropy loss of classification tasks.
+  Ignored in segmentation tasks, since unsupported on sparse labels.
 
 
 **Architecture hyperparameters**:
