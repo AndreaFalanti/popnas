@@ -115,7 +115,7 @@ class TestConfigDataclasses(unittest.TestCase):
         complete_post_search_config_dict = merge({}, self.example_config, self.post_search_partial_config)
         post_search_config_dclass = from_dict(data_class=RunConfig, data=complete_post_search_config_dict)
 
-        self.assertEqual(post_search_config_dclass.training_hyperparameters.epochs, 5)
+        self.assertEqual(5, post_search_config_dclass.training_hyperparameters.epochs)
         self.assertTrue(post_search_config_dclass.dataset.data_augmentation.use_cutout)
 
 

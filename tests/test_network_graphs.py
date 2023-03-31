@@ -48,7 +48,7 @@ class TestNetworkGraphs(unittest.TestCase):
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -2, '3x3 conv')])
         g = model_gen.build_model_graph(cell_spec)
 
-        self.assertEqual(g.get_total_params(), 274474, 'Single block wrong params count')
+        self.assertEqual(274474, g.get_total_params(), 'Single block wrong params count')
 
     def test_simple_block_lb_reshape_network(self):
         input_shape = (32, 32, 3)
@@ -58,7 +58,7 @@ class TestNetworkGraphs(unittest.TestCase):
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -2, '3x3 conv')])
         g = model_gen.build_model_graph(cell_spec)
 
-        self.assertEqual(g.get_total_params(), 296602, 'Lookback reshape wrong params count')
+        self.assertEqual(296602, g.get_total_params(), 'Lookback reshape wrong params count')
 
     def test_cvt_block(self):
         input_shape = (32, 32, 3)
@@ -67,11 +67,11 @@ class TestNetworkGraphs(unittest.TestCase):
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3k-1h-1b cvt', -2, '3k-1h-1b cvt')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 155818, 'CVT wrong params count')
+        self.assertEqual(155818, g.get_total_params(), 'CVT wrong params count')
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3k-1h scvt', -2, '3k-1h scvt')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 112666, 'SCVT wrong params count')
+        self.assertEqual(112666, g.get_total_params(), 'SCVT wrong params count')
 
     def test_multi_block_cell(self):
         input_shape = (64, 64, 3)
@@ -84,7 +84,7 @@ class TestNetworkGraphs(unittest.TestCase):
                                        BlockSpecification(-2, '1x7-7x1 conv', 0, '3x3 conv')])
 
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 1667098, 'Multi-block cell wrong params count')
+        self.assertEqual(1667098, g.get_total_params(), 'Multi-block cell wrong params count')
 
     def test_residual_cells(self):
         input_shape = (32, 32, 3)
@@ -93,13 +93,13 @@ class TestNetworkGraphs(unittest.TestCase):
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 dconv', -2, '1x5-5x1 conv')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 209989, 'Residual single block wrong params count')
+        self.assertEqual(209989, g.get_total_params(), 'Residual single block wrong params count')
 
         cell_spec = CellSpecification([BlockSpecification(-2, '2x2 maxpool', -1, '1x5-5x1 conv'),
                                        BlockSpecification(-2, '2x2 avgpool', -1, '1x5-5x1 conv'),
                                        BlockSpecification(-2, '1x1 conv', 0, '1x5-5x1 conv')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 1156858, 'Residual multiple blocks wrong params count')
+        self.assertEqual(1156858, g.get_total_params(), 'Residual multiple blocks wrong params count')
 
     # TODO: now these networks use transpose convolutions instead of bilinear upsample (for XLA compatibility), so the number of parameters must be updated!
     #  They are expected to fail right now, will be updated when I have the data on a new search experiment using the new macro-architecture.
@@ -110,17 +110,17 @@ class TestNetworkGraphs(unittest.TestCase):
     #
     #     cell_spec = CellSpecification([BlockSpecification(-2, '1x5-5x1 conv', -2, '2x2 maxpool')])
     #     g = model_gen.build_model_graph(cell_spec)
-    #     self.assertEqual(g.get_total_params(), 872702, 'Segmentation -2 lookback only wrong params count')
+    #     self.assertEqual(872702, g.get_total_params(), 'Segmentation -2 lookback only wrong params count')
     #
     #     cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5:4dr conv')])
     #     g = model_gen.build_model_graph(cell_spec)
-    #     self.assertEqual(g.get_total_params(), 4535746, 'Segmentation mixed lookbacks wrong params count')
+    #     self.assertEqual(4535746, g.get_total_params(), 'Segmentation mixed lookbacks wrong params count')
     #
     #     cell_spec = CellSpecification([BlockSpecification(-1, '1x7-7x1 conv', -1, '8r SE'),
     #                                    BlockSpecification(-1, '2x2 maxpool', 0, '5x5:2dr conv'),
     #                                    BlockSpecification(-1, '2x2 avgpool', 0, '5x5:2dr conv')])
     #     g = model_gen.build_model_graph(cell_spec)
-    #     self.assertEqual(g.get_total_params(), 10947030, 'Segmentation multi-block wrong params count')
+    #     self.assertEqual(10947030, g.get_total_params(), 'Segmentation multi-block wrong params count')
 
     def test_segmentation_deeplab_network_graphs(self):
         input_shape = (None, None, 3)
@@ -129,18 +129,17 @@ class TestNetworkGraphs(unittest.TestCase):
 
         cell_spec = CellSpecification([BlockSpecification(-2, '5x5:2dr conv', -2, '2x2 avgpool')])
         g = model_gen.build_model_graph(cell_spec)
-        print(g.get_params_per_layer())
-        self.assertEqual(g.get_total_params(), 188971, 'Segmentation -2 lookback only wrong params count')
+        self.assertEqual(188971, g.get_total_params(), 'Segmentation -2 lookback only wrong params count')
 
         cell_spec = CellSpecification([BlockSpecification(-2, '3x3 conv', -1, '5x5 conv')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 369659, 'Segmentation mixed lookbacks wrong params count')
+        self.assertEqual(369659, g.get_total_params(), 'Segmentation mixed lookbacks wrong params count')
 
         cell_spec = CellSpecification([BlockSpecification(-2, '2x2 avgpool', -1, '1x9-9x1 conv'),
                                        BlockSpecification(0, '1x9-9x1 conv', 0, '2x2 maxpool'),
                                        BlockSpecification(1, '1x9-9x1 conv', 1, '2x2 maxpool')])
         g = model_gen.build_model_graph(cell_spec)
-        self.assertEqual(g.get_total_params(), 690211, 'Segmentation multi-block wrong params count')
+        self.assertEqual(690211, g.get_total_params(), 'Segmentation multi-block wrong params count')
 
 
 if __name__ == '__main__':
