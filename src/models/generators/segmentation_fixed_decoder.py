@@ -184,6 +184,12 @@ class SegmentationFixedDecoderModelGenerator(BaseModelGenerator):
                                                                            name='final_upscale')(decoder_out.tensor)
         last_output = WrappedTensor(last_output_tensor, [1, 1, filters / self.filters_ratio])
 
+        # fix multi-output considering only cell outputs, so it would discard the fixed part at the end of the network (ASPP and decoder)
+        if self.multi_output:
+            # override last cell output with the one considering also ASPP and decoder
+            self.cell_index = self.cell_index - 1
+            self._generate_output(last_output, self.dropout_prob)
+
         model = self._finalize_model(model_input, last_output)
         return model, self._get_output_names()
 
