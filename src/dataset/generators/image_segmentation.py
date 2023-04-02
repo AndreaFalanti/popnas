@@ -176,7 +176,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # TFDS dataset case
         else:
             split_name = 'train+validation' if self.val_size is None else 'train'
-            train_ds, info = generate_dataset_from_tfds(self.dataset_name, split_name, self.samples_limit, self.tfds_feature_keys)
+            train_ds, info = generate_dataset_from_tfds(self.dataset_name, split_name, self.samples_limit,
+                                                        shuffle=True, supervised_keys=self.tfds_feature_keys)
             image_shape = (None, None, 3)
             classes = self.dataset_classes_count
 
