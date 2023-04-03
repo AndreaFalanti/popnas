@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 
 import tensorflow as tf
@@ -36,10 +35,12 @@ def main():
     parser.add_argument('-j', metavar='JSON_PATH', type=str,
                         help='path to config json with training parameters (used to instantiate dataset)', default=None)
     parser.add_argument('--search_model', help='use best model found in search, with weights found on proxy training', action='store_true')
-    parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: best_model_training)',
-                        default='best_model_training')
+    parser.add_argument('-f', metavar='MODEL_FOLDER', type=str, help='model folder name (default: final_model_training)',
+                        default='final_model_training')
+    parser.add_argument('-b', metavar='BATCH_SIZE', type=int, help='overrides the batch size used in configuration', default=None)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
-    parser.add_argument('--top', help='when -f is provided, consider it as a nested folder if this option is set', action='store_true')
+    parser.add_argument('--top', help='when -f is provided, consider it as a nested folder if this option is set. Useful for example when evaluating'
+                                      ' all models found during model selection step.', action='store_true')
     args = parser.parse_args()
 
     model_path = os.path.join(args.p, 'best_model') if args.search_model else os.path.join(args.p, args.f)
@@ -50,8 +51,12 @@ def main():
     else:
         custom_json_path = os.path.join(args.p, 'restore', 'run.json') if args.search_model \
             else os.path.join(model_path, 'run.json')
+
     print('Reading configuration...')
     config = read_json_config(custom_json_path)
+    # override batch size if provided
+    if args.b is not None:
+        config.dataset.batch_size = args.b
 
     train_config = config.training_hyperparameters
     arc_config = config.architecture_hyperparameters
@@ -93,9 +98,7 @@ def main():
             print('Generating Keras model from cell specification...')
 
             # read model configuration to extract its macro architecture parameters
-            with open(os.path.join(m_path, 'run.json'), 'r') as f:
-                model_config = json.load(f)
-
+            model_config = read_json_config(os.path.join(m_path, 'run.json'))
             macro = MacroConfig.from_config(model_config)
 
             with train_strategy.scope():
