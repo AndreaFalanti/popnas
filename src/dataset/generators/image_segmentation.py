@@ -132,7 +132,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             image_shape = (None, None, 3)
         # TFDS dataset case
         else:
-            test_ds, info = generate_dataset_from_tfds(self.dataset_name, 'test', self.samples_limit, self.tfds_feature_keys)
+            test_ds, info = generate_dataset_from_tfds(self.dataset_name, 'test', self.samples_limit, supervised_keys=self.tfds_feature_keys)
 
             # even if the image shape is fixed, random crops at train time are smaller, so HW are kept None
             # still, it is possible to batch the validation dataset, if the images have the same dimensions
