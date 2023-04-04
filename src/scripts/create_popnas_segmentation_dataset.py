@@ -42,7 +42,7 @@ def save_palette_info(palette: set, save_folder: str):
         f.writelines(f'{class_index}: {color_value}\n' for class_index, color_value in enumerate(palette))
 
 
-def convert_from_rgb_to_tensor(img: Image, colors: set):
+def convert_from_rgb_to_tensor(img: Image.Image, colors: set):
     ''' Convert a mask from RGB to one-hot encoded tensor (H, W, # classes). '''
     img_np = np.asarray(img)
     original_shape = img_np.shape
@@ -80,7 +80,51 @@ def convert_mask(mask: Image, masks_palette: set, target_type: str):
         raise AttributeError('Not supported conversion target type')
 
 
-def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: Optional[int] = None, save_as_ragged: bool = False):
+def central_crop_and_pad_to_squared_dim(img: Image.Image, target_dim: int, pad_constant_color: int):
+    '''
+    Perform a central crop plus padding of the provided image.
+    The crop is performed for any dimension larger than the target dimension, while the padding is performed in the opposite case.
+
+    Args:
+        img: target image
+        target_dim: resize dimension for square crops
+        pad_constant_color: color to use for padding
+
+    Returns:
+        the new image with size (target_dim, target_dim)
+    '''
+    img_w, img_h = img.width, img.height
+
+    # make the padding value RGB if necessary
+    if img.mode == 'RGB':
+        pad_constant_color = (pad_constant_color, pad_constant_color, pad_constant_color)
+
+    # central crop, if necessary
+    crop_w = max(img_w - target_dim, 0)
+    crop_h = max(img_h - target_dim, 0)
+    if crop_w > 0 or crop_h > 0:
+        # compute crop box coordinates
+        box_left = math.ceil(crop_w / 2)
+        box_right = math.floor(img_w - crop_w / 2)
+        box_top = math.ceil(crop_h / 2)
+        box_bottom = math.ceil(img_h - crop_h / 2)
+        img = img.crop(box=(box_left, box_top, box_right, box_bottom))
+
+    pad_w = max(target_dim - img_w, 0)
+    pad_h = max(target_dim - img_h, 0)
+    if pad_w > 0 or pad_h > 0:
+        paste_left = pad_w // 2
+        paste_top = pad_h // 2
+
+        padding_base_img = Image.new(img.mode, size=(target_dim, target_dim), color=pad_constant_color)
+        padding_base_img.paste(img, box=(paste_left, paste_top))
+        img = padding_base_img
+
+    return img
+
+
+def main(ds_folders: 'list[str]', masks_conversion_mode: str, fixed_resize_dim: Optional[int] = None,
+         resize_min_axis: Optional[int] = None, save_as_ragged: bool = False):
     '''
     Generate a segmentation dataset in a standardized .npz format, easily readable by POPNAS.
     Each split should be placed in a folder, with subfolders for RGB images and masks.
@@ -90,7 +134,9 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
          It should contain two subfolders: one named 'images', containing RGB images used as samples,
          and one named 'masks', with PNG segmentation masks.
         masks_conversion_mode: conversion mode for masks
+        fixed_resize_dim: optional parameter to resize images to specific squared dimension.
         resize_min_axis: optional parameter to resize the smallest axis of images and masks to the provided value, preserving the aspect ratio.
+          Ignored if fixed_resize is provided.
         save_as_ragged: save the numpy array with object type, if it is ragged.
     '''
     first_split_masks_folder = os.path.join(ds_folders[0], 'masks')
@@ -102,6 +148,10 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
         raise AttributeError('Invalid conversion type')
     if init_type == target_type:
         print('Conversion types are set to the same value, masks will not be converted')
+
+    if fixed_resize_dim is not None and save_as_ragged:
+        save_as_ragged = False
+        print('Fixed dimension is provided, so the dataset will not be saved as ragged (it would just be a drawback, flag is overriden)')
 
     mask_colours = extract_palette_from_masks(first_split_masks_folder, init_type)
     print('Masks palette extracted successfully!')
@@ -120,7 +170,9 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
             new_size = None
 
             with Image.open(img_entry.path) as img:
-                if resize_min_axis is not None:
+                if fixed_resize_dim is not None:
+                    img = central_crop_and_pad_to_squared_dim(img, fixed_resize_dim, pad_constant_color=0)
+                elif resize_min_axis is not None:
                     min_axis_len = min(img.height, img.width)
                     ratio = resize_min_axis / min_axis_len
                     new_size = (math.floor(img.width * ratio), math.floor(img.height * ratio))
@@ -132,15 +184,21 @@ def main(ds_folders: 'list[str]', masks_conversion_mode: str, resize_min_axis: O
 
             fname_without_ext = img_entry.name.split('.')[0]
             with Image.open(os.path.join(masks_folder, fname_without_ext + '.png')) as img:
-                if new_size is not None:
+                if fixed_resize_dim is not None:
+                    img = central_crop_and_pad_to_squared_dim(img, fixed_resize_dim, pad_constant_color=255)
+                elif new_size is not None:
                     img = img.resize(new_size, resample=Image.NEAREST)
 
                 np_mask = convert_mask(img, mask_colours, target_type)
                 Y.append(np_mask)
 
         print('Saving NPZ archive...')
-        name_suffix = '' if resize_min_axis is None else str(resize_min_axis)
+        if fixed_resize_dim:
+            name_suffix = f'{fixed_resize_dim}f'
+        else:
+            name_suffix = '' if resize_min_axis is None else str(resize_min_axis)
         save_name = f'{os.path.basename(ds_folder)}{name_suffix}'
+
         # use object as dtype if arrays are ragged
         if save_as_ragged:
             np.savez_compressed(os.path.join(ds_folder, save_name), x=np.asarray(X, dtype=object), y=np.asarray(Y, dtype=object))
@@ -154,8 +212,9 @@ if __name__ == '__main__':
     parser.add_argument('-p', metavar='FOLDER_PATHS', nargs='+', type=str, help="path to dataset splits to convert", required=True)
     parser.add_argument('-m', metavar='MASK_CONVERSION_MODE', help='2 letters separated by colon, first is original format, second is target format. '
                                                                    'Supported values: R for RGB, T for tensor.', required=True)
+    parser.add_argument('-fr', metavar='FIXED_RESIZE_DIM', type=int, help="the target size for resizing images (squares)", default=None)
     parser.add_argument('-r', metavar='RESIZE_MIN_AXIS', type=int, help="the target size for smallest axis of the image", default=None)
     parser.add_argument('--ragged', action='store_true', help="use it if the images have different sizes", default=False)
     args = parser.parse_args()
 
-    main(args.p, args.m, args.r, args.ragged)
+    main(args.p, args.m, args.fr, args.r, args.ragged)
