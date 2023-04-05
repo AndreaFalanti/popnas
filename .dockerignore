@@ -7,3 +7,5 @@ build/
 .venv/
 .github/
 tests/
+*.env
+.neptune

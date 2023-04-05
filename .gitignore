@@ -140,3 +140,7 @@ temp_weights
 
 # catboost logs
 catboost_info
+
+# neptune env variables and temporary files
+neptune.env
+.neptune
