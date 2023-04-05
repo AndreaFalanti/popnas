@@ -192,16 +192,44 @@ class Popnas:
         total_time = self._compute_total_time()
 
         dataset_name = get_dataset_name(log_service.log_path)
-        trained_cnn_count = get_sampled_networks_count(log_service.log_path)
+        num_networks_trained = get_sampled_networks_count(log_service.log_path)
         top_score, mean5_top_score = get_top_scores(log_service.log_path, self.score_metric)
 
-        info = SearchInfo(dataset_name, trained_cnn_count, top_score, mean5_top_score, total_time, self.score_metric.name)
+        info = SearchInfo(dataset_name, num_networks_trained, top_score, mean5_top_score, total_time, self.score_metric.name)
         write_search_infos_csv(log_service.build_path('csv', 'search_results.csv'), [info])
 
         self._logger.info('%s', '*' * 40 + ' RUN RESULTS ' + '*' * 40)
-        self._logger.info('Trained networks: %d', trained_cnn_count)
+        self._logger.info('Trained networks: %d', num_networks_trained)
         self._logger.info('Total run time: %0.1f seconds (%d hours %d minutes %d seconds)', total_time, *from_seconds_to_hms(total_time))
         self._logger.info('*' * 94)
+
+        self.save_summary_files_and_metadata_into_neptune(total_time, num_networks_trained)
+
+    def save_summary_files_and_metadata_into_neptune(self, total_time: int, num_networks_trained: int):
+        # save summary info into Neptune project, if instantiated
+        if log_service.neptune_project is None:
+            return
+
+        # save summary info into Neptune project, if instantiated
+        hours, minutes, seconds = from_seconds_to_hms(total_time)
+        log_service.neptune_project['search_time'] = f'{hours} hours {minutes} minutes {seconds} seconds'
+        log_service.neptune_project['networks_trained'] = num_networks_trained
+
+        # upload plot images
+        plot_images = [f for f in os.scandir(log_service.build_path('plots')) if f.is_file()]  # type: list[os.DirEntry]
+        for plot_entry in plot_images:
+            log_service.neptune_project[f'plots/{plot_entry.name}'].upload(plot_entry.path)
+
+        # upload csv files
+        csv_files = [f for f in os.scandir(log_service.build_path('csv')) if f.is_file()]  # type: list[os.DirEntry]
+        for csv_entry in csv_files:
+            log_service.neptune_project[f'csv/{csv_entry.name}'].upload(csv_entry.path)
+
+        # upload logs
+        log_service.neptune_project['logs'].upload(log_service.build_path('debug.log'))
+        log_service.neptune_project['errors'].upload(log_service.build_path('critical.log'))
+
+        log_service.neptune_project.sync()
 
     def generate_final_plots(self):
         ''' Generate plots after the run has been terminated, analyzing the whole results. '''

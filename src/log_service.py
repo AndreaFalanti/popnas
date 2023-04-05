@@ -4,10 +4,16 @@ import shutil
 import sys
 import tempfile
 import time
+from typing import Optional
+
+import neptune
+from neptune import management
 
 # Must be set using initialize_log_folders, check_log_folder or set_log_path
 log_path = tempfile.mkdtemp()  # type: str
 using_temp = True
+neptune_project_name = None
+neptune_project = None         # type: Optional[neptune.Project]
 
 
 def set_log_path(path):
@@ -55,6 +61,10 @@ def initialize_log_folders(folder_name: str = None):
     # additional folders for different plot formats
     # os.mkdir(os.path.join(log_path, 'plots', 'eps'))
     os.mkdir(os.path.join(log_path, 'plots', 'pdf'))
+
+    # initialize a Neptune project if a valid API token is provided in the environment variables
+    if os.environ.get('NEPTUNE_API_TOKEN') is not None:
+        initialize_neptune_project(log_folder)
 
 
 def restore_log_folder(folder_path: str):
@@ -124,3 +134,15 @@ def make_exception_handler(logger):
 
 def build_path(*args):
     return os.path.join(log_path, *args)
+
+
+def initialize_neptune_project(run_name: str):
+    global neptune_project_name
+    neptune_project_name = management.create_project(
+        name=f'popnas-{run_name}',
+        workspace=os.environ.get('NEPTUNE_WORKSPACE'),
+        visibility=management.ProjectVisibility.PRIVATE
+    )
+
+    global neptune_project
+    neptune_project = neptune.init_project(neptune_project_name)
