@@ -4,7 +4,6 @@ import os
 
 import jsonschema
 from dacite import from_dict
-from neptune.utils import stringify_unsupported
 
 import log_service
 from utils.config_dataclasses import RunConfig
@@ -46,18 +45,20 @@ def initialize_search_config_and_logs(log_folder_name: str, json_config_path: st
     '''
     if restore_path is not None:
         log_service.restore_log_folder(restore_path)
+        log_service.restore_neptune_project()
         # load the exact configuration provided when the run was started
         run_config = read_json_config(log_service.build_path('restore', 'run.json'))
     else:
         log_service.initialize_log_folders(log_folder_name)
+        log_service.initialize_neptune_project()
         run_config = read_json_config(json_config_path)
 
         # copy config for possible run restore and post-search scripts
-        with open(log_service.build_path('restore', 'run.json'), 'w') as f:
+        config_save_path = log_service.build_path('restore', 'run.json')
+        with open(config_save_path, 'w') as f:
             config_dict = dataclasses.asdict(run_config)
             json.dump(config_dict, f, indent=4)
-            if log_service.neptune_project is not None:
-                log_service.neptune_project['popnas_config'] = stringify_unsupported(config_dict)
+            log_service.write_config_into_neptune(config_dict, config_save_path)
 
     return run_config
 

@@ -8,6 +8,12 @@ from typing import Optional
 
 import neptune
 from neptune import management
+from neptune.utils import stringify_unsupported
+from neptune_tensorflow_keras import NeptuneCallback
+from tensorflow.keras.callbacks import Callback
+
+from search_space import CellSpecification
+from utils.func_utils import from_seconds_to_hms
 
 # Must be set using initialize_log_folders, check_log_folder or set_log_path
 log_path = tempfile.mkdtemp()  # type: str
@@ -32,6 +38,10 @@ def set_log_path(path):
 
     # NOTE: solves issue with Keras model.save duplicating logs. See also: https://github.com/keras-team/keras/issues/16732
     logging.root.addHandler(logging.NullHandler())
+
+
+def get_log_folder_name():
+    return os.path.split(log_path)[1]
 
 
 def initialize_log_folders(folder_name: str = None):
@@ -61,12 +71,6 @@ def initialize_log_folders(folder_name: str = None):
     # additional folders for different plot formats
     # os.mkdir(os.path.join(log_path, 'plots', 'eps'))
     os.mkdir(os.path.join(log_path, 'plots', 'pdf'))
-
-    # initialize a Neptune project if a valid API token is provided in the environment variables
-    if os.environ.get('NEPTUNE_API_TOKEN') is None or os.environ.get('NEPTUNE_WORKSPACE') is None:
-        print('WARNING: Neptune API key or workspace not provided, this run will not be logged on Neptune')
-    else:
-        initialize_neptune_project(log_folder)
 
 
 def restore_log_folder(folder_path: str):
@@ -138,7 +142,18 @@ def build_path(*args):
     return os.path.join(log_path, *args)
 
 
-def initialize_neptune_project(run_name: str):
+# region NEPTUNE_LOGGING
+def _neptune_env_vars_missing():
+    return os.environ.get('NEPTUNE_API_TOKEN') is None or os.environ.get('NEPTUNE_WORKSPACE') is None
+
+def initialize_neptune_project():
+    ''' Initialize a Neptune project if a valid API token is provided in the environment variables. '''
+    if _neptune_env_vars_missing():
+        print('WARNING: Neptune API key or workspace not provided, this run will not be logged on Neptune')
+        return
+
+    run_name = get_log_folder_name()
+
     global neptune_project_name
     neptune_project_name = management.create_project(
         name=f'popnas-{run_name}',
@@ -148,3 +163,87 @@ def initialize_neptune_project(run_name: str):
 
     global neptune_project
     neptune_project = neptune.init_project(neptune_project_name)
+
+
+def restore_neptune_project():
+    '''
+    Restore connection to a Neptune project if a valid API token is provided in the environment variables.
+    Necessary to continue logging on Neptune when restoring an interrupted POPNAS experiment.
+    '''
+    if _neptune_env_vars_missing():
+        print('WARNING: Neptune API key or workspace not provided, this run will not be logged on Neptune')
+        return
+
+    run_name = get_log_folder_name()
+
+    global neptune_project_name
+    neptune_project_name = f'popnas-{run_name}'
+
+    global neptune_project
+    neptune_project = neptune.init_project(neptune_project_name)
+
+
+def write_config_into_neptune(config_dict: dict, config_path: str):
+    ''' Save config info into the Neptune project, if instantiated. '''
+    if neptune_project is None:
+        return
+    
+    neptune_project['popnas_config'] = stringify_unsupported(config_dict)
+    neptune_project['popnas_config_json'].upload(config_path)
+
+
+def save_summary_files_and_metadata_into_neptune(total_search_time: int, num_networks_trained: int):
+    ''' Save search summary info and files into the Neptune project, if instantiated. '''
+    if neptune_project is None:
+        return
+
+    # save summary info into Neptune project, if instantiated
+    hours, minutes, seconds = from_seconds_to_hms(total_search_time)
+    neptune_project['search_time'] = f'{hours} hours {minutes} minutes {seconds} seconds'
+    neptune_project['networks_trained'] = num_networks_trained
+
+    # upload plot images
+    plot_images = [f for f in os.scandir(build_path('plots')) if f.is_file()]  # type: list[os.DirEntry]
+    for plot_entry in plot_images:
+        neptune_project[f'plots/{plot_entry.name}'].upload(plot_entry.path)
+
+    # upload csv files
+    csv_files = [f for f in os.scandir(build_path('csv')) if f.is_file()]  # type: list[os.DirEntry]
+    for csv_entry in csv_files:
+        neptune_project[f'csv/{csv_entry.name}'].upload(csv_entry.path)
+
+    # upload logs
+    neptune_project['logs'].upload(build_path('debug.log'))
+    neptune_project['errors'].upload(build_path('critical.log'))
+
+    neptune_project.sync()
+
+
+def generate_neptune_run(run_name: str, cell_spec: 'CellSpecification', callbacks: 'list[Callback]'):
+    '''
+    Initialize a Neptune run under the experiment project, to store data related to a particular model training session.
+    If there is no Neptune project (optional credentials have not been provided), then the Neptune run is not created.
+    '''
+    if neptune_project_name is None:
+        return None, callbacks
+
+    # create Neptune run and add the related callback
+    neptune_run = neptune.init_run(project=neptune_project_name, name=run_name,
+                                   source_files=[], tags=['search'])
+
+    neptune_run['cell_specification'] = str(cell_spec)
+    callbacks.append(NeptuneCallback(run=neptune_run, log_model_diagram=True))
+
+    return neptune_run, callbacks
+
+
+def finalize_neptune_run(neptune_run: neptune.Run, params: int, training_time: int):
+    ''' Write conclusive info about a model training session and close the Neptune run. '''
+    if neptune_run is None:
+        return
+
+    neptune_run['training_time(seconds)'] = training_time
+    neptune_run['params'] = params
+
+    neptune_run.stop()
+# endregion

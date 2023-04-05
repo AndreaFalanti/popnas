@@ -2,10 +2,8 @@ import os
 import shutil
 from statistics import mean
 
-import neptune
 import numpy as np
 import tensorflow as tf
-from neptune.integrations.tensorflow_keras import NeptuneCallback
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import History, Callback
 from tensorflow.keras.utils import plot_model
@@ -237,7 +235,9 @@ class NetworkManager:
             # generate a CNN model given the cell specification
             # TODO: instead of rebuilding the model it should be better to just reset the weights and the optimizer
             model, callbacks = self.__compile_model(cell_spec, model_logdir)
-            neptune_run, callbacks = self.generate_neptune_run(cell_spec, i, callbacks)
+            fold_suffix = '' if i == 0 else f'fold_{str(i)}'
+            run_name = f'search_{self.current_network_id}{fold_suffix}'
+            neptune_run, callbacks = log_service.generate_neptune_run(run_name, cell_spec, callbacks)
 
             # add callback to register as accurate as possible the training time.
             # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the
@@ -256,32 +256,6 @@ class NetworkManager:
             times[i] = time_cb.get_total_time()
             histories.append(hist.history)
 
-            self.finalize_neptune_run(neptune_run, model, times[i])
+            log_service.finalize_neptune_run(neptune_run, model.count_params(), times[i])
 
         return model, histories, times
-
-    def generate_neptune_run(self, cell_spec: CellSpecification, fold_number: int, callbacks: 'list[Callback]'):
-        # if there is no Neptune project (optional credentials have not been provided), then do not create the Neptune run
-        if log_service.neptune_project_name is None:
-            return None, callbacks
-
-        # create Neptune run and add the related callback
-        fold_suffix = '' if fold_number == 0 else ''
-        run_name = f'search_{self.current_network_id}{fold_suffix}'
-        neptune_run = neptune.init_run(project=log_service.neptune_project_name, name=run_name,
-                                       source_files=[], tags=['search'])
-
-        neptune_run['cell_specification'] = str(cell_spec)
-        callbacks.append(NeptuneCallback(run=neptune_run, log_model_diagram=True))
-
-        return neptune_run, callbacks
-
-    def finalize_neptune_run(self, neptune_run: neptune.Run, model: Model, training_time: int):
-        # do nothing if Neptune is not used
-        if neptune_run is None:
-            return
-
-        neptune_run['training_time(seconds)'] = training_time
-        neptune_run['params'] = model.count_params()
-
-        neptune_run.stop()
