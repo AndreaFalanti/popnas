@@ -63,7 +63,9 @@ def initialize_log_folders(folder_name: str = None):
     os.mkdir(os.path.join(log_path, 'plots', 'pdf'))
 
     # initialize a Neptune project if a valid API token is provided in the environment variables
-    if os.environ.get('NEPTUNE_API_TOKEN') is not None:
+    if os.environ.get('NEPTUNE_API_TOKEN') is None or os.environ.get('NEPTUNE_WORKSPACE') is None:
+        print('WARNING: Neptune API key or workspace not provided, this run will not be logged on Neptune')
+    else:
         initialize_neptune_project(log_folder)
 
 
