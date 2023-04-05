@@ -295,6 +295,16 @@ The files are organized in different subfolders:
 
 
 ## Additional scripts and utils
+
+### Logging runs on Neptune
+If you have an account on [Neptune](https://neptune.ai/), you can easily log any POPNAS experiment to your Neptune workspace.
+POPNAS checks for the existence of two environment variables on your system:
+- `NEPTUNE_API_TOKEN`: set it to your personal API token
+- `NEPTUNE_WORKSPACE`: set it to the target workspace name
+
+If both are provided, POPNAS will create a new Neptune project and store the results of all models in separate runs.
+When using Docker, you can provide the environment variables with the `-e` flag, or `--env-file` flag if you prefer to store them in a file.
+
 ### Model selection script
 This script can be used to extensively train the best architectures found during a POPNAS search or a custom cell specification.
 It uses a configuration file (by default _model_selection_training.json_), which is a subset of the search algorithm JSON file and its properties
