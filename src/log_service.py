@@ -87,11 +87,11 @@ def get_logger(name, filename='debug.log'):
     # Create handlers
     file_handler = logging.FileHandler(os.path.join(log_path, filename))
     file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - [%(name)s:%(levelname)s] %(message)s'))
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
 
     # loggers with same name are actually the same logger, so they already have handlers in that case.
     # clear them and add the new ones. In this way, when running multiple experiments with e2e scripts, each experiments has its isolated log file.
@@ -105,9 +105,9 @@ def get_logger(name, filename='debug.log'):
 def create_critical_logger():
     logger = logging.getLogger('critical')
     file_handler = logging.FileHandler(os.path.join(log_path, 'critical.log'))
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - [%(name)s:%(levelname)s] %(message)s"))
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - [%(name)s:%(levelname)s] %(message)s'))
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
 
     # loggers with the same name are actually the same logger, so they already have handlers in that case.
     # clear them and add the new ones; in this way, when running multiple experiments with e2e scripts, each experiment has its isolated log file.
@@ -120,20 +120,20 @@ def create_critical_logger():
 
 # Taken from: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python
 def make_exception_handler(logger):
-    """
+    '''
     Closure to make an exception handler, given a logger.
-    """
+    '''
 
     def handle_exception(exc_type, exc_value, exc_traceback):
-        """
+        '''
         Handle uncaught exception logging, must be bound to sys.excepthook.
-        """
+        '''
         # Avoid to log keyboard interrupts
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
 
-        logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        logger.error('Uncaught exception', exc_info=(exc_type, exc_value, exc_traceback))
 
     return handle_exception
 
@@ -165,7 +165,7 @@ def initialize_neptune_project():
     neptune_project = neptune.init_project(neptune_project_name)
 
 
-def restore_neptune_project():
+def restore_neptune_project(run_name: str = None):
     '''
     Restore connection to a Neptune project if a valid API token is provided in the environment variables.
     Necessary to continue logging on Neptune when restoring an interrupted POPNAS experiment.
@@ -174,7 +174,8 @@ def restore_neptune_project():
         print('WARNING: Neptune API key or workspace not provided, this run will not be logged on Neptune')
         return
 
-    run_name = get_log_folder_name()
+    if run_name is None:
+        run_name = get_log_folder_name()
 
     global neptune_project_name
     neptune_project_name = f'popnas-{run_name}'
@@ -219,7 +220,7 @@ def save_summary_files_and_metadata_into_neptune(total_search_time: int, num_net
     neptune_project.sync()
 
 
-def generate_neptune_run(run_name: str, cell_spec: 'CellSpecification', callbacks: 'list[Callback]'):
+def generate_neptune_run(run_name: str, tags: 'list[str]', cell_spec: 'CellSpecification', callbacks: 'list[Callback]'):
     '''
     Initialize a Neptune run under the experiment project, to store data related to a particular model training session.
     If there is no Neptune project (optional credentials have not been provided), then the Neptune run is not created.
@@ -229,7 +230,7 @@ def generate_neptune_run(run_name: str, cell_spec: 'CellSpecification', callback
 
     # create Neptune run and add the related callback
     neptune_run = neptune.init_run(project=neptune_project_name, name=run_name,
-                                   source_files=[], tags=['search'])
+                                   source_files=[], tags=tags)
 
     neptune_run['cell_specification'] = str(cell_spec)
     callbacks.append(NeptuneCallback(run=neptune_run, log_model_diagram=True))
@@ -246,4 +247,14 @@ def finalize_neptune_run(neptune_run: neptune.Run, params: int, training_time: i
     neptune_run['params'] = params
 
     neptune_run.stop()
+
+
+def save_macro_hp_in_neptune_run(neptune_run: neptune.Run, motifs: int, normal_cells_per_motif: int, filters: int):
+    ''' Save macro hyperparameters in the Neptune run. '''
+    if neptune_run is None:
+        return
+
+    neptune_run['motifs'] = motifs
+    neptune_run['normal_cells_per_motif'] = normal_cells_per_motif
+    neptune_run['filters'] = filters
 # endregion

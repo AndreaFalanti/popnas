@@ -90,8 +90,6 @@ def add_macro_architecture_changes_to_cells_iter(cells_iter: Iterator['tuple[int
 def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, params: str = None, ts: str = None,
             name: str = 'best_model_training', debug: bool = False, stem: bool = False):
     ''' Refer to argparse help for more information about these arguments. '''
-    custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if j is None else j
-
     # create appropriate model structure (different between single model and multi-models)
     if k <= 1:
         save_path = os.path.join(p, name)
@@ -103,12 +101,20 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         log_service.set_log_path(save_path)
 
     logger = log_service.get_logger(__name__)
+    # reconnect to the Neptune project instantiated during the search procedure (identified by name of experiment folder)
+    log_service.restore_neptune_project(run_name=os.path.split(p)[1])
 
     # NOTE: it's bugged on windows, see https://github.com/tensorflow/tensorflow/issues/43608. Run debug only on linux.
     if debug:
         tf.debugging.experimental.enable_dump_debug_info(os.path.join(save_path, 'debug'),
                                                          tensor_debug_mode="FULL_HEALTH",
                                                          circular_buffer_size=-1)
+
+    custom_json_path = Path(__file__).parent / '../configs/model_selection_training.json' if j is None else j
+    if log_service.neptune_project is not None:
+        log_service.neptune_project['model_selection_json_override'].upload(custom_json_path)
+        log_service.neptune_project['params_range'] = str(params)
+        log_service.neptune_project['num_models_considered'] = k
 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
@@ -164,7 +170,8 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     for i, (cell_spec, macro) in cell_score_iter:
         model_folder = os.path.join(save_path, f'{i}-{macro}')
         create_model_log_folder(model_folder)
-        model_logger = log_service.get_logger(f'model_{i}_{macro}')
+        model_id = f'model_{i}_{macro}'
+        model_logger = log_service.get_logger(model_id)
 
         model_logger.info('CELL INFO (%d)', i)
         cell_spec.pretty_logging(logger)
@@ -195,8 +202,10 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
         # TODO: right now only the first fold is used, expand the logic later to support multiple folds
         train_dataset, validation_dataset = dataset_folds[0]
 
-        # Define callbacks
         train_callbacks = define_callbacks(score_metric_name, output_names, use_val=True)
+        neptune_run, train_callbacks = log_service.generate_neptune_run(f'ms:{model_id}', ['model-selection'], cell_spec, train_callbacks)
+        log_service.save_macro_hp_in_neptune_run(neptune_run, macro.m, macro.n, macro.f)
+
         time_cb = TrainingTimeCallback()
         train_callbacks.insert(0, time_cb)
 
@@ -215,6 +224,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
                                                                                        output_names, using_val=True)
         log_training_results_summary(logger, best_epoch, train_config.epochs, training_time, best_training_score, score_metric_name)
         log_training_results_dict(logger, results_dict)
+        log_service.finalize_neptune_run(neptune_run, model.count_params(), training_time)
 
         model_logger.info('Converting trained model to ONNX')
         save_keras_model_to_onnx(model, save_path=os.path.join(model_folder, 'trained.onnx'))

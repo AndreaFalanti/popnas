@@ -237,7 +237,7 @@ class NetworkManager:
             model, callbacks = self.__compile_model(cell_spec, model_logdir)
             fold_suffix = '' if i == 0 else f'fold_{str(i)}'
             run_name = f'search_{self.current_network_id}{fold_suffix}'
-            neptune_run, callbacks = log_service.generate_neptune_run(run_name, cell_spec, callbacks)
+            neptune_run, callbacks = log_service.generate_neptune_run(run_name, ['search'], cell_spec, callbacks)
 
             # add callback to register as accurate as possible the training time.
             # it must be the first callback, so that it registers the time before other callbacks are executed, registering "almost" only the
