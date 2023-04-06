@@ -46,6 +46,10 @@ def get_image_classification_tf_data_aug(crop_size: 'tuple[int, int]', use_cutou
         x = tf.image.random_flip_left_right(x)
         if use_cutout:
             cutout_size = tf.cast(tf.cast(h, dtype='float32') * 0.125, dtype='int32')
+            # make sure the cutout size is divisible by 2
+            if cutout_size % 2 != 0:
+                cutout_size = cutout_size + 1
+
             x = tfa.image.random_cutout(x, mask_size=(cutout_size, cutout_size), constant_values=0)
 
         return x, y
