@@ -164,3 +164,18 @@ Improve the predictors and fix performance problems in image classification data
 
 ### 3.7.1
 Small refactors on json config default paths, rename aMLLibrary config file and fix its relative path in predictor initializer.
+
+### 3.7.4
+Integrate Neptune into POPNAS, set label smoothing as a configuration option, and fix multiple bugs.
+
+- Add integration with Neptune. If the related environment variables are provided, POPNAS will log the experiments on Neptune,
+  making it possible to access them on cloud and share them among multiple persons.
+- Update segmentation dataset preprocessing script to allow resizing images to square crops of fixed dimension.
+- Extend DeepLab-like architecture graphs to consider ASPP and decoder, so that the number of parameters can be extracted correctly.
+- Label smoothing was previously always applied in post-search procedures. Since this setting works only on one-hot labels,
+  it is now applied only in classification tasks if a new parameter is set in the JSON config. This change also enables label
+  smoothing during search.
+- Fix loss always set to CategoricalCrossentropy in post-search procedures. Now they use the loss function of the model generator.
+- Fix DeepLab-like architectures pruning ASPP and decoder when using the "multi-output" setting.
+- Fix TFDS train+val and test datasets not working correctly.
+- Fix cutout size not being fixed to a multiple of 2, causing an error when odd.
