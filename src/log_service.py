@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import shutil
@@ -257,4 +258,44 @@ def save_macro_hp_in_neptune_run(neptune_run: neptune.Run, motifs: int, normal_c
     neptune_run['motifs'] = motifs
     neptune_run['normal_cells_per_motif'] = normal_cells_per_motif
     neptune_run['filters'] = filters
+
+
+def save_model_in_neptune_registry(tf_model_path: str, onnx_path: str, cell_spec: 'CellSpecification', params: int,
+                                   motifs: int, normal_cells_per_motif: int, filters: int):
+    ''' Save the model files into the Neptune model registry of the current project. '''
+    if neptune_project is None:
+        return
+
+    try:
+        neptune_model = neptune.init_model(project=neptune_project_name, key='DEPLOYMENT', name='Final training model')
+    except:
+        neptune_models_df = neptune_project.fetch_models_table().to_pandas()
+        model_id = neptune_models_df["sys/id"].values[0]
+        neptune_model = neptune.init_model(project=neptune_project_name, with_id=model_id)
+
+    model_id = neptune_model['sys/id'].fetch()
+    model_version = neptune.init_model_version(project=neptune_project_name, model=model_id)
+
+    # save TF model
+    model_version['tf-model/saved_model'].upload(os.path.join(tf_model_path, 'saved_model.pb'))
+    model_version['tf-model/keras_metadata'].upload(os.path.join(tf_model_path, 'keras_metadata.pb'))
+
+    for file_path in glob.glob(f'{tf_model_path}/variables/*'):
+        file_name = os.path.split(file_path)[1]
+        model_version[f'tf-model/variables/{file_name}'].upload(file_path)
+
+    # save ONNX model
+    model_version['onnx'].upload(onnx_path)
+
+    # save metadata
+    model_version['cell_spec'] = str(cell_spec)
+    model_version['params'] = params
+    macro = {
+        'motifs': motifs,
+        'normal': normal_cells_per_motif,
+        'filters': filters
+    }
+    model_version['macro_architecture'] = macro
+
+    model_version.stop()
 # endregion

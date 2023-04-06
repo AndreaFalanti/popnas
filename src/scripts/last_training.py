@@ -30,9 +30,13 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     save_path = os.path.join(p, name)
     create_model_log_folder(save_path)
     logger = log_service.get_logger(__name__)
+    # reconnect to the Neptune project instantiated during the search procedure (identified by name of experiment folder)
+    log_service.restore_neptune_project(run_name=os.path.split(p)[1])
 
     # read final_training config
     custom_json_path = Path(__file__).parent / '../configs/last_training.json' if j is None else j
+    if log_service.neptune_project is not None:
+        log_service.neptune_project['final_training_json_override'].upload(custom_json_path)
 
     logger.info('Reading configuration...')
     config, train_strategy = build_config(p, b, ts, custom_json_path)
@@ -101,8 +105,10 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     logger.info('Converting untrained model to ONNX')
     save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'untrained.onnx'))
 
-    # Define callbacks
     train_callbacks = define_callbacks(score_metric_name, output_names, use_val=False)
+    neptune_run, train_callbacks = log_service.generate_neptune_run(f'lt:final-model', ['final-training'], cell_spec, train_callbacks)
+    log_service.save_macro_hp_in_neptune_run(neptune_run, m, n, f)
+
     time_cb = TrainingTimeCallback()
     train_callbacks.insert(0, time_cb)
 
@@ -115,16 +121,22 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
                      callbacks=train_callbacks)  # type: callbacks.History
 
     training_time = time_cb.get_total_time()
+    params = model.count_params()
     results_dict, best_epoch, best_training_score = extract_final_training_results(hist, score_metric_name, extended_keras_metrics,
                                                                                    output_names, using_val=False)
     log_training_results_summary(logger, best_epoch, train_config.epochs, training_time, best_training_score, score_metric_name)
     log_training_results_dict(logger, results_dict)
+    log_service.finalize_neptune_run(neptune_run, params, training_time)
 
     logger.info('Saving TF model')
-    model.save(os.path.join(save_path, 'tf_model'))
+    tf_model_path = os.path.join(save_path, 'tf_model')
+    model.save(tf_model_path)
 
     logger.info('Converting trained model to ONNX')
-    save_keras_model_to_onnx(model, save_path=os.path.join(save_path, 'trained.onnx'))
+    onnx_model_path = os.path.join(save_path, 'trained.onnx')
+    save_keras_model_to_onnx(model, save_path=onnx_model_path)
+
+    log_service.save_model_in_neptune_registry(tf_model_path, onnx_model_path, cell_spec, params, m, n, f)
 
     try:
         test_ds, _, _, test_batches = dataset_generator.generate_test_dataset()
