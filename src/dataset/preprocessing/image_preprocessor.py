@@ -52,7 +52,7 @@ class ImagePreprocessor(DataPreprocessor):
                     padding = [pads_y, pads_x, [0, 0]]
 
                     image = tf.pad(image, padding)
-                    label = tf.pad(label, padding) if self.resize_labels else label
+                    label = tf.pad(label, padding, constant_values=255) if self.resize_labels else label
                     return image, label
 
                 ds = ds.map(zero_pad_to_multiples, num_parallel_calls=AUTOTUNE)
