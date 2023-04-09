@@ -51,7 +51,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     # override config with command line parameters
     arc_config.motifs = m
     arc_config.normal_cells_per_motif = n
-    train_config.filters = f
+    arc_config.filters = f
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
