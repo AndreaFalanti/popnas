@@ -233,13 +233,14 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - **ignore_class**: optional parameter used only in image segmentation problems. Defines the integer value of a class
   (e.g., background or void class) to ignore during loss and mean IoU computations (accuracy will still consider it,
   no current support for masking in TF).
-- **batch_size**: defines the batch size dimension of the dataset.
-- **inference_batch_size**: defines the batch size dimension for benchmarking the inference time of a network.
+- **batch_size**: defines the batch size used for the training split.
+- **val_test_batch_size**: defines the batch size used for the validation and test splits. If not provided, it will default to _batch_size_.
+- **inference_batch_size**: defines the batch size dimension for benchmarking the inference time of a network. Defaults to 1.
 - **validation_size**: fraction of the total samples to use for the validation set, e.g. _0.1_ value means that 10% of the
   training samples will be reserved for the validation dataset. Can be _null_ for TFDS dataset which have
   a separated validation set, for using it instead of partitioning the training set.
 - **cache**: if _true_, the dataset will be cached in memory, increasing the training performance.
-  Strongly advised for small datasets.
+  Strongly advised for small datasets, but also for big ones if they can fit in the available RAM.
 - **folds**: number of dataset folds to use. When using multiple folds, the metrics extrapolated from CNN training
   will be the average of the ones obtained on each fold.
 - **samples**: if provided, limits the total dataset samples used by the algorithm to the number provided (integer).
