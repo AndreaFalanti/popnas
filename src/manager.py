@@ -78,10 +78,9 @@ class NetworkManager:
 
         # take 6 batches of size provided in config, used to test the inference time.
         # when using multiple steps per execution, multiply the number of batches by the steps executed.
-        # NOTE: since images can have different sizes in image_segmentation, it's not possible to batch multiple images together (batch_size = 1)
-        self.inference_batch_size = dataset_config.inference_batch_size if dataset_config.type != 'image_segmentation' else 1
+        self.inference_batch_size = dataset_config.inference_batch_size
         self.inference_batches_count = 6 * self.execution_steps
-        self.inference_batch = self.dataset_folds[0][0].unbatch() \
+        self.inference_batch = self.dataset_folds[0].validation.unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
         # DEBUG ONLY
@@ -176,11 +175,7 @@ class NetworkManager:
         else:
             flops = 0
 
-        # compute inference time from a prediction session
-        inference_time_cb = InferenceTimingCallback()
-        model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
-        # discard first batch time since it is pretty noisy due to initialization of the process
-        inference_time = mean(inference_time_cb.logs[1:])
+        inference_time = self.check_inference_speed(model)
 
         # empty cell has a single output even if the multi-output flag is set
         is_multi_output = self.multi_output_model and not cell_spec.is_empty_cell()
@@ -212,6 +207,16 @@ class NetworkManager:
         perform_global_memory_clear()
 
         return training_res
+
+    def check_inference_speed(self, model):
+        ''' Compute the given model inference time by executing a short prediction session. '''
+        self._logger.info('Testing inference speed...')
+        inference_time_cb = InferenceTimingCallback()
+        model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
+
+        # discard first batch time since it is pretty noisy due to initialization of the process
+        # divide by execution steps, since if > 1 a batch will have "steps" samples
+        return mean(inference_time_cb.logs[1:]) / self.execution_steps
 
     def train_model(self, cell_spec: CellSpecification, model_logdir: str):
         '''
