@@ -163,7 +163,7 @@ class ControllerManager:
         try:
             model_estimation = next(model_est
                                     for model_est in model_estimations
-                                    if exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front) and
+                                    if exploration.has_sufficient_exploration_score(model_est, exp_cell_counter) and
                                     not cell_pruning.is_model_equivalent_to_another(cell_pruning.CellEncoding(model_est.cell_spec), curr_model_reprs))
 
             exploration_pareto_front.append(model_estimation)
@@ -176,7 +176,7 @@ class ControllerManager:
         for i, model_est in enumerate(model_estimations):
             # less expected training time than the last pareto element
             if not any(model_est.is_dominated_by(epf_elem) for epf_elem in exploration_pareto_front) and \
-                    exploration.has_sufficient_exploration_score(model_est, exp_cell_counter, exploration_pareto_front):
+                    exploration.has_sufficient_exploration_score(model_est, exp_cell_counter):
                 cell_repr = cell_pruning.CellEncoding(model_est.cell_spec)
 
                 # existing_model_reprs contains the pareto front and exploration cells will be progressively added to it

@@ -39,14 +39,13 @@ def get_block_element_exploration_score(el, exploration_counter: Counter, total_
     return score
 
 
-def has_sufficient_exploration_score(model_est: ModelEstimate, exp_cell_counter: CellCounter,
-                                     exploration_pareto_front: 'list[ModelEstimate]'):
+def has_sufficient_exploration_score(model_est: ModelEstimate, exp_cell_counter: CellCounter):
     exp_score = 0
     exp_inputs_total_count = exp_cell_counter.inputs_total()
     exp_ops_total_count = exp_cell_counter.ops_total()
 
     # give a bonus to the least searched set between inputs and operators (to both if equal)
-    # in case one exploration set is empty, after first step the bonus will not be granted anymore.
+    # in case one exploration set is empty, after the first step the bonus will not be granted anymore.
     op_bonus = exp_ops_total_count <= exp_inputs_total_count
     input_bonus = exp_inputs_total_count <= exp_ops_total_count
 
@@ -56,16 +55,6 @@ def has_sufficient_exploration_score(model_est: ModelEstimate, exp_cell_counter:
         exp_score += get_block_element_exploration_score(op1, exp_cell_counter.op_counter, exp_ops_total_count, op_bonus)
         exp_score += get_block_element_exploration_score(op1, exp_cell_counter.op_counter, exp_ops_total_count, op_bonus)
 
-    # additional conditions for pareto variety (float values, 1 point every difference of 4% of accuracy or 10% of time difference
-    # with previous pareto entry). Considered only for cells with elements in exploration sets, when exploration pareto front is not empty.
-    # TODO: disabled since it doesn't work well for >=3 objectives of Pareto optimization. It is also not really needed probably,
-    #  so simplifying isn't a bad thing. For >=3 objectives could add a negative score, if instead done absolute still it is not very sound
-    #  to make the rapport with the previous inserted element.
-    # if exp_score > 0 and len(exploration_pareto_front) > 0:
-    #     exp_score += (1 - model_est.score / exploration_pareto_front[-1].score) / 0.04
-    #     exp_score += (1 - model_est.time / exploration_pareto_front[-1].time) / 0.10
-    #     exp_score += (1 - model_est.params / exploration_pareto_front[-1].params) / 0.20
-
-    # adapt threshold if one of the two sets is empty
+    # adapt the threshold if one of the two sets is empty
     exp_score_threshold = 8 if (exp_cell_counter.ops_keys_len() > 0 and exp_cell_counter.inputs_keys_len() > 0) else 4
     return exp_score >= exp_score_threshold

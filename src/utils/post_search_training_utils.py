@@ -52,8 +52,8 @@ def define_callbacks(score_metric: str, output_names: 'list[str]', save_chunk: i
     ckpt_save_format = 'cp_ed{epoch:02d}_' + str(save_chunk) + '.ckpt'
     # TODO: best score metric could be the min, should use the .optimal value from the TargetMetric. Refactor this later...
     ckpt_callback = ModelCheckpointCustom(filepath=log_service.build_path('weights', ckpt_save_format),
-                                               save_weights_only=True, save_best_only=True,
-                                               monitor=target_metric, mode='max', save_chunk=save_chunk)
+                                          save_weights_only=True, save_best_only=True,
+                                          monitor=target_metric, mode='max', save_chunk=save_chunk)
     # By default, it shows losses and metrics for both training and validation
     tb_callback = callbacks.TensorBoard(log_dir=log_service.build_path('tensorboard'), profile_batch=0, histogram_freq=0, write_graph=False)
 
@@ -81,7 +81,7 @@ def extract_final_training_results(hist: callbacks.History, score_metric_name: s
     epoch_index, best_score = get_best_metric_and_epoch_index(history, score_metric, output_names, using_val)
 
     best_epoch_results = {output_name: {m.name: history[m.to_keras_history_key(False, output_name)][epoch_index] for m in keras_metrics}
-                              for output_name in output_names}
+                          for output_name in output_names}
     if using_val:
         best_epoch_results.update(
             {output_name: {f'val_{m.name}': history[m.to_keras_history_key(True, output_name)][epoch_index] for m in keras_metrics}
@@ -126,7 +126,7 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
     # read hyperparameters to use for model selection, overriding search ones
     with open(custom_json_path, 'r') as f:
         ms_partial_config = json.load(f)  # type: dict
-        
+
     ms_config_dict = merge({}, search_config, ms_partial_config)
     ms_config = from_dict(data_class=RunConfig, data=ms_config_dict)
 

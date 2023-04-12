@@ -63,7 +63,6 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
             shard_policy = AutoShardPolicy.DATA
 
-            # TODO: currently resizing is not working, neither random crop. There is a problem due to ragged tensors special format...
             # Custom dataset, loaded from numpy npz files
             if self.dataset_path is not None:
                 classes = self.dataset_classes_count

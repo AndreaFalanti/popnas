@@ -20,11 +20,8 @@ from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_bo
 # so that it can be further analyzed in a more straightforward way
 
 __logger = None  # type: logging.Logger
-# disable matplotlib info and warning messages
-# TODO: it is not wise to disable warnings, but i couldn't find a way to only remove PostScript transparency warning,
-#  which is a known thing and it is triggered thousands of times... EPS disabled, reverted to WARNING
+# disable matplotlib info messages
 plt.set_loglevel('WARNING')
-# warnings.filterwarnings('ignore', module='matplotlib.backends.backend_ps')    # NOT WORKING
 
 
 # TODO: otherwise would be initialized before run.py code, producing an error. Is there a less 'hacky' way?

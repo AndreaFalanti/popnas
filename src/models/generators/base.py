@@ -595,11 +595,9 @@ class BaseModelGenerator(ABC):
             last_used_cell = max(self.network_build_info.used_cell_indexes)
             target_metric = f'val_{output_layer_name}_c{last_used_cell}_{score_metric}' \
                 if self.multi_output and self.network_build_info.blocks > 0 else f'val_{score_metric}'
+
             model_callbacks.append(callbacks.ModelCheckpoint(filepath=os.path.join(model_logdir, 'best_weights.ckpt'),
                                                              save_weights_only=True, save_best_only=True, monitor=target_metric, mode='max'))
-
-        # TODO: if you want to use early stopping, training time should be rescaled for predictor
-        # es_callback = callbacks.EarlyStopping(monitor='val_accuracy', patience=8, restore_best_weights=True, verbose=1)
 
         return model_callbacks
 
