@@ -146,6 +146,7 @@ class BaseDatasetGenerator(ABC):
         self.samples_limit = dataset_config.samples
         self.dataset_classes_count = dataset_config.classes_count
         self.batch_size = dataset_config.batch_size
+        self.val_test_batch_size = dataset_config.val_test_batch_size
         self.val_size = dataset_config.validation_size
         self.cache = dataset_config.cache
         self.class_labels_remapping_dict = dataset_config.class_labels_remapping

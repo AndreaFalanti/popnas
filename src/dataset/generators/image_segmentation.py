@@ -57,10 +57,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
-
-        # TODO: currently not supported
         preprocessing_model = None
-        keras_aug = None
 
         for i in range(self.dataset_folds_count):
             self._logger.info('Preprocessing and building dataset fold #%d...', i + 1)
@@ -104,12 +101,12 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             # finalize dataset generation, common logic to all dataset formats
             data_preprocessor = self.build_preprocessor()
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                             keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
+                                                             keras_data_augmentation=None, tf_data_augmentation=self.tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
                                                              use_sample_weights=self.use_sample_weights)
             # use a batch_size = 1 if the validation dataset is ragged,
             # otherwise use half batch size (since actual images could be much bigger than crops)
-            val_batch_size = 1 if val_ds_is_ragged else self.batch_size // 2
+            val_batch_size = 1 if val_ds_is_ragged else self.val_test_batch_size
             val_ds, val_batches = self._finalize_dataset(val_ds, val_batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
@@ -146,15 +143,13 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         data_preprocessor = self.build_preprocessor()
         # use a batch_size = 1 if the test dataset is ragged,
         # otherwise use half batch size (since actual images could be much bigger than crops)
-        test_batch_size = 1 if test_ds_is_ragged else self.batch_size // 2
+        test_batch_size = 1 if test_ds_is_ragged else self.val_test_batch_size
         test_ds, batches = self._finalize_dataset(test_ds, test_batch_size, data_preprocessor, shard_policy=shard_policy)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches
 
     def generate_final_training_dataset(self) -> 'tuple[tf.data.Dataset, int, tuple[int, ...], int, Optional[Sequential]]':
-        # TODO: currently not supported
-        keras_aug = None
         shard_policy = AutoShardPolicy.DATA
 
         # Custom dataset, loaded from numpy npz files
@@ -184,7 +179,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = self.build_preprocessor()
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, data_preprocessor,
-                                                         keras_data_augmentation=keras_aug, tf_data_augmentation=self.tf_aug,
+                                                         keras_data_augmentation=None, tf_data_augmentation=self.tf_aug,
                                                          shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy,
                                                          use_sample_weights=self.use_sample_weights)
 

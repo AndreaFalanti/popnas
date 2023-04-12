@@ -79,7 +79,6 @@ class DatasetConfig:
     classes_count: int
     ignore_class: Optional[int]
     batch_size: int
-    inference_batch_size: int
     validation_size: Optional[float]
     cache: bool
     folds: int
@@ -89,7 +88,13 @@ class DatasetConfig:
     class_labels_remapping: Optional[Dict[str, int]]
     resize: Optional[ResizeDict]
     data_augmentation: DataAugmentationDict
+    val_test_batch_size: int = None
+    inference_batch_size: int = 1
     balance_class_losses: bool = False
+
+    def __post_init__(self):
+        if self.val_test_batch_size is None:
+            self.val_test_batch_size = self.batch_size
 
 
 @dataclass

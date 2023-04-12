@@ -112,11 +112,11 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 q_x = np.quantile(x_train, q=0.98) if self.rescale else 1
 
                 classes = len(np.unique(y_train))
-                # discard first dimension since is the number of samples
+                # discard the first dimension since it is the number of samples
                 input_shape = np.shape(x_train)[1:]
 
                 if self.samples_limit is not None:
-                    # also shuffle, since .ts files are usually ordered by class. Without shuffle, entire classes could be dropped.
+                    # many .ts files are usually ordered by class. Without shuffle, entire classes could be dropped.
                     x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
 
                 # create a validation set for evaluation of the child models. If val_size is None, then files for validation split must exist.
@@ -134,7 +134,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
 
             preprocessor = self.build_preprocessor(classes, q_x)
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, preprocessor, shuffle=True, fit_preprocessing_layers=True)
-            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, preprocessor)
+            val_ds, val_batches = self._finalize_dataset(val_ds, self.val_test_batch_size, preprocessor)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = preprocessor.preprocessor_model
@@ -159,7 +159,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             raise NotImplementedError()
 
         preprocessor = self.build_preprocessor(classes, q_x)
-        test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, preprocessor)
+        test_ds, batches = self._finalize_dataset(test_ds, self.val_test_batch_size, preprocessor)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, input_shape, batches
@@ -170,7 +170,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             x_train, y_train = self._get_numpy_split('train')
 
             classes = len(np.unique(y_train))
-            # discard first dimension since is the number of samples
+            # discard the first dimension since it is the number of samples
             input_shape = np.shape(x_train)[1:]
 
             # create a validation set for evaluation of the child models. If val_size is None, then files for validation split must exist.

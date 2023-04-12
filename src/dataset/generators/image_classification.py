@@ -174,7 +174,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, train_preprocessor,
                                                              keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
                                                              shuffle=True, fit_preprocessing_layers=True, shard_policy=shard_policy)
-            val_ds, val_batches = self._finalize_dataset(val_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
+            val_ds, val_batches = self._finalize_dataset(val_ds, self.val_test_batch_size, data_preprocessor, shard_policy=shard_policy)
             dataset_folds.append(DatasetsFold(train_ds, val_ds))
 
             preprocessing_model = train_preprocessor.preprocessor_model
@@ -228,7 +228,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         # finalize dataset generation, common logic to all dataset formats
         data_preprocessor = self.build_preprocessor(classes)
-        test_ds, batches = self._finalize_dataset(test_ds, self.batch_size, data_preprocessor, shard_policy=shard_policy)
+        test_ds, batches = self._finalize_dataset(test_ds, self.val_test_batch_size, data_preprocessor, shard_policy=shard_policy)
 
         self._logger.info('Test dataset built successfully')
         return test_ds, classes, image_shape, batches

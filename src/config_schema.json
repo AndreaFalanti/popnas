@@ -243,6 +243,10 @@
                     "type": "integer",
                     "minimum": 2
                 },
+                "val_test_batch_size": {
+                    "type": "integer",
+                    "minimum": 1
+                },
                 "inference_batch_size": {
                     "type": "integer",
                     "minimum": 1
@@ -332,7 +336,6 @@
                 "path",
                 "classes_count",
                 "batch_size",
-                "inference_batch_size",
                 "validation_size",
                 "cache",
                 "folds",
