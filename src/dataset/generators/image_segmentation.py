@@ -1,5 +1,5 @@
 import os.path
-from typing import Optional
+from typing import Optional, NamedTuple
 
 import numpy as np
 import tensorflow as tf
@@ -18,8 +18,14 @@ from utils.config_dataclasses import DatasetConfig
 PAD_MULTIPLES = 16
 
 
-tfds_supported_datasets_labels = {
-    'cityscapes': ('image_left', 'segmentation_label')
+class MetadataTFDS(NamedTuple):
+    feature_keys: 'tuple[str, str]'
+    # split which can be used for local test purposes, since many test splits do not provide the labels but are intended for online submissions
+    local_test_split: str
+
+
+tfds_supported_datasets = {
+    'cityscapes': MetadataTFDS(feature_keys=('image_left', 'segmentation_label'), local_test_split='validation')
 }
 
 
@@ -35,10 +41,11 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         # if using a TFDS dataset (no path to dataset), make sure it is supported and extract the feature keys for later usage
         if dataset_config.path is None:
-            try:
-                self.tfds_feature_keys = tfds_supported_datasets_labels[self.dataset_name]
-            except KeyError:
+            if self.dataset_name not in tfds_supported_datasets.keys():
                 raise AttributeError('The provided dataset name is not supported by POPNAS or by TFDS')
+
+            self.tfds_feature_keys = tfds_supported_datasets[self.dataset_name].feature_keys
+            self.tfds_test_split = tfds_supported_datasets[self.dataset_name].local_test_split
 
         self.use_sample_weights = dataset_config.balance_class_losses
         # introduce side effect on the configuration dataclass, avoiding the use of loss weights which can't be applied on >= 3 dims labels
@@ -128,7 +135,8 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
             image_shape = (None, None, 3)
         # TFDS dataset case
         else:
-            test_ds, info = generate_dataset_from_tfds(self.dataset_name, 'test', self.samples_limit, supervised_keys=self.tfds_feature_keys)
+            test_ds, info = generate_dataset_from_tfds(self.dataset_name, self.tfds_test_split, self.samples_limit,
+                                                       supervised_keys=self.tfds_feature_keys)
 
             # even if the image shape is fixed, random crops at train time are smaller, so HW are kept None
             # still, it is possible to batch the validation dataset, if the images have the same dimensions
