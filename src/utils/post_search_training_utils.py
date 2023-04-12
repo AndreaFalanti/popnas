@@ -68,17 +68,9 @@ def create_model_log_folder(log_path: str):
     log_service.set_log_path(log_path)
 
 
-def save_complete_and_trimmed_json_config(config: RunConfig, save_path: str):
-    ''' Save the config subsection related to the network training, without search only parameters. '''
-    keep_keys = ['cnn_hp', 'architecture_parameters', 'dataset', 'search_strategy']
-    full_config = dataclasses.asdict(config)
-    minimal_config = {k: v for k, v in full_config.items() for k in keep_keys}
-
+def dump_json_config(config: RunConfig, save_path: str):
     with open(os.path.join(save_path, 'run.json'), 'w') as f:
-        json.dump(full_config, f, indent=4)
-
-    with open(os.path.join(save_path, 'run_trimmed.json'), 'w') as f:
-        json.dump(minimal_config, f, indent=4)
+        json.dump(dataclasses.asdict(config), f, indent=4)
 
 
 def extract_final_training_results(hist: callbacks.History, score_metric_name: str, keras_metrics: 'list[TargetMetric]',

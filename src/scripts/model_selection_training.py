@@ -20,7 +20,7 @@ from search_space import CellSpecification
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
-from utils.post_search_training_utils import create_model_log_folder, save_complete_and_trimmed_json_config, define_callbacks, \
+from utils.post_search_training_utils import create_model_log_folder, dump_json_config, define_callbacks, \
     build_config, MacroConfig, compile_post_search_model, build_macro_customized_config, \
     get_best_cell_specs, extend_keras_metrics, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict
@@ -127,7 +127,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
     score_metric_name = config.search_strategy.score_metric
 
     # dump the json into save folder, so that is possible to retrieve how the model had been trained
-    save_complete_and_trimmed_json_config(config, save_path)
+    dump_json_config(config, save_path)
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -182,7 +182,7 @@ def execute(p: str, j: str = None, k: int = 5, spec: str = None, b: int = None, 
             f.write(str(cell_spec))
 
         model_config = build_macro_customized_config(config, macro)
-        save_complete_and_trimmed_json_config(model_config, model_folder)
+        dump_json_config(model_config, model_folder)
 
         model_logger.info('Generating Keras model from cell specification...')
         with train_strategy.scope():

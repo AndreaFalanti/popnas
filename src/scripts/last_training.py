@@ -16,7 +16,7 @@ from utils.experiments_summary import FinalTrainingInfo, write_final_training_in
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages
 from utils.post_search_training_utils import create_model_log_folder, define_callbacks, \
-    save_complete_and_trimmed_json_config, compile_post_search_model, build_config, \
+    dump_json_config, compile_post_search_model, build_config, \
     save_evaluation_results, get_best_cell_specs, extract_final_training_results, log_training_results_summary, \
     log_training_results_dict, extend_keras_metrics
 
@@ -93,7 +93,7 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     with open(os.path.join(save_path, 'cell_spec.txt'), 'w') as fp:
         fp.write(str(cell_spec))
 
-    save_complete_and_trimmed_json_config(config, save_path)
+    dump_json_config(config, save_path)
 
     with train_strategy.scope():
         mo_model, output_names = model_gen.build_model(cell_spec, add_imagenet_stem=stem)
