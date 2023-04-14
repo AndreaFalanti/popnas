@@ -19,7 +19,7 @@ pydot = "1.4.2"
 numba = "0.56.4"
 psutil = "5.9.4"
 seaborn = "0.12.2"
-tf2onnx = "1.13.0"
+tf2onnx = "1.14.0"
 keras-tuner = "1.1.0"
 tensorflow-addons = "0.19.0"
 tensorflow-datasets = "4.8.3"
@@ -43,6 +43,9 @@ onnxruntime-gpu = "1.14.1"
 # fix scipy dependency issue caused by statsmodels (https://github.com/statsmodels/statsmodels/issues/8543),
 # by fixing a "working" version to this indirect dependency. Remove when solved.
 statsmodels = "0.13.2"
+# fix strange issue between Tensorflow and poetry
+# see also: https://github.com/tensorflow/io/issues/1617
+tensorflow-io-gcs-filesystem = "0.31.0"
 # aMLLibrary extra dependencies
 xgboost = "1.6.1"
 mlxtend = "0.19.0"
