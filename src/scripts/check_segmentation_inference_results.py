@@ -66,6 +66,7 @@ def main():
     parser.add_argument('-p', metavar='PATH', type=str, help="path to final model folder", required=True)
     parser.add_argument('-d', metavar='DATASET_PATH', type=str, help="override dataset path", required=False)
     parser.add_argument('-n', metavar='NUM_SAMPLES', type=int, help="number of test samples to use", required=False, default=10)
+    parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help="device to use for training", required=False, default='GPU')
     args = parser.parse_args()
 
     model_path = os.path.join(args.p, 'tf_model')
@@ -79,7 +80,7 @@ def main():
     # reduce batch size to 1
     config.dataset.val_test_batch_size = 1
 
-    train_strategy = initialize_train_strategy('GPU', True)
+    train_strategy = initialize_train_strategy(args.ts, True)
 
     # Load and prepare the dataset
     print('Preparing datasets...')
@@ -95,8 +96,10 @@ def main():
     save_folder = os.path.join(args.p, 'test-predictions')
     create_empty_folder(save_folder)
 
-    # plot some predictions
+    # limit the dataset to the indicated number of samples
     test_samples = test_ds.take(args.n)
+
+    # plot some predictions
     for i, (x, y) in enumerate(test_samples):
         # use the second output ([1])
         mask = model.predict(x)[1]
