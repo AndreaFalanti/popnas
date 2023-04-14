@@ -114,7 +114,7 @@ def get_optimized_steps_per_execution(train_strategy: tf.distribute.Strategy):
 
 
 def save_keras_model_to_onnx(model: Model, save_path: str):
-    tf2onnx.convert.from_keras(model, opset=13, output_path=save_path)
+    tf2onnx.convert.from_keras(model, opset=17, output_path=save_path)
 
 
 def support_weight_decay(optimizer_str: str):
