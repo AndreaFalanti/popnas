@@ -18,7 +18,6 @@ def load_segmentation_images(samples_path: str, samples_limit: int):
     samples = []
     for i in range(samples_limit):
         with Image.open(sample_files[i].path) as img:
-            # img = img.resize((1024, 512))
             x = np.asarray(img) / 255.
             samples.append(x)
 
@@ -50,6 +49,48 @@ def perform_model_inference(test_batch_size: int, num_batches: int, x: np.ndarra
     return inf_times
 
 
+def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession, num_classes: int,
+                                      test_batch_size: int, num_batches: int, x: np.ndarray):
+    '''
+    Perform the inference on the provided test batches, logging the time required for each batch.
+
+    Optimized for ONNX runtime, it places input and output buffers on GPU before the execution, making it possible to observe just the
+    computation time required by the network.
+    '''
+    inf_times = []
+    for i in range(num_batches):
+        test_data = x[test_batch_size * i:test_batch_size * (i + 1)]
+
+        io_binding = prepare_onnx_io_binding(onnx_session, test_data, num_classes)
+
+        start_time = timer()
+        onnx_session.run_with_iobinding(io_binding)
+        inf_times.append(timer() - start_time)
+
+    return inf_times
+
+
+def prepare_onnx_io_binding(onnx_session: onnxruntime.InferenceSession, data: np.ndarray, num_classes: int):
+    x_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(data, 'cuda', 0)
+    # output has the same resolution, but a different number of channels, since it is a one-hot tensor
+    output_shape = list(data.shape)[:-1] + [num_classes]
+    y1_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
+    y2_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
+
+    io_binding = onnx_session.io_binding()
+    # input name is fixed, while output names can change based on model structure (but are always two outputs for post-search models)
+    out_1_name, out_2_name = [out.name for out in onnx_session.get_outputs()]
+
+    io_binding.bind_input(name='input_1', device_type=x_ortvalue.device_name(), device_id=0, element_type=data.dtype, shape=x_ortvalue.shape(),
+                          buffer_ptr=x_ortvalue.data_ptr())
+    io_binding.bind_output(name=out_1_name, device_type=y1_ortvalue.device_name(), device_id=0, element_type=np.float32, shape=y1_ortvalue.shape(),
+                           buffer_ptr=y1_ortvalue.data_ptr())
+    io_binding.bind_output(name=out_2_name, device_type=y2_ortvalue.device_name(), device_id=0, element_type=np.float32, shape=y2_ortvalue.shape(),
+                           buffer_ptr=y2_ortvalue.data_ptr())
+
+    return io_binding
+
+
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to model folder", required=True)
@@ -76,10 +117,22 @@ def main():
     else:
         sess_options = None
 
-    sess = onnxruntime.InferenceSession(os.path.join(args.p, 'trained.onnx'), providers=['CUDAExecutionProvider'], sess_options=sess_options)
+    onnx_providers = [
+        ('TensorrtExecutionProvider', {
+            'trt_fp16_enable': True
+        }),
+        ('CUDAExecutionProvider', {
+            'cudnn_conv_use_max_workspace': '1'
+        })
+    ]
+
+    sess = onnxruntime.InferenceSession(os.path.join(args.p, 'trained.onnx'), providers=onnx_providers, sess_options=sess_options)
     onnx_times = perform_model_inference(test_batch_size, num_batches, x_train,
                                          predict_f=lambda data, size: sess.run(None, {'input_1': data}))
     print_results(onnx_times[warmup_batches:], 'ONNX')
+
+    onnx_times = perform_io_binding_onnx_inference(sess, 19, test_batch_size, num_batches, x_train)
+    print_results(onnx_times[warmup_batches:], 'ONNX IO bound')
 
     # TF model
     if not args.onnx_only:
