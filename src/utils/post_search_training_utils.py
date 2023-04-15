@@ -138,6 +138,7 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
         ms_config.training_hyperparameters.learning_rate = ms_config.training_hyperparameters.learning_rate * \
                                                            (batch_size / ms_config.dataset.batch_size)
         ms_config.dataset.batch_size = batch_size
+        ms_config.dataset.val_test_batch_size = batch_size
 
     # initialize train strategy (try-except to be retrocompatible with the previous config format)
     try:
@@ -185,6 +186,8 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     mo_losses, mo_loss_weights, optimizer, train_metrics = model_gen.define_training_hyperparams_and_metrics()
     # remove unnecessary exits and recalibrate loss weights
     model, mo_losses, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_losses, mo_loss_weights)
+
+    train_metrics.extend([tf.keras.metrics.IoU(21, target_class_ids=[i], ignore_class=255, sparse_y_pred=False) for i in range(21)])
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
     model.compile(optimizer=optimizer, loss=mo_losses, loss_weights=loss_weights, metrics=train_metrics,

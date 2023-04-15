@@ -56,7 +56,7 @@ def main():
     config = read_json_config(custom_json_path)
     # override batch size if provided
     if args.b is not None:
-        config.dataset.batch_size = args.b
+        config.dataset.val_test_batch_size = args.b
 
     train_config = config.training_hyperparameters
     arc_config = config.architecture_hyperparameters
