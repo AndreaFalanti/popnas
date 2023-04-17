@@ -7,13 +7,13 @@ import dataclasses
 import json
 import logging
 import os
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import pandas as pd
 import tensorflow as tf
 from dacite import from_dict
 from mergedeep import merge
-from tensorflow.keras import callbacks, Model, losses
+from tensorflow.keras import callbacks, Model, losses, metrics
 
 import log_service
 from models.custom_callbacks import ModelCheckpointCustom
@@ -179,7 +179,8 @@ def prune_excessive_outputs(mo_model: Model, mo_losses: 'dict[str, losses.Loss]'
     return model, mo_losses, loss_weights, output_names
 
 
-def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy, enable_xla: bool):
+def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy,
+                              enable_xla: bool, extra_metrics: 'Optional[list[metrics.Metric]]' = None):
     '''
     Build a model suited for final evaluation, given a multi-output model and the model generator with the correct macro parameters.
     '''
@@ -187,7 +188,8 @@ def compile_post_search_model(mo_model: Model, model_gen: BaseModelGenerator, tr
     # remove unnecessary exits and recalibrate loss weights
     model, mo_losses, loss_weights, output_names = prune_excessive_outputs(mo_model, mo_losses, mo_loss_weights)
 
-    train_metrics.extend([tf.keras.metrics.IoU(21, target_class_ids=[i], ignore_class=255, sparse_y_pred=False) for i in range(21)])
+    if extra_metrics is not None:
+        train_metrics.extend(extra_metrics)
 
     execution_steps = get_optimized_steps_per_execution(train_strategy)
     model.compile(optimizer=optimizer, loss=mo_losses, loss_weights=loss_weights, metrics=train_metrics,

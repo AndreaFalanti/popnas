@@ -104,7 +104,11 @@ def main():
             with train_strategy.scope():
                 model_gen.alter_macro_structure(*macro)
                 mo_model, _ = model_gen.build_model(cell_spec, add_imagenet_stem=False)
-                model, _ = compile_post_search_model(mo_model, model_gen, train_strategy, enable_xla=config.others.enable_XLA_compilation)
+                # add separate IoU in evaluation of segmentation models
+                extra_metrics = [tf.keras.metrics.IoU(classes_count, target_class_ids=[i], ignore_class=255, sparse_y_pred=False)
+                                 for i in range(classes_count)] if config.dataset.type == 'image_segmentation' else None
+                model, _ = compile_post_search_model(mo_model, model_gen, train_strategy,
+                                                     enable_xla=config.others.enable_XLA_compilation, extra_metrics=extra_metrics)
 
             print('Model generated successfully')
 
