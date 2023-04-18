@@ -20,7 +20,7 @@ from utils.func_utils import from_seconds_to_hms
 log_path = tempfile.mkdtemp()  # type: str
 using_temp = True
 neptune_project_name = None
-neptune_project = None         # type: Optional[neptune.Project]
+neptune_project = None  # type: Optional[neptune.Project]
 
 
 def set_log_path(path):
@@ -147,6 +147,7 @@ def build_path(*args):
 def _neptune_env_vars_missing():
     return os.environ.get('NEPTUNE_API_TOKEN') is None or os.environ.get('NEPTUNE_WORKSPACE') is None
 
+
 def initialize_neptune_project():
     ''' Initialize a Neptune project if a valid API token is provided in the environment variables. '''
     if _neptune_env_vars_missing():
@@ -179,7 +180,7 @@ def restore_neptune_project(run_name: str = None):
         run_name = get_log_folder_name()
 
     global neptune_project_name
-    neptune_project_name = f'popnas-{run_name}'
+    neptune_project_name = f'{os.environ.get("NEPTUNE_WORKSPACE")}/popnas-{run_name}'
 
     global neptune_project
     neptune_project = neptune.init_project(neptune_project_name)
@@ -189,7 +190,7 @@ def write_config_into_neptune(config_dict: dict, config_path: str):
     ''' Save config info into the Neptune project, if instantiated. '''
     if neptune_project is None:
         return
-    
+
     neptune_project['popnas_config'] = stringify_unsupported(config_dict)
     neptune_project['popnas_config_json'].upload(config_path)
 
