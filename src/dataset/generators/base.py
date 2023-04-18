@@ -23,10 +23,13 @@ class DatasetsFold(NamedTuple):
     validation: tf.data.Dataset
 
 
-def load_npz(file_path: str, possibly_ragged: bool = False) -> 'tuple[np.ndarray, np.ndarray]':
+def load_npz(file_path: str, possibly_ragged: bool = False,
+             x_dtype: Optional[np.dtype.type] = None, y_dtype: Optional[np.dtype.type] = None) -> 'tuple[np.ndarray, np.ndarray]':
     ''' Load an .npz numpy file from disk. Set possibly_ragged flag to True if the array contains arrays of different dimensions. '''
     with np.load(file_path, allow_pickle=possibly_ragged) as npz:
-        return npz['x'], npz['y']
+        x = npz['x'] if x_dtype is None else npz['x'].astype(x_dtype)
+        y = npz['y'] if y_dtype is None else npz['y'].astype(y_dtype)
+        return x, y
 
 
 def generate_tf_dataset_from_numpy_ragged_array(x_arr: np.ndarray, y_arr: np.ndarray, dtype: Optional[np.dtype.type] = None):

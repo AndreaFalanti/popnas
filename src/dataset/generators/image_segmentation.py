@@ -62,6 +62,9 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
         return ImagePreprocessor(resize_dim=None, rescaling=(1. / 255, 0), resize_labels=True,
                                  pad_to_multiples_of=PAD_MULTIPLES, remap_classes=self.class_labels_remapping_dict)
 
+    def _load_npz_split(self, split_name: str):
+        return load_npz(os.path.join(self.dataset_path, f'{split_name}.npz'), possibly_ragged=True, x_dtype=np.uint8, y_dtype=np.uint8)
+
     def generate_train_val_datasets(self) -> 'tuple[list[DatasetsFold], int, tuple[int, ...], int, int, Optional[Sequential]]':
         dataset_folds = []  # type: list[tuple[tf.data.Dataset, tf.data.Dataset]]
         preprocessing_model = None
@@ -76,13 +79,13 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
                 # image_shape = self.resize_dim + (3,) if self.resize_dim else (None, None, 3)
                 image_shape = (None, None, 3)
 
-                x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'), possibly_ragged=True)
+                x_train, y_train = self._load_npz_split('train')
                 # shuffle samples, then stratify in train-val split if needed.
                 # sample limit will also be applied in case it is not None
                 x_train, y_train = shuffle(x_train, y_train, n_samples=self.samples_limit, random_state=SEED)
 
                 if self.val_size is None:
-                    x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'), possibly_ragged=True)
+                    x_val, y_val = self._load_npz_split('validation')
                 # extract a validation split from training samples
                 else:
                     # TODO: stratification removed since not working properly on 2D labels. Find a way to add it.
@@ -128,7 +131,7 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         # Custom dataset, loaded from numpy npz files
         if self.dataset_path is not None:
-            x_test, y_test = load_npz(os.path.join(self.dataset_path, 'test.npz'), possibly_ragged=True)
+            x_test, y_test = self._load_npz_split('test')
             test_ds, test_ds_is_ragged = generate_possibly_ragged_dataset(x_test, y_test)
 
             classes = self.dataset_classes_count
@@ -161,11 +164,11 @@ class ImageSegmentationDatasetGenerator(BaseDatasetGenerator):
 
         # Custom dataset, loaded from numpy npz files
         if self.dataset_path is not None:
-            x_train, y_train = load_npz(os.path.join(self.dataset_path, 'train.npz'), possibly_ragged=True)
+            x_train, y_train = self._load_npz_split('train')
 
             # merge validation split into train
             if self.val_size is None:
-                x_val, y_val = load_npz(os.path.join(self.dataset_path, 'validation.npz'), possibly_ragged=True)
+                x_val, y_val = self._load_npz_split('validation')
                 x_train = np.concatenate((x_train, x_val), axis=0)
                 y_train = np.concatenate((y_train, y_val), axis=0)
 
