@@ -11,6 +11,15 @@ import tensorflow_addons as tfa
 from PIL import Image
 
 
+def load_segmentation_samples(samples_path: str, samples_limit: int):
+    if samples_path.endswith('.npz'):
+        return load_segmentation_array(samples_path, samples_limit)
+    elif os.path.isdir(samples_path):
+        return load_segmentation_images(samples_path, samples_limit)
+    else:
+        raise ValueError('Dataset path must be either a folder with images or the path to a .npz file')
+
+
 def load_segmentation_images(samples_path: str, samples_limit: int):
     ''' Load images from file, convert them into numpy arrays, and apply the preprocessing to convert RGB int values to float in [0, 1]. '''
     sample_files = [f for f in os.scandir(samples_path) if f.is_file()]  # type: list[os.DirEntry]
@@ -22,6 +31,15 @@ def load_segmentation_images(samples_path: str, samples_limit: int):
             samples.append(x)
 
     return np.asarray(samples, dtype=np.float32)
+
+
+def load_segmentation_array(npz_path: str, samples_limit: int):
+    ''' Load images from numpy npz file, and apply the preprocessing to convert RGB int values to float in [0, 1]. '''
+    with np.load(npz_path) as npz:
+        samples = npz['x'][:samples_limit]  # type: np.ndarray
+        samples = samples / 255.
+
+    return samples.astype(np.float32)
 
 
 def format_list(elems: list):
@@ -107,7 +125,7 @@ def main():
     num_batches = args.n + warmup_batches
     num_samples = test_batch_size * num_batches
 
-    x_train = load_segmentation_images(samples_path=args.d, samples_limit=num_samples)
+    samples = load_segmentation_samples(samples_path=args.d, samples_limit=num_samples)
 
     # ONNX model: make sure to install onnxruntime-gpu, otherwise remove CUDA provider
     # produce a json with profiling data, if the related flag is set
@@ -127,11 +145,11 @@ def main():
     ]
 
     sess = onnxruntime.InferenceSession(os.path.join(args.p, 'trained.onnx'), providers=onnx_providers, sess_options=sess_options)
-    onnx_times = perform_model_inference(test_batch_size, num_batches, x_train,
+    onnx_times = perform_model_inference(test_batch_size, num_batches, samples,
                                          predict_f=lambda data, size: sess.run(None, {'input_1': data}))
     print_results(onnx_times[warmup_batches:], 'ONNX')
 
-    onnx_times = perform_io_binding_onnx_inference(sess, 19, test_batch_size, num_batches, x_train)
+    onnx_times = perform_io_binding_onnx_inference(sess, 19, test_batch_size, num_batches, samples)
     print_results(onnx_times[warmup_batches:], 'ONNX IO bound')
 
     # TF model
@@ -140,7 +158,7 @@ def main():
             'Addons>Lookahead': tfa.optimizers.Lookahead
         }
         tf_model = tf.keras.models.load_model(os.path.join(args.p, 'tf_model'), custom_objects)  # type: tf.keras.Model
-        tf_times = perform_model_inference(test_batch_size, num_batches, x_train,
+        tf_times = perform_model_inference(test_batch_size, num_batches, samples,
                                            predict_f=lambda data, size: tf_model.predict(data, batch_size=size))
         print_results(tf_times[warmup_batches:], 'TF')
 
