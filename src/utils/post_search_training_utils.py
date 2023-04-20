@@ -138,7 +138,6 @@ def build_config(run_path: str, batch_size: int, train_strategy: str, custom_jso
         ms_config.training_hyperparameters.learning_rate = ms_config.training_hyperparameters.learning_rate * \
                                                            (batch_size / ms_config.dataset.batch_size)
         ms_config.dataset.batch_size = batch_size
-        ms_config.dataset.val_test_batch_size = batch_size
 
     # initialize train strategy (try-except to be retrocompatible with the previous config format)
     try:

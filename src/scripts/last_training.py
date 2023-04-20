@@ -24,7 +24,7 @@ from utils.post_search_training_utils import create_model_log_folder, define_cal
 remove_annoying_tensorflow_messages()
 
 
-def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = None, ts: str = None,
+def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = None, bt: int = None, ts: str = None,
             name: str = 'final_model_training', stem: bool = False):
     ''' Refer to argparse help for more information about these arguments. '''
     save_path = os.path.join(p, name)
@@ -52,6 +52,9 @@ def execute(p: str, b: int, f: int, m: int, n: int, spec: str = None, j: str = N
     arc_config.motifs = m
     arc_config.normal_cells_per_motif = n
     arc_config.filters = f
+    # override test batch size if provided
+    if bt is not None:
+        ds_config.val_test_batch_size = bt
 
     # Load and prepare the dataset
     logger.info('Preparing datasets...')
@@ -163,6 +166,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', metavar='FILTERS', type=int, help="desired starting filters", required=True)
     parser.add_argument('-m', metavar='MOTIFS', type=int, help="desired motifs", required=True)
     parser.add_argument('-n', metavar='NORMAL CELLS PER MOTIF', type=int, help="desired normal cells per motif", required=True)
+    parser.add_argument('-bt', metavar='TEST BATCH SIZE', type=int, help="desired batch size for test inference", default=None)
     parser.add_argument('-ts', metavar='TRAIN_STRATEGY', type=str, help='device used in Tensorflow distribute strategy', default=None)
     parser.add_argument('-spec', metavar='CELL_SPECIFICATION', type=str, help="cell specification string", default=None)
     parser.add_argument('-name', metavar='OUTPUT_NAME', type=str, help="output location in log folder", default='final_model_training')
