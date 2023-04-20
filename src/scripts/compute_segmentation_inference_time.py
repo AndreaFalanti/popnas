@@ -67,8 +67,7 @@ def perform_model_inference(test_batch_size: int, num_batches: int, x: np.ndarra
     return inf_times
 
 
-def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession, num_classes: int,
-                                      test_batch_size: int, num_batches: int, x: np.ndarray):
+def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession, test_batch_size: int, num_batches: int, x: np.ndarray):
     '''
     Perform the inference on the provided test batches, logging the time required for each batch.
 
@@ -79,7 +78,7 @@ def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession
     for i in range(num_batches):
         test_data = x[test_batch_size * i:test_batch_size * (i + 1)]
 
-        io_binding = prepare_onnx_io_binding(onnx_session, test_data, num_classes)
+        io_binding = prepare_onnx_io_binding(onnx_session, test_data)
 
         start_time = timer()
         onnx_session.run_with_iobinding(io_binding)
@@ -88,9 +87,10 @@ def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession
     return inf_times
 
 
-def prepare_onnx_io_binding(onnx_session: onnxruntime.InferenceSession, data: np.ndarray, num_classes: int):
+def prepare_onnx_io_binding(onnx_session: onnxruntime.InferenceSession, data: np.ndarray):
     x_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(data, 'cuda', 0)
     # output has the same resolution, but a different number of channels, since it is a one-hot tensor
+    num_classes = onnx_session.get_outputs()[-1].shape[-1]
     output_shape = list(data.shape)[:-1] + [num_classes]
     y1_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
     y2_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
@@ -149,7 +149,7 @@ def main():
                                          predict_f=lambda data, size: sess.run(None, {'input_1': data}))
     print_results(onnx_times[warmup_batches:], 'ONNX')
 
-    onnx_times = perform_io_binding_onnx_inference(sess, 19, test_batch_size, num_batches, samples)
+    onnx_times = perform_io_binding_onnx_inference(sess, test_batch_size, num_batches, samples)
     print_results(onnx_times[warmup_batches:], 'ONNX IO bound')
 
     # TF model
