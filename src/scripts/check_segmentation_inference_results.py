@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from tensorflow.keras import models, Model
 
 from dataset.generators.factory import dataset_generator_factory
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_utils import read_json_config
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import initialize_train_strategy, remove_annoying_tensorflow_messages

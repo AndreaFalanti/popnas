@@ -4,7 +4,7 @@ from typing import NamedTuple, Callable
 from igraph import *
 
 from models.operators.params_utils import compute_conv_params
-from search_space import BlockSpecification, CellSpecification
+from search_space_units import BlockSpecification, CellSpecification
 from utils.tensor_utils import get_tensors_spatial_ratio
 
 

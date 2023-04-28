@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import Iterable, Optional, Collection
 
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 
 
 def _get_counter_total(counter: Counter):

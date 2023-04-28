@@ -8,7 +8,7 @@ from tensorflow.keras import Model
 
 import log_service
 from models.results import BaseTrainingResults
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.model_estimate import ModelEstimate
 
 

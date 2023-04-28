@@ -7,7 +7,7 @@ from tensorflow.keras import layers, Model, losses, metrics
 from models.generators.base import BaseModelGenerator, NetworkBuildInfo, WrappedTensor
 from models.graphs.network_graph import NetworkGraph
 from models.results import BaseTrainingResults, ClassificationTrainingResults
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.func_utils import elementwise_mult
 
 

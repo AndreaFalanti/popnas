@@ -11,7 +11,7 @@ from dacite import from_dict
 import log_service
 from benchmarking import NATSbench
 from popnas import Popnas
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_dataclasses import RunConfig
 from utils.config_utils import validate_config_json
 from utils.func_utils import create_empty_folder

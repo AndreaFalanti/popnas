@@ -4,7 +4,8 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from search_space import SearchSpace, CellSpecification
+from search_space import SearchSpace
+from search_space_units import CellSpecification
 from utils.func_utils import to_list_of_tuples
 
 

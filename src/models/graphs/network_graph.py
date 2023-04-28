@@ -2,7 +2,7 @@ from igraph import Graph
 
 from models.graphs.units import TensorNode, build_cell_dag
 from models.operators.op_instantiator import OpInstantiator
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 
 
 class NetworkGraph:

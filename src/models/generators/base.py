@@ -14,7 +14,7 @@ from models.graphs.network_graph import NetworkGraph
 from models.operators.op_instantiator import OpInstantiator
 from models.optimizers import instantiate_optimizer_and_schedulers
 from models.results.base import BaseTrainingResults
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
 from utils.func_utils import elementwise_mult
 from utils.nn_utils import support_weight_decay

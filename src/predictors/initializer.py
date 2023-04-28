@@ -6,7 +6,8 @@ import log_service
 from models.generators import BaseModelGenerator
 from models.results.base import TargetMetric
 from predictors.models import *
-from search_space import SearchSpace, CellSpecification
+from search_space import SearchSpace
+from search_space_units import CellSpecification
 from utils.feature_utils import generate_acc_features, generate_time_features
 
 

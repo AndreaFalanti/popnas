@@ -13,7 +13,8 @@ from manager_bench_proxy import NetworkBenchManager
 from models.results import BaseTrainingResults
 from models.results.base import get_pareto_targeted_metrics
 from predictors.initializer import PredictorsHandler
-from search_space import SearchSpace, CellSpecification, BlockSpecification
+from search_space import SearchSpace
+from search_space_units import BlockSpecification, CellSpecification
 from utils.config_dataclasses import RunConfig
 from utils.experiments_summary import get_sampled_networks_count, get_dataset_name, SearchInfo, get_top_scores, write_search_infos_csv
 from utils.feature_utils import build_time_feature_names, initialize_features_csv_files, \

@@ -6,7 +6,8 @@ import pandas as pd
 
 import log_service
 from models.results import BaseTrainingResults
-from search_space import SearchSpace, parse_cell_strings
+from search_space import SearchSpace
+from search_space_units import parse_cell_strings
 
 
 class RestoreInfo:

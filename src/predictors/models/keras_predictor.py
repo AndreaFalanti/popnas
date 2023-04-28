@@ -15,7 +15,8 @@ from tensorflow.keras.utils import plot_model
 from tensorflow_addons import metrics as tfa_metrics
 from tensorflow_addons import optimizers as tfa_optimizers
 
-from search_space import SearchSpace, parse_cell_strings
+from search_space import SearchSpace
+from search_space_units import parse_cell_strings
 from utils.func_utils import create_empty_folder, alternative_dict_to_string
 from utils.nn_utils import get_optimized_steps_per_execution
 from utils.rstr import rstr

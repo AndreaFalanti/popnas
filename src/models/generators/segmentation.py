@@ -8,7 +8,7 @@ from models.graphs.network_graph import NetworkGraph
 from models.graphs.units import TensorNode
 from models.operators.params_utils import compute_conv_params
 from models.results import BaseTrainingResults, SegmentationTrainingResults
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.func_utils import elementwise_mult
 
 

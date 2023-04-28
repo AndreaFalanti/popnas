@@ -8,7 +8,7 @@ import pandas as pd
 
 from models.generators.factory import get_model_generator_class_for_task
 from models.results.base import TargetMetric
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_dataclasses import RunConfig
 from utils.config_utils import retrieve_search_config
 from utils.func_utils import from_seconds_to_hms

@@ -3,7 +3,7 @@ import unittest
 from dacite import from_dict
 
 from models.generators import *
-from search_space import CellSpecification, BlockSpecification
+from search_space_units import BlockSpecification, CellSpecification
 from utils.config_dataclasses import TrainingHyperparametersConfig, ArchitectureHyperparametersConfig
 
 train_hp = from_dict(data_class=TrainingHyperparametersConfig, data={

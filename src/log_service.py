@@ -13,7 +13,7 @@ from neptune.utils import stringify_unsupported
 from neptune_tensorflow_keras import NeptuneCallback
 from tensorflow.keras.callbacks import Callback
 
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.func_utils import from_seconds_to_hms
 
 # Must be set using initialize_log_folders, check_log_folder or set_log_path

@@ -2,7 +2,7 @@ from typing import Union
 
 import graphviz
 
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 
 
 def save_cell_dag_image(cell_spec: Union[str, CellSpecification], save_path: str):

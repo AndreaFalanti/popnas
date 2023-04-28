@@ -14,7 +14,8 @@ from tensorflow.keras import callbacks
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.utils import plot_model
 
-from search_space import SearchSpace, CellSpecification
+from search_space import SearchSpace
+from search_space_units import CellSpecification
 from utils.func_utils import create_empty_folder, to_one_hot, list_flatten, chunks
 from utils.rstr import rstr
 from .keras_predictor import KerasPredictor

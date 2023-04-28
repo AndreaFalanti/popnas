@@ -1,4 +1,4 @@
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 
 
 class ModelEstimate:

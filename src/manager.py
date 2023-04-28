@@ -15,7 +15,7 @@ from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks import InferenceTimingCallback, TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.results.base import write_multi_output_results_to_csv
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_dataclasses import *
 from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
 

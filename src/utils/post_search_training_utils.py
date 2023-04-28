@@ -19,7 +19,7 @@ import log_service
 from models.custom_callbacks import ModelCheckpointCustom
 from models.generators.base import BaseModelGenerator
 from models.results.base import TargetMetric, get_best_metric_and_epoch_index
-from search_space import CellSpecification, parse_cell_strings
+from search_space_units import CellSpecification, parse_cell_strings
 from utils.config_dataclasses import RunConfig
 from utils.func_utils import create_empty_folder, from_seconds_to_hms
 from utils.nn_utils import initialize_train_strategy, get_optimized_steps_per_execution

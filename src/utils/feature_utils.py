@@ -5,7 +5,8 @@ from typing import Callable
 
 import igraph
 
-from search_space import SearchSpace, CellSpecification
+from search_space import SearchSpace
+from search_space_units import CellSpecification
 from utils.func_utils import list_flatten, to_list_of_tuples
 
 

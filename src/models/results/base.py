@@ -8,7 +8,7 @@ from typing import Iterable, Callable, NamedTuple, Optional, TypeVar, Any
 from typing_extensions import Protocol
 
 import log_service
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 
 T = TypeVar("T")
 

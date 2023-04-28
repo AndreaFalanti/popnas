@@ -11,7 +11,7 @@ from dataset.utils import generate_balanced_weights_for_classes
 from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators.factory import model_generator_factory
 from models.graphs.utils import save_cell_dag_image
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.experiments_summary import FinalTrainingInfo, write_final_training_infos_csv
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages

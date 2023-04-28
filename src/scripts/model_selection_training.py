@@ -16,7 +16,7 @@ from models.custom_callbacks.training_time import TrainingTimeCallback
 from models.generators import BaseModelGenerator
 from models.generators.factory import model_generator_factory
 from models.results.base import TargetMetric
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.func_utils import create_empty_folder
 from utils.nn_utils import save_keras_model_to_onnx, predict_and_save_confusion_matrix, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages

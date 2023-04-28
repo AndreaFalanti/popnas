@@ -7,7 +7,7 @@ from tensorflow.keras import models
 import log_service
 from dataset.generators.factory import dataset_generator_factory
 from models.generators.factory import model_generator_factory
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.config_utils import read_json_config
 from utils.nn_utils import predict_and_save_confusion_matrix, initialize_train_strategy, perform_global_memory_clear, \
     remove_annoying_tensorflow_messages

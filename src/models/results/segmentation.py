@@ -1,4 +1,4 @@
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from .base import BaseTrainingResults, TargetMetric, extract_metric_from_train_histories
 
 

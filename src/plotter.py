@@ -10,7 +10,7 @@ from sklearn.metrics import r2_score
 
 import log_service
 from models.results.base import TargetMetric
-from search_space import CellSpecification, parse_cell_strings
+from search_space_units import CellSpecification, parse_cell_strings
 from utils.cell_counter import CellCounter
 from utils.func_utils import compute_spearman_rank_correlation_coefficient_from_df, compute_mape
 from utils.plotter_utils import plot_histogram, plot_multibar_histogram, plot_boxplot, plot_pie_chart, plot_scatter, \

@@ -2,7 +2,7 @@ import nats_bench
 
 import log_service
 from models.results import ClassificationTrainingResults
-from search_space import CellSpecification
+from search_space_units import CellSpecification
 from utils.rstr import rstr
 
 
