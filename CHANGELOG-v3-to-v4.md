@@ -179,3 +179,18 @@ Integrate Neptune into POPNAS, set label smoothing as a configuration option, an
 - Fix DeepLab-like architectures pruning ASPP and decoder when using the "multi-output" setting.
 - Fix TFDS train+val and test datasets not working correctly.
 - Fix cutout size not being fixed to a multiple of 2, causing an error when odd.
+
+### 3.7.7
+Add new scripts to analyze the results of segmentation networks and their inference time. Perform multiple fixes and improvements.
+
+- Add a script for visualizing the predictions made by a segmentation model, as an image comparison of the original image and mask with the prediction.
+- Add a script for measuring the inference time of an ONNX model for segmentation tasks, and check the estimated FPS.
+- Tweak SVR predictor configuration
+- Fix mask padding using class 0 instead of ignored class
+- Fix filters argument not being applied correctly in last training script
+- Update ONNX opset to 17 and the ONNX dependencies, moving the runtime from dev to main dependencies
+- Improve the generation of segmentation datasets and the handling of TFDS datasets
+- Fix a potential circular dependency between search space and other modules
+- Disable XLA compilation override in default post-search configurations
+- Add a new README focused on scripts (see the _scripts_ folder)
+- Other minor fixes
