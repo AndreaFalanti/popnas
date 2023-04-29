@@ -12,7 +12,7 @@ def save_cell_dag_image(cell_spec: Union[str, CellSpecification], save_path: str
 
     block_count = len(cell_spec)
 
-    g = graphviz.Digraph(filename='cell_graph.gz', directory=save_path,
+    g = graphviz.Digraph(filename='cell_graph.gv', directory=save_path,
                          graph_attr=dict(rankdir='LR', ordering='out', splines='true'),
                          edge_attr=dict(arrowhead='vee'))
 
