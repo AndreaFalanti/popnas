@@ -17,6 +17,17 @@ def shape_from_str(shape_str: str):
     return ast.literal_eval(shape_str)
 
 
+def get_kernel_size_str_for_input_dimensionality(size_val: int, input_dimensions: int):
+    '''
+    Return a string representing the kernel size of an operator, adapted automatically to the input dimensionality.
+    e.g., a squared maxpool of size 2 on 3D data (images) will return "2x2" as kernel size, and just "2" on 2D data (time series).
+    '''
+    if input_dimensions <= 1:
+        raise ValueError('Input dimension cannot be less or equal than 1, check the correctness of the provided value')
+
+    return 'x'.join([str(size_val)] * (input_dimensions - 1))
+
+
 def merge_attribute_dicts(dict1: dict, dict2: dict):
     return {k: v + dict2[k] for k, v in dict1}
 
@@ -86,13 +97,14 @@ def build_cell_output_concat(g: Graph, unused_block_indexes: 'list[int]', target
                              compute_layer_params: 'Callable[[str, list[float], list[float]], int]'):
     concat_filters = target_shape[-1] * len(unused_block_indexes)
     concat_shape = target_shape[:-1] + [concat_filters]
+    pointwise_conv_str = f'{get_kernel_size_str_for_input_dimensionality(1, len(target_shape))} conv'
 
     v_attributes = {
         'name': [f'c{cell_index}_concat', f'c{cell_index}_out'],
-        'op': ['concat', '1x1 conv'],
+        'op': ['concat', pointwise_conv_str],
         'cell_index': [cell_index] * 2,
         'block_index': [-1] * 2,
-        'params': [0, compute_layer_params('1x1 conv', concat_shape, target_shape)]
+        'params': [0, compute_layer_params(pointwise_conv_str, concat_shape, target_shape)]
     }
     g.add_vertices(2, attributes=v_attributes)
 
@@ -137,8 +149,10 @@ def build_residual_connection(g: Graph, residual_input_node: TensorNode, residua
 def build_residual_linear_projection(g: Graph, residual_input_node: TensorNode, target_shape: 'list[float, ...]', cell_index: int,
                                      compute_layer_params: 'Callable[[str, list[float], list[float]], int]'):
     same_channels = residual_input_node.shape[-1] == target_shape[-1]
-    op = '2x2 maxpool' if same_channels else '1x1 conv'
-    params = 0 if same_channels else compute_layer_params('1x1 conv', residual_input_node.shape, target_shape)
+    # use maxpool when channels are not adapted, otherwise use a pointwise convolution
+    op = f'{get_kernel_size_str_for_input_dimensionality(2, len(target_shape))} maxpool' if same_channels\
+        else f'{get_kernel_size_str_for_input_dimensionality(1, len(target_shape))} conv'
+    params = 0 if same_channels else compute_layer_params(op, residual_input_node.shape, target_shape)
 
     res_node_name = f'c{cell_index}_residual_linear_proj'
     v_attributes = {
@@ -164,14 +178,15 @@ def perform_lookback_reshape(g: Graph, lookback_nodes: 'list[TensorNode]', targe
     lb2, lb1 = lookback_nodes
     # TODO: target should be always equal to lb1.shape when available, so probably could avoid the ternary operator
     new_shape = target_shape if lb1 is None else lb1.shape
+    pointwise_conv_str = f'{get_kernel_size_str_for_input_dimensionality(1, len(target_shape))} conv'
 
     reshape_name = f'c{cell_index}_lb2_reshape'
     v_attributes = {
         'name': [reshape_name],
-        'op': ['1x1 conv'],
+        'op': [pointwise_conv_str],
         'cell_index': [cell_index],
         'block_index': [-1],
-        'params': [compute_layer_params('1x1 conv', lb2.shape, new_shape)]
+        'params': [compute_layer_params(pointwise_conv_str, lb2.shape, new_shape)]
     }
     g.add_vertices(1, attributes=v_attributes)
 
