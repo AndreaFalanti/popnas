@@ -50,7 +50,8 @@
                         "type": "string",
                         "enum": [
                             "time",
-                            "params"
+                            "params",
+                            "inference_time"
                         ]
                     }
                 }

@@ -151,9 +151,9 @@ Here it is presented a list of the configuration sections and fields, with a bri
 - **max_exploration_children**: defines the maximum number of cells the algorithm can train in the exploration step.
 - **score_metric**: specifies the metric used for estimating the prediction quality of the trained models.
   Currently supported: [accuracy, f1_score, mean_iou].
-- **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
-  the selection of the neural network architectures to train. Currently supported values: [time, params].
-  POPNAS requires at least one of them.
+  - **additional_pareto_objectives**: defines the additional objectives considered during the search alongside the score metric, for optimizing
+    the selection of the neural network architectures to train.
+    Currently supported values: [time, params, inference_time]. POPNAS requires at least one of them.
   
 **Training hyperparameters**:
 - **epochs**: defines for how many epochs E each child network has to be trained.
