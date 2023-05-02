@@ -85,9 +85,13 @@ class Popnas:
         self.time_delta = restore_data['total_time']
 
         if self.restore_info.must_restore_dynamic_reindex_function():
-            op_times, initial_thrust_time = restore_dynamic_reindex_function()
-            reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
+            op_times, empty_cell_time = restore_dynamic_reindex_function()
+            reindex_function = generate_dynamic_reindex_function(op_times, empty_cell_time)
             self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+
+            op_inf_times, empty_cell_inf_time = restore_inference_dynamic_reindex_function()
+            inf_reindex_function = generate_dynamic_reindex_function(op_inf_times, empty_cell_inf_time)
+            self.search_space.add_operator_encoder('dynamic_reindex_inference', fn=inf_reindex_function)
 
         if self.restore_info.must_restore_search_space_children():
             restore_search_space_children(self.search_space, self.starting_b, self.children_max_size, self.pnas_mode)

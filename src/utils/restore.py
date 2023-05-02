@@ -49,14 +49,21 @@ class RestoreInfo:
 
 
 def restore_dynamic_reindex_function():
-    initial_thrust_data = pd.read_csv(log_service.build_path('csv', 'training_results.csv'), nrows=1)
+    empty_cell_data = pd.read_csv(log_service.build_path('csv', 'training_results.csv'), nrows=1)
 
-    op_times = {}
     smb_data = pd.read_csv(log_service.build_path('csv', 'reindex_op_times.csv'), names=['time', 'op'])
-    for row in smb_data.itertuples(index=False):
-        op_times[row.op] = row.time
+    op_times = {row.op: row.time for row in smb_data.itertuples(index=False)}
 
-    return op_times, initial_thrust_data['training time(seconds)'][0]
+    return op_times, empty_cell_data['training time(seconds)'][0]
+
+
+def restore_inference_dynamic_reindex_function():
+    empty_cell_data = pd.read_csv(log_service.build_path('csv', 'training_results.csv'), nrows=1)
+
+    smb_data = pd.read_csv(log_service.build_path('csv', 'reindex_op_times.csv'), names=['inf_time', 'op'])
+    op_times = {row.op: row.inf_time for row in smb_data.itertuples(index=False)}
+
+    return op_times, empty_cell_data['inference time(seconds)'][0]
 
 
 def restore_train_info(b: int, results_class: Type[BaseTrainingResults]):
