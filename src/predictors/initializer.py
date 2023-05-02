@@ -15,7 +15,7 @@ class PredictorsHandler:
     # TODO: could be extended with predictors configs for hyperparameters
     # TODO: score domain could be put directly in TargetMetric, to increase consistency and flexibility
     def __init__(self, search_space: SearchSpace,
-                 score_metric: TargetMetric, score_domain: 'tuple[float, float]',
+                 score_metric: TargetMetric, score_domain: 'tuple[float, float]', pareto_metrics: 'list[TargetMetric]',
                  model_gen: BaseModelGenerator, train_strategy: tf.distribute.Strategy, pnas_mode: bool = False) -> None:
         '''
         Utility class to initialize the predictors and expose "shortcut" functions for quickly returning the features used by a predictor from any
@@ -32,6 +32,8 @@ class PredictorsHandler:
         '''
         self._search_space = search_space
         self._model_gen = model_gen
+        self.pareto_metrics = pareto_metrics
+        pareto_metric_names = [m.name for m in self.pareto_metrics]
 
         score_csv_field = score_metric.results_csv_column
         predictors_log_path = log_service.build_path('predictors')
@@ -50,9 +52,13 @@ class PredictorsHandler:
         # initialize the time predictors to be used
         # to use CatBoost: CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
         # example for aMLLibrary: AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, override_logs=False)
-        self._time_predictor = None if pnas_mode else \
-            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path, override_logs=False)
+        self._time_predictor = None if pnas_mode or 'time' not in pareto_metric_names else \
+            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path,
+                                override_logs=False, name='aMLLibrary_SVR_training_time')
 
+        self._inference_time_predictor = None if pnas_mode or 'inference_time' not in pareto_metric_names else \
+            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path,
+                                override_logs=False, name='aMLLibrary_SVR_inference_time')
 
         self._logger.info('Predictors generated successfully')
 
@@ -63,11 +69,17 @@ class PredictorsHandler:
     def get_time_predictor(self, b: int):
         return self._time_predictor
 
+    def get_inference_time_predictor(self, b: int):
+        return self._inference_time_predictor
+
     def generate_cell_score_features(self, cell_spec: CellSpecification):
         return generate_acc_features(cell_spec, self._search_space, self._model_gen.get_real_cell_depth)
 
     def generate_cell_time_features(self, cell_spec: CellSpecification):
-        return generate_time_features(cell_spec, self._search_space, self._model_gen.get_real_cell_depth)
+        return generate_time_features(cell_spec, self._search_space, 'dynamic_reindex', self._model_gen.get_real_cell_depth)
+
+    def generate_cell_inference_time_features(self, cell_spec: CellSpecification):
+        return generate_time_features(cell_spec, self._search_space, 'dynamic_reindex_inference', self._model_gen.get_real_cell_depth)
 
     # since it has the reference to the model generator, it's nice to expose the graph generation for agents
     # that need to consider extra constraints, like the params.

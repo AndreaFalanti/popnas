@@ -109,7 +109,7 @@ class Popnas:
 
         # create the predictors
         score_domain = (0, 1)   # TODO: for now it is always [0, 1] interval for each supported metric, should be put in JSON config in the future
-        self.predictors_handler = PredictorsHandler(self.search_space, self.score_metric, score_domain,
+        self.predictors_handler = PredictorsHandler(self.search_space, self.score_metric, score_domain, self.pareto_metrics,
                                                     self.nn_manager.model_gen, train_strategy, self.pnas_mode)
 
         # set controller step to the correct one (in case of restore is not b=1)

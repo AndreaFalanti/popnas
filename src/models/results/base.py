@@ -150,7 +150,8 @@ class BaseTrainingResults(ABC):
         return [
             TargetMetric('time', min, results_csv_column='training time(seconds)', units='seconds',
                          pareto_predict_csv_column='time', need_predictor=True),
-            TargetMetric('inference_time', min, results_csv_column='inference time(seconds)', units='seconds'),
+            TargetMetric('inference_time', min, results_csv_column='inference time(seconds)', units='seconds',
+                         pareto_predict_csv_column='inference_time', need_predictor=True),
             TargetMetric('params', min, results_csv_column='total params', pareto_predict_csv_column='params'),
             TargetMetric('flops', min, results_csv_column='flops')
         ]
