@@ -22,7 +22,7 @@ from utils.feature_utils import build_time_feature_names, initialize_features_cs
 from utils.func_utils import from_seconds_to_hms
 from utils.nn_utils import remove_annoying_tensorflow_messages
 from utils.restore import RestoreInfo, restore_dynamic_reindex_function, restore_train_info, \
-    restore_search_space_children
+    restore_search_space_children, restore_inference_dynamic_reindex_function
 
 remove_annoying_tensorflow_messages()
 
@@ -141,14 +141,17 @@ class Popnas:
 
         # last fields are exploration and data augmentation
         time_data = [train_res.training_time] + [0, 0, 0, 0, 1, 0, 0, 0, 1] + [False]
+        # use the same features of training time, since OP score is 0 in this case
+        inf_time_data = [train_res.inference_time] + time_data[1:]
         score = getattr(train_res, self.score_metric_name)
         score_data = [score] + [0] * (score_features_len - 3) + [False, False]
 
         fw.append_to_time_features_csv(time_data)
+        fw.append_to_inference_time_features_csv(inf_time_data)
         fw.append_to_score_features_csv(score_data)
         fw.write_training_results_into_csv(train_res)
 
-        return train_res.training_time
+        return train_res
 
     def write_predictors_training_data(self, current_blocks: int, train_res: BaseTrainingResults, exploration: bool = False):
         '''
@@ -163,6 +166,10 @@ class Popnas:
         cell_time_features = self.predictors_handler.generate_cell_time_features(train_res.cell_spec)
         time_row = [train_res.training_time] + cell_time_features + [exploration]
 
+        # same conceptual features of training time, but use a different dynamic reindex map (and so has different OP scores)
+        cell_inf_time_features = self.predictors_handler.generate_cell_inference_time_features(train_res.cell_spec)
+        inf_time_row = [train_res.inference_time] + cell_inf_time_features + [exploration]
+
         # accuracy features need data augmentation to generalize on equivalent cell specifications
         eqv_cells, _ = self.search_space.generate_eqv_cells(train_res.cell_spec, size=self.blocks)
         # expand cell_spec for bool comparison of data_augmented field
@@ -173,6 +180,7 @@ class Popnas:
                     for eqv_cell in eqv_cells]
 
         fw.append_to_time_features_csv(time_row)
+        fw.append_to_inference_time_features_csv(inf_time_row)
         # not efficient, but consistent with the API. Anyway, the file is re-opened only like 3-4 times, so it's not a problem.
         for acc_row in acc_rows:
             fw.append_to_score_features_csv(acc_row)
@@ -186,6 +194,17 @@ class Popnas:
             a dictionary, with the operator used in the specular mono block as key, and the training time as value.
         '''
         return {train_res.cell_spec.operators[0]: train_res.training_time for train_res in monoblocks_train_info
+                if train_res.cell_spec.is_specular_monoblock()}
+
+    def get_specular_monoblocks_inference_times(self, monoblocks_train_info: 'list[BaseTrainingResults]'):
+        '''
+        Extract the inference time required to train the specular cells composed of single block.
+        These times are required to compute the dynamic reindex map for inference predictor.
+
+        Returns:
+            a dictionary, with the operator used in the specular mono block as key, and the inference time as value.
+        '''
+        return {train_res.cell_spec.operators[0]: train_res.inference_time for train_res in monoblocks_train_info
                 if train_res.cell_spec.is_specular_monoblock()}
 
     def log_and_save_run_final_results(self):
@@ -255,13 +274,13 @@ class Popnas:
 
         self.nn_manager.bootstrap_dataset_lazy_initialization()
 
-        initial_thrust_time = 0
+        empty_cell_results = None
         # if B = 0, perform initial thrust before starting actual training procedure
         if self.starting_b == 0:
             # add headers to csv and create CatBoost feature files
             initialize_features_csv_files(time_headers, time_feature_types, score_headers, score_feature_types, log_service.build_path('csv'))
 
-            initial_thrust_time = self.perform_initial_thrust(len(score_headers))
+            empty_cell_results = self.perform_initial_thrust(len(score_headers))
             self.starting_b = 1
             self.restore_info.update(current_b=1, total_time=self._compute_total_time())
 
@@ -276,10 +295,18 @@ class Popnas:
 
             # all CNN with current_blocks = 1 have been trained, build the dynamic reindex and write the feature dataset for regressors
             if current_blocks == 1:
+                # dynamic reindex (training time)
                 op_times = self.get_specular_monoblocks_training_times(training_results)
                 fw.write_specular_monoblock_times(op_times, save_path=log_service.build_path('csv', 'reindex_op_times.csv'))
-                reindex_function = generate_dynamic_reindex_function(op_times, initial_thrust_time)
+                reindex_function = generate_dynamic_reindex_function(op_times, empty_cell_results.training_time)
                 self.search_space.add_operator_encoder('dynamic_reindex', fn=reindex_function)
+
+                # dynamic reindex (inference time)
+                op_inference_times = self.get_specular_monoblocks_inference_times(training_results)
+                fw.write_specular_monoblock_times(op_inference_times, save_path=log_service.build_path('csv', 'reindex_op_inference_times.csv'))
+                reindex_function_inference = generate_dynamic_reindex_function(op_inference_times, empty_cell_results.inference_time)
+                self.search_space.add_operator_encoder('dynamic_reindex_inference', fn=reindex_function_inference)
+
                 plotter.plot_specular_monoblock_info(self.targeted_metrics)
 
                 for train_res in training_results:

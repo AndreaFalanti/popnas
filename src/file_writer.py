@@ -85,6 +85,13 @@ def append_to_time_features_csv(cell_time_features: list):
         writer.writerow(cell_time_features)
 
 
+def append_to_inference_time_features_csv(cell_time_features: list):
+    ''' Append time features extracted by a cell to the related csv file. '''
+    with open(log_service.build_path('csv', 'training_time_inference.csv'), mode='a+', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(cell_time_features)
+
+
 def append_to_score_features_csv(cell_score_features: list):
     ''' Append score features extracted by a cell to the related csv file. '''
     with open(log_service.build_path('csv', 'training_score.csv'), mode='a+', newline='') as f:

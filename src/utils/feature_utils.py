@@ -61,6 +61,10 @@ def initialize_features_csv_files(time_headers: list, time_feature_types: list, 
         writer = csv.writer(f)
         writer.writerow(time_headers)
 
+    with open(os.path.join(csv_folder_path, 'training_time_inference.csv'), mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(time_headers)
+
     with open(os.path.join(csv_folder_path, 'training_score.csv'), mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(acc_headers)
@@ -130,12 +134,13 @@ def compute_features_from_dag(inputs: 'list[int]', op_features: 'list[tuple[int,
     return [dag_depth, concat_inputs_len, heaviest_path_op_score_fraction]
 
 
-def generate_time_features(cell_spec: CellSpecification, search_space: SearchSpace, compute_real_cell_depth: Callable[[CellSpecification], int]):
+def generate_time_features(cell_spec: CellSpecification, search_space: SearchSpace,
+                           reindex_type: str, compute_real_cell_depth: Callable[[CellSpecification], int]):
     inputs = cell_spec.inputs
     blocks = len(cell_spec)
     total_cells = compute_real_cell_depth(cell_spec)
 
-    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name='dynamic_reindex').operators
+    op_time_features_flat = search_space.encode_cell_spec(cell_spec, op_enc_name=reindex_type).operators
     op_time_features = to_list_of_tuples(op_time_features_flat, 2)
 
     total_op_score = sum(op_time_features_flat)

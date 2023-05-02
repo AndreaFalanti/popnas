@@ -68,9 +68,16 @@ class ControllerManager:
             time_predictor = self.predictor_handler.get_time_predictor(self.current_b)
             time_predictor.train(csv_path)
 
+        # train inference time predictor with new data
+        if not self.pnas_mode and 'inference_time' in self.pareto_objectives:
+            csv_path = log_service.build_path('csv', 'training_time_inference.csv')
+            inf_time_predictor = self.predictor_handler.get_inference_time_predictor(self.current_b)
+            inf_time_predictor.train(csv_path)
+
         self._logger.info('Predictors training complete')
 
-    def __generate_model_estimations(self, batched_models: 'list[tuple]', models_count: int, time_predictor: Predictor, acc_predictor: Predictor):
+    def __generate_model_estimations(self, batched_models: 'list[tuple]', models_count: int,
+                                     time_predictor: Predictor, acc_predictor: Predictor, inference_time_predictor: Predictor):
         model_estimations = []  # type: list[ModelEstimate]
 
         # use as total the actual predictions to make, but manually iterate on the batches with custom pbar update to reflect actual prediction speed
@@ -99,12 +106,19 @@ class ControllerManager:
                     else:
                         estimated_times = [0] * len(cells_batch)
 
+                    if 'inference_time' in self.pareto_objectives:
+                        batch_time_features = [self.predictor_handler.generate_cell_inference_time_features(cell_spec) for cell_spec in cells_batch]
+                        estimated_inference_times = inference_time_predictor.predict_batch(batch_time_features)
+                    else:
+                        estimated_inference_times = [0] * len(cells_batch)
+
                     params_count = [self.predictor_handler.get_architecture_dag(cell_spec).get_total_params() for cell_spec in cells_batch] \
                         if 'params' in self.pareto_objectives else [0] * len(cells_batch)
 
                     # apply also time constraint
-                    ests_in_time_limit = [ModelEstimate(cell_spec, score, time, params) for cell_spec, score, time, params
-                                          in zip(cells_batch, estimated_scores, estimated_times, params_count) if time <= self.T]
+                    ests_in_time_limit = [ModelEstimate(cell_spec, score, time, params, inf_time) for cell_spec, score, time, params, inf_time
+                                          in zip(cells_batch, estimated_scores, estimated_times, params_count, estimated_inference_times)
+                                          if time <= self.T]
                     model_estimations.extend(ests_in_time_limit)
 
                 pbar.update(len(cells_batch))
@@ -206,6 +220,7 @@ class ControllerManager:
             return
 
         time_predictor = self.predictor_handler.get_time_predictor(self.current_b)
+        inf_time_predictor = self.predictor_handler.get_inference_time_predictor(self.current_b)
         acc_predictor = self.predictor_handler.get_score_predictor(self.current_b)
 
         self.current_b += 1
@@ -221,7 +236,7 @@ class ControllerManager:
         batched_models = to_list_of_tuples(next_models, self.predictions_batch_size)
 
         # use the predictors to estimate all the relevant metrics used in the pareto front
-        model_estimations = self.__generate_model_estimations(batched_models, len(next_models), time_predictor, acc_predictor)
+        model_estimations = self.__generate_model_estimations(batched_models, len(next_models), time_predictor, acc_predictor, inf_time_predictor)
 
         # sort the children according to their score
         model_estimations = sorted(model_estimations, key=lambda x: x.score, reverse=True)
