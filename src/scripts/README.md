@@ -2,7 +2,7 @@
 This folder contains additional scripts that can be used to further analyze and process the neural networks found
 during the POPNAS search procedure.
 While _model selection_, _last training_, and _evaluate network_, can be integrated into the main search process when launched from
-the _run_e2e.py_ entrypoint, the other scripts provide additional functionalities to POPNAS users.
+the `run_e2e.py` entrypoint, the other scripts provide additional functionalities to POPNAS users.
 
 
 ### Model selection script
@@ -10,12 +10,12 @@ This script can be used to extensively train the best architectures found during
 It uses a configuration file (by default _model_selection_training.json_), which is a subset of the search algorithm JSON file and its properties
 override the ones used during search.
 
-If the _params_ flag is set, the script also performs a pseudo-grid-search to tune the macro architectures of the selected cells, to generate additional
+If the `-params` option is set, the script also performs a pseudo-grid-search to tune the macro architectures of the selected cells, to generate additional
 architectures to train which satisfy the provided parameters range (e.g. "2.5e6;3.5e6", must be semicolon separated).
 
 Models and training procedure are slightly altered compared to search time: each model uses a secondary exit on the cell placed at 2/3 of total
-model length, plus label smoothing is forced in loss. If using the default config, scheduled drop path and cutout are also forced to improve
-the generalization during the extended number of epochs.
+model length.
+If using the default config, scheduled drop path and cutout are also applied to improve the generalization during the extended number of epochs.
 
 The script can be launched with the following command:
 ```
@@ -32,11 +32,11 @@ the training and validation data, without reserving a validation set.
 It is important to check that the model generalizes well during the model selection phase, to not incur in overfitting.
 
 Here, multiple command line arguments must be provided, to build the exact model without altering the configuration file:
-- **-b**, the desired batch size
-- **-f**, the model starting filters
-- **-m**, the number of motifs used in the model
-- **-n**, the number of normal cells to stack per motif
-- **-spec**, the cell specification, in format "[(block0);(block1);...]"
+- `-b`: the desired batch size
+- `-f`: the model starting filters
+- `-m`: the number of motifs used in the model
+- `-n`: the number of normal cells to stack per motif
+- `-spec`: the cell specification, in format "[(block0);(block1);...]"
 
 The script can be launched with the following command (change parameters accordingly):
 ```
@@ -81,7 +81,7 @@ python scripts/plot_slideshow.py -p {path_to_log_folder}
 ```
 Close a plot overview to visualize the next one, the program terminates after showing all plots.
 
-If the **--save** flag is specified, it will instead save all slides into _plot_slides_ folder, inside the log folder provided as -p argument.
+If the `--save` flag is specified, it will instead save all slides into _plot_slides_ folder, inside the log folder provided as -p argument.
 
 If any of the _predictor testing_ scripts have been run on data contained in selected log folder,
 their plots will be appended in additional slides.
