@@ -8,7 +8,7 @@ from tensorflow.keras.regularizers import Regularizer
 from utils.func_utils import to_int_tuple
 
 # common regex groups for parameters and utilities. They can be imported by Allocator concrete implementations.
-opt_dilation_rate = rf'(:(?P<dilation_rate>\d+)dr)?'
+opt_dilation_rate = r'(:(?P<dilation_rate>\d+)dr)?'
 
 
 def generate_kernel_group(op_dims: int, group_suffix: str = '') -> str:

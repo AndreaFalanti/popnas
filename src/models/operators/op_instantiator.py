@@ -43,6 +43,7 @@ class OpInstantiator:
             'dconv': SeparableConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
             'tconv': TransposeConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
             'stack_conv': StackedConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
+            'zconv': ZoomedConvolutionOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
             'pool': PoolOpAllocator(self.op_dims, self.weight_reg, self.activation_f),
             'se': SqueezeExcitationOpAllocator(self.op_dims, self.weight_reg, self.activation_f)
         }

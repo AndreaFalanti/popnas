@@ -20,8 +20,10 @@ from .sdp import ScheduledDropPath
 from .rnn import Lstm, Gru, RnnBatchReduce
 from .squeeze_excitation import SqueezeExcitation, ResizableSqueezeExcitation
 from .aspp import AtrousSpatialPyramidPooling, ImagePooling
+from .zoomed_conv import ZoomedConvolution
 
 
 __all__ = ['Identity', 'SeparableConvolution', 'Convolution', 'StackedConvolution', 'TransposeConvolution', 'TransposeConvolutionStack',
            'DilatedConvBatchActivationPooling', 'Pooling', 'PoolingConv', 'ScheduledDropPath', 'CVTStage', 'SimplifiedCVT', 'Lstm', 'Gru',
-           'RnnBatchReduce', 'SqueezeExcitation', 'ResizableSqueezeExcitation', 'AtrousSpatialPyramidPooling', 'ImagePooling', 'op_dim_selector']
+           'RnnBatchReduce', 'SqueezeExcitation', 'ResizableSqueezeExcitation', 'AtrousSpatialPyramidPooling', 'ImagePooling',
+           'ZoomedConvolution', 'op_dim_selector']
