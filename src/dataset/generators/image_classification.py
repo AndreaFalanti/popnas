@@ -168,7 +168,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
             # finalize dataset generation, common logic to all dataset formats
             image_res = image_shape[0:2]
-            train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125)
+            train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125 if self.use_data_augmentation else 1)
             data_preprocessor = self.build_preprocessor(classes)
             tf_aug = get_image_classification_tf_data_aug(image_res, self.use_cutout) if self.use_data_augmentation else None
             train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, train_preprocessor,
@@ -286,7 +286,7 @@ class ImageClassificationDatasetGenerator(BaseDatasetGenerator):
 
         # finalize dataset generation, common logic to all dataset formats
         image_res = image_shape[0:2]
-        train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125)
+        train_preprocessor = self.build_training_preprocessor(classes, image_res, upsample_factor=1.125 if self.use_data_augmentation else 1)
         tf_aug = get_image_classification_tf_data_aug(image_res, self.use_cutout) if self.use_data_augmentation else None
         train_ds, train_batches = self._finalize_dataset(train_ds, self.batch_size, train_preprocessor,
                                                          keras_data_augmentation=keras_aug, tf_data_augmentation=tf_aug,
