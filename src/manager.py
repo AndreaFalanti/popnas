@@ -18,6 +18,7 @@ from models.results.base import write_multi_output_results_to_csv
 from search_space_units import CellSpecification
 from utils.config_dataclasses import *
 from utils.nn_utils import get_model_flops, get_optimized_steps_per_execution, save_keras_model_to_onnx, perform_global_memory_clear
+from utils.rstr import rstr
 
 AUTOTUNE = tf.data.AUTOTUNE
 
@@ -78,8 +79,9 @@ class NetworkManager:
 
         # take 6 batches of size provided in config, used to test the inference time.
         # when using multiple steps per execution, multiply the number of batches by the steps executed.
+        inference_trials = 13
         self.inference_batch_size = dataset_config.inference_batch_size
-        self.inference_batches_count = 6 * self.execution_steps
+        self.inference_batches_count = inference_trials * self.execution_steps
         self.inference_batch = self.dataset_folds[0].validation.unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
@@ -208,15 +210,16 @@ class NetworkManager:
 
         return training_res
 
-    def check_inference_speed(self, model):
+    def check_inference_speed(self, model: Model):
         ''' Compute the given model inference time by executing a short prediction session. '''
         self._logger.info('Testing inference speed...')
         inference_time_cb = InferenceTimingCallback()
         model.predict(self.inference_batch, steps=self.inference_batches_count, callbacks=[inference_time_cb])
 
-        # discard first batch time since it is pretty noisy due to initialization of the process
+        # discard the first 3 batch measurements, since they can be pretty noisy due to initialization of the process (used as warmup of the model)
         # divide by execution steps, since if > 1 a batch will have "steps" samples
-        return mean(inference_time_cb.logs[1:]) / self.execution_steps
+        self._logger.info('Measured inference times (raw): %s', rstr(inference_time_cb.logs))
+        return mean(inference_time_cb.logs[3:]) / self.execution_steps
 
     def train_model(self, cell_spec: CellSpecification, model_logdir: str):
         '''
