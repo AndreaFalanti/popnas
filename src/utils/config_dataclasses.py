@@ -17,6 +17,7 @@ class OptimizerDict:
     type: str
     scheduler: Optional[str]
     lookahead: Optional[LookaheadDict]
+    warmup: int = 0
 
 
 @dataclass

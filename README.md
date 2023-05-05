@@ -174,10 +174,12 @@ Here it is presented a list of the configuration sections and fields, with a bri
     (CosineDecay) `"cd: \f alpha"`], with `\f` representing a float number.
     Parameters are optional, so you can just specify the name (e.g., "cdr") or a subset of parameters,
     and default values will be used for undefined groups. NOTE: parameters must be ordered as in specification.
+  - `warmup`: optional number of epochs where the learning rate scales linearly from 0 to the target learning rate.
+    After warmup, the specified scheduler is applied. Warmup can stabilize training results.
   - `lookahead`: optional object which can enable the lookahead mechanism when defined.
     - `sync_period`: integer defining the number of steps before syncing slow weights.
     - `slow_step_size`: float value indicating the ratio for updating the slow weights.
-- `label_smoothing`: float between 0 and 1, can be applied in CategoricalCrossentropy loss of classification tasks.
+- `label_smoothing`: float between 0 and 1, it can be applied in CategoricalCrossentropy loss of classification tasks.
   Ignored in segmentation tasks, since unsupported on sparse labels.
 
 
