@@ -7,6 +7,19 @@ from tensorflow.keras.optimizers.schedules import LearningRateSchedule
 class WarmUpSchedulerWrapper(LearningRateSchedule):
     def __init__(self, main_scheduler: Union[LearningRateSchedule, float], warmup_steps: int,
                  target_lr: float, start_lr: float = 0.0, hold_steps: int = 0):
+        '''
+        Wraps a Keras scheduler instance and applies an initial warmup for the given number of steps,
+        where the learning rate increases linearly to the target value.
+
+        The warmup can stabilize the training of the network, especially when high learning rates are used.
+
+        Args:
+            main_scheduler: Keras scheduler to wrap, executed after the warmup is complete
+            warmup_steps: initial steps used for warmup (number of weight updates)
+            target_lr: LR reached after the warmup
+            start_lr: LR used in the first step (default: 0)
+            hold_steps: if > 0, the LR will be kept at the target LR after warmup for the specified number of steps
+        '''
         super().__init__()
 
         # if a fixed learning rate (float) is provided, convert it into a callable
