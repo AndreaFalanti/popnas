@@ -5,6 +5,7 @@ from tensorflow.keras import optimizers
 from tensorflow.keras.optimizers import schedules
 from tensorflow_addons import optimizers as tfa_optimizers
 
+from models.custom_schedulers import WarmUpSchedulerWrapper
 from utils.config_dataclasses import OptimizerDict
 
 decimal_regex = r'\d+.?\d*'
@@ -50,6 +51,10 @@ def build_scheduler(scheduler_str: str, learning_rate: float, weight_decay: floa
     raise AttributeError(f'Scheduler "{scheduler_str}" not recognized')
 
 
+def apply_warmup_to_schedulers(lr: Rate, wd: Rate, warmup_steps: int, max_learning_rate: float, max_weight_decay: float):
+    return WarmUpSchedulerWrapper(lr, warmup_steps, max_learning_rate), WarmUpSchedulerWrapper(wd, warmup_steps, max_weight_decay)
+
+
 def build_optimizer(optimizer_str: str, learning_rate: Rate, weight_decay: Rate, total_training_steps: int) -> optimizers.Optimizer:
     # AdamW
     match = re.compile(r'adamW').match(optimizer_str)
@@ -83,7 +88,12 @@ def build_optimizer(optimizer_str: str, learning_rate: Rate, weight_decay: Rate,
 
 def instantiate_optimizer_and_schedulers(optimizer_config: OptimizerDict, learning_rate: float, weight_decay: float,
                                          training_steps_per_epoch: int, epochs: int) -> optimizers.Optimizer:
-    lr, wd = build_scheduler(optimizer_config.scheduler, learning_rate, weight_decay, training_steps_per_epoch, epochs)
+    warmup_epochs = optimizer_config.warmup
+
+    lr, wd = build_scheduler(optimizer_config.scheduler, learning_rate, weight_decay, training_steps_per_epoch, epochs - warmup_epochs)
+    if warmup_epochs > 0:
+        lr, wd = apply_warmup_to_schedulers(lr, wd, warmup_epochs * training_steps_per_epoch, learning_rate, weight_decay)
+
     optimizer = build_optimizer(optimizer_config.type, lr, wd, training_steps_per_epoch * epochs)
 
     lookahead = optimizer_config.lookahead
