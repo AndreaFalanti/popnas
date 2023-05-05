@@ -194,3 +194,18 @@ Add new scripts to analyze the results of segmentation networks and their infere
 - Disable XLA compilation override in default post-search configurations
 - Add a new README focused on scripts (see the _scripts_ folder)
 - Other minor fixes
+
+### 3.8.0
+Update Pareto front to support inference time, add zoomed convolution operator and warmup scheduler wrapper.
+
+- Add a new predictor for computing inference time. This predictor is instantiated only if "inference_time" is provided in the additional
+  Pareto metrics of the JSON config. Inference predictor is an SVR such as the training time predictor, using the same feature set but calibrating
+  the dynamic reindex map on the inference times of the specular monoblocks.
+- Add ZoomedConvolution operator, which can be especially useful in segmentation tasks to optimize the inference time of the network while
+  preserving a high receptive field (see FasterSeg paper).
+- Add a custom LearningRateScheduler called WarmupSchedulerWrapper, which wraps an already existent Keras scheduler and applies an initial warmup
+  for the given number of steps, where the learning rate increases linearly to the target value.
+  After the warmup, the wrapped scheduler is used. It is a nice decorator for Keras which is transparent to the user.
+- Fix images being upsampled in image classification tasks even when data augmentation was disabled. The images are upsampled just to perform
+  random crop to original dimension during augmentation, to simulate zoom and translation of the image, so it is avoided when augmentation
+  is not performed.
