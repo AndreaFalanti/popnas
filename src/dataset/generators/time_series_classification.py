@@ -65,6 +65,14 @@ def reimmission_sample_in_monosample_classes(x: np.ndarray, y: np.ndarray, num_c
     return x, y
 
 
+def compute_classes_count(y: np.ndarray, labels_remap_dict: 'dict[str, int]'):
+    ''' Infer the number of classes from either the samples themselves or the labels remap dictionary. '''
+    if labels_remap_dict is None:
+        return len(np.unique(y))
+    else:
+        return len(np.unique(list(labels_remap_dict.values())))
+
+
 class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
     def __init__(self, dataset_config: DatasetConfig, optimize_for_xla_compilation: bool = False):
         super().__init__(dataset_config, optimize_for_xla_compilation)
@@ -111,7 +119,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
                 x_train, y_train = self._get_numpy_split('train')
                 q_x = np.quantile(x_train, q=0.98) if self.rescale else 1
 
-                classes = len(np.unique(y_train))
+                classes = compute_classes_count(y_train, self.class_labels_remapping_dict)
                 # discard the first dimension since it is the number of samples
                 input_shape = np.shape(x_train)[1:]
 
@@ -150,7 +158,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
             x_test, y_test = self._get_numpy_split('test')
             q_x = np.quantile(x_test, q=0.98) if self.rescale else 1
 
-            classes = len(np.unique(y_test))
+            classes = compute_classes_count(y_test, self.class_labels_remapping_dict)
             # discard first dimension since is the number of samples
             input_shape = np.shape(x_test)[1:]
 
@@ -169,7 +177,7 @@ class TimeSeriesClassificationDatasetGenerator(BaseDatasetGenerator):
         if self.dataset_path is not None:
             x_train, y_train = self._get_numpy_split('train')
 
-            classes = len(np.unique(y_train))
+            classes = compute_classes_count(y_train, self.class_labels_remapping_dict)
             # discard the first dimension since it is the number of samples
             input_shape = np.shape(x_train)[1:]
 
