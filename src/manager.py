@@ -77,12 +77,13 @@ class NetworkManager:
         self.save_all_models = others_config.save_children_models
         self.XLA_compile = others_config.enable_XLA_compilation
 
-        # take 6 batches of size provided in config, used to test the inference time.
+        # take N batches of size provided in config, used to test the inference time.
         # when using multiple steps per execution, multiply the number of batches by the steps executed.
         inference_trials = 13
         self.inference_batch_size = dataset_config.inference_batch_size
         self.inference_batches_count = inference_trials * self.execution_steps
-        self.inference_batch = self.dataset_folds[0].validation.unbatch() \
+        # use training split since it always has a fixed size, making it more probable to have consistent inference measurements
+        self.inference_batch = self.dataset_folds[0].train.unbatch() \
             .take(self.inference_batch_size * self.inference_batches_count).batch(self.inference_batch_size)
 
         # DEBUG ONLY
