@@ -123,7 +123,7 @@ def support_weight_decay(optimizer_str: str):
 
 def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str, n_classes: int, normalize: bool):
     # if normalize is set, normalize the rows (true values)
-    cmat = confusion_matrix(y_true, y_pred, normalize='true' if normalize else None)
+    cmat = confusion_matrix(y_true, y_pred, normalize='true' if normalize else None)    # type: np.ndarray
 
     fig_size = 8 + 0.2 * n_classes
     fig = plt.figure(figsize=(1 + fig_size, fig_size))
@@ -140,6 +140,9 @@ def save_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, save_path: str
     plt.savefig(save_path + '.png', bbox_inches='tight', dpi=120)
     plt.savefig(save_path + '.pdf', bbox_inches='tight')
     plt.close(fig)
+
+    # save also the numpy version of the matrix (required by AI-SPRINT studio)
+    np.save(save_path + '.npy', cmat)
 
 
 def predict_and_save_confusion_matrix(model: Model, ds: tf.data.Dataset, multi_output: bool, n_classes: int, save_path: str):
