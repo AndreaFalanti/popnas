@@ -42,7 +42,7 @@ class WarmUpSchedulerWrapper(LearningRateSchedule):
         return tf.where(step < self.warmup_steps + self.hold_steps, warmup_lr, main_scheduler_lr, name='learning_rate')
 
     def get_config(self):
-        config = super().get_config()
+        config = self.main_scheduler.get_config()
         config.update({
             'start_lr': self.start_lr,
             'target_lr': self.target_lr,
