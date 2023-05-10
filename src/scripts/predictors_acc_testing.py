@@ -14,8 +14,8 @@ remove_annoying_tensorflow_messages()
 
 def setup_folders(log_path: str):
     '''
-    Create folder for storing test results. If folder already exists, keep it and previous results.
-    Note: predictors will override results if have same name of an already existing folder.
+    Create folder for storing test results. If the folder already exists, keep it and previous results.
+    Note: predictors will override results if they have the same name of an already existing folder.
 
     Args:
         log_path: path of run logs folder

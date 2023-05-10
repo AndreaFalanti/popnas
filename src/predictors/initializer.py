@@ -38,9 +38,12 @@ class PredictorsHandler:
         score_csv_field = score_metric.results_csv_column
         predictors_log_path = log_service.build_path('predictors')
         # catboost_time_desc_path = log_service.build_path('csv', 'column_desc_time.csv')
-        amllibrary_config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'amllibrary.ini')
-        if not os.path.exists(amllibrary_config_path):
-            raise FileNotFoundError('aMLLibrary configuration file not found')
+        amllibrary_time_config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'amllibrary.ini')
+        if not os.path.exists(amllibrary_time_config_path):
+            raise FileNotFoundError('aMLLibrary time configuration file not found')
+        amllibrary_inference_time_config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'amllibrary_inference.ini')
+        if not os.path.exists(amllibrary_inference_time_config_path):
+            raise FileNotFoundError('aMLLibrary inference time configuration file not found')
 
         self._logger = log_service.get_logger(__name__)
         self._logger.info('Initializing predictors...')
@@ -53,11 +56,11 @@ class PredictorsHandler:
         # to use CatBoost: CatBoostPredictor(catboost_time_desc_path, self._logger, predictors_log_path, use_random_search=True, override_logs=False)
         # example for aMLLibrary: AMLLibraryPredictor(amllibrary_config_path, ['LRRidge'], self._logger, predictors_log_path, override_logs=False)
         self._time_predictor = None if pnas_mode or 'time' not in pareto_metric_names else \
-            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path,
+            AMLLibraryPredictor(amllibrary_time_config_path, ['SVR'], self._logger, predictors_log_path,
                                 override_logs=False, name='aMLLibrary_SVR_training_time')
 
         self._inference_time_predictor = None if pnas_mode or 'inference_time' not in pareto_metric_names else \
-            AMLLibraryPredictor(amllibrary_config_path, ['SVR'], self._logger, predictors_log_path,
+            AMLLibraryPredictor(amllibrary_inference_time_config_path, ['SVR'], self._logger, predictors_log_path,
                                 override_logs=False, name='aMLLibrary_SVR_inference_time')
 
         self._logger.info('Predictors generated successfully')

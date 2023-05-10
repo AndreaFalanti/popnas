@@ -4,7 +4,6 @@ import os
 
 import log_service
 from predictors.models import *
-from search_space import SearchSpace
 from utils.config_utils import retrieve_search_config
 from utils.feature_analysis import generate_dataset_correlation_heatmap
 from utils.nn_utils import remove_annoying_tensorflow_messages
@@ -23,7 +22,7 @@ def setup_folders(log_path: str):
     Returns:
         (str): path for script output
     '''
-    test_path = os.path.join(log_path, 'pred_time_test')
+    test_path = os.path.join(log_path, 'pred_inf_time_test')
     os.makedirs(test_path, exist_ok=True)
 
     return test_path
@@ -47,18 +46,18 @@ def main():
     logger = create_logger(__name__, log_path)
 
     csv_path = os.path.join(args.p, 'csv')
-    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'amllibrary.ini')
-    training_time_csv_path = os.path.join(csv_path, 'training_time.csv')
+    amllibrary_config_path = os.path.join(os.getcwd(), 'configs', 'amllibrary_inference.ini')
+    training_time_csv_path = os.path.join(csv_path, 'training_time_inference.csv')
     catboost_col_desc_file_path = os.path.join(csv_path, 'column_desc_time.csv')
     nn_training_data_path = os.path.join(csv_path, 'training_results.csv')
-    nn_y_col = 'training time(seconds)'
+    nn_y_col = 'inference time(seconds)'
     nn_y_domain = (0, math.inf)
 
     # compute dataset correlation
     generate_dataset_correlation_heatmap(training_time_csv_path, log_path, save_name='dataset_corr_heatmap.png')
     logger.info('Dataset correlation heatmap generated')
 
-    search_space = SearchSpace(run_config.search_space)
+    # search_space = SearchSpace(run_config.search_space)
 
     predictors_to_test = [
         # AMLLibraryPredictor(amllibrary_config_path, ['NNLS'], logger, log_path),
@@ -69,7 +68,7 @@ def main():
         # RNNPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1DPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
         # Conv1D1IPredictor(search_space, nn_y_col, nn_y_domain, logger, log_path, hp_tuning=False),
-        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=False),
+        # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True),
         # CatBoostPredictor(catboost_col_desc_file_path, logger, log_path, use_random_search=True, task_type='GPU', name='CatBoost_GPU_NEW'),
         # LGBMPredictor(logger, log_path, drop_feature_names=['exploration'], use_random_search=True)
     ]  # type: 'list[Predictor]'
@@ -78,7 +77,7 @@ def main():
         dataset_path = nn_training_data_path if isinstance(p, KerasPredictor) else training_time_csv_path
 
         logger.info('%s', '*' * 36 + f' Testing predictor "{p.name}" ' + '*' * 36)
-        p.perform_prediction_test(dataset_path, 'time')
+        p.perform_prediction_test(dataset_path, 'inference_time')
         logger.info('%s', '*' * 100)
 
     logger.info('Script completed successfully')
