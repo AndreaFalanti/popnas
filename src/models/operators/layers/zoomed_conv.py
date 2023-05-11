@@ -37,15 +37,6 @@ class BaseZoomedConvolution(Layer, ABC):
 
         self.upsampler_class = op_dim_selector['upsample'][self.op_dims]
 
-        # add batch size and channels to dims count
-        # self.slice_start = tf.zeros(self.op_dims + 2, tf.int32)
-
-    def build(self, input_shape: tf.TensorShape):
-        # discard batch size and channels, retrieving only the resolution
-        input_res = tf.constant(input_shape[1:-1])
-        # divide by stride factor, ceiling the value (solves odd-sized axes shape discrepancy), and casting back to int
-        self.output_resolution = tf.cast(tf.math.ceil(input_res / self.strides[0]), tf.int32)
-
     def get_config(self):
         config = super().get_config()
         config.update({
@@ -67,12 +58,28 @@ class ZoomedConvolution2D(BaseZoomedConvolution):
         self.upsampler = self.upsampler_class(self.pool_size, interpolation='bilinear', name=name)
 
     def call(self, inputs, training=None, mask=None):
+        # solves odd-sized axes shape discrepancy caused by downsampling, striding, upsampling compared to target size
+        i_shape = tf.shape(inputs)
+        # divide by stride factor, ceiling the value (solves odd-sized axes shape discrepancy), and casting back to int
+        # e.g. 31x31 (downsample)-> 16x16 (upsample)-> 32x32 (sliced to)-> 31x31
+        out_shape = tf.cast(tf.math.ceil(i_shape / self.strides[0]), tf.int32)
+
         x = self.downsampler(inputs)
         x = self.conv(x, training=training)
         x = self.upsampler(x)
         # force the output to have the same resolution of the input, or half of it in case of reduction
         # solves the shape problem with odd dimensions (upsample has +1 element on odd-sized axes compared to the input)
-        return x[:, :self.output_resolution[0], :self.output_resolution[1], :]
+        return x[:, :out_shape[1], :out_shape[2], :]
+
+    # TODO: Keras summary shows the output shape as None for the dimensions related to resolution (due to dynamic striding in call).
+    #  Still, implementing this function does not seem to solve the "problem". Since it is functionally working correctly, this is not a big deal.
+    # def compute_output_shape(self, input_shape: tf.TensorShape):
+    #     if self.strides[0] == 1 or input_shape[1] == None:
+    #         return input_shape
+    #     else:
+    #         input_res = tf.constant(input_shape[1:-1])
+    #         out_res = tf.cast(tf.math.ceil(input_res / self.strides[0]), tf.int32)
+    #         return tf.TensorShape([input_shape[0], out_res[0], out_res[1], input_shape[-1]])
 
 
 class ZoomedConvolution1D(BaseZoomedConvolution):
@@ -85,12 +92,16 @@ class ZoomedConvolution1D(BaseZoomedConvolution):
         self.upsampler = self.upsampler_class(zoom_factor, name=name)
 
     def call(self, inputs, training=None, mask=None):
+        # solves odd-sized axes shape discrepancy caused by downsampling, striding, upsampling compared to target size
+        i_shape = tf.shape(inputs)
+        out_shape = tf.cast(tf.math.ceil(i_shape / self.strides[0]), tf.int32)
+
         x = self.downsampler(inputs)
         x = self.conv(x, training=training)
         x = self.upsampler(x)
         # force the output to have the same resolution of the input, or half of it in case of reduction
         # solves the shape problem with odd dimensions (upsample has +1 element on odd-sized axes compared to the input)
-        return x[:, :self.output_resolution[0], :]
+        return x[:, :out_shape[1], :]
 
 
 # The main class to use in the OP allocator.
@@ -113,5 +124,3 @@ class ZoomedConvolution(Layer):
 
     def get_config(self):
         return self.zconv.get_config()
-
-
