@@ -81,8 +81,8 @@ Follow https://www.tensorflow.org/install/gpu instructions to set up your device
 to install the exact versions of CUDA and CUDNN for Tensorflow 2.10 (see https://www.tensorflow.org/install/source#gpu).
 
 ### Note for fellow developers
-If you open the project with an IDE, the imports from _tensorflow.keras_ will be marked as error and autocomplete will not work.
-Actually, the import works fine, but the Keras library is lazily loaded by tensorflow, causing 
+If you open the project with an IDE, the imports from _tensorflow.keras_ will be marked as errors and autocomplete will not work.
+Actually, the imports work fine, but the Keras library is lazily loaded by tensorflow, causing 
 [issues](https://github.com/tensorflow/tensorflow/issues/56231) with autocomplete.
 
 You can solve the problem by creating a symlink to Keras inside the Tensorflow package located in the virtual environment,
@@ -132,6 +132,7 @@ Here it is presented a list of the configuration sections and fields, with a bri
   - @x@:@dr dconv (depthwise-separable convolution)
   - @x@-@x@ conv (spatial-separable convolutions)
   - @x@:@dr conv
+  - @x@:@z zconv (zoomed convolution, see FasterSeg paper)
   - @x@ maxpool
   - @x@ avgpool
   - @x@ tconv (transpose convolution)

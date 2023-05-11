@@ -209,3 +209,14 @@ Update Pareto front to support inference time, add zoomed convolution operator a
 - Fix images being upsampled in image classification tasks even when data augmentation was disabled. The images are upsampled just to perform
   random crop to original dimension during augmentation, to simulate zoom and translation of the image, so it is avoided when augmentation
   is not performed.
+
+### 3.8.1
+Refine and fix some features added with version 3.8.0.
+
+- Improve inference time measurement, using more batches to reduce noise and discarding the first 3 measurements (instead of only the first one),
+  which tends to be noisier. Also, it uses the training set instead of validation during inference, since in some cases validation images could be of
+  different sizes, complicating the estimation of the inference time (training samples instead always have the same size for batch purposes).
+- Fix bug regarding number of classes when relabelling dictionary was configured in TSC tasks
+- Fix serialization of WarmupSchedulerWrapper
+- Update hyperparameters of inference time SVR predictor, since the regularization factors did not work well for the new domain.
+- Fix ZoomedConvolutions for networks with non-fixed input resolutions,
