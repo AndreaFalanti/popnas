@@ -219,4 +219,4 @@ Refine and fix some features added with version 3.8.0.
 - Fix bug regarding number of classes when relabelling dictionary was configured in TSC tasks
 - Fix serialization of WarmupSchedulerWrapper
 - Update hyperparameters of inference time SVR predictor, since the regularization factors did not work well for the new domain.
-- Fix ZoomedConvolutions for networks with non-fixed input resolutions,
+- Fix ZoomedConvolutions for networks with non-fixed input resolutions

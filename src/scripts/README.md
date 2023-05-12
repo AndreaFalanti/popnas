@@ -118,12 +118,14 @@ python scripts/create_popnas_segmentation_dataset.py -p {folder path of each spl
 ```
 
 
-### Segmentation inference time script
+### Inference time script
 This script checks out the inference speed of the target ONNX model on the device hardware.
 It is meant mainly for real-time segmentation tasks, where a certain number of frame-per-second (FPS) is required for the
-network to be deployed.
+network to be deployed, but can be used also for classification networks.
+
+Either the `-d` parameter (dataset path) or the `-i` parameter must be provided to build the samples used in inference simulation.
 
 The script can be executed with the following command:
 ```
-python scripts/compute_segmentation_inference_time.py -p {path to model output of last training script} -d {path to dataset} --onnx_only
+python scripts/compute_inference_time.py -p {path to folder output of last training script} -d {path to dataset} --onnx_only
 ```

@@ -1,5 +1,6 @@
 import argparse
 import os.path
+from ast import literal_eval
 from statistics import mean
 from timeit import default_timer as timer
 from typing import Callable
@@ -9,6 +10,11 @@ import onnxruntime
 import tensorflow as tf
 import tensorflow_addons as tfa
 from PIL import Image
+
+
+def generate_synthetic_samples(input_size: 'tuple[int, ...]', num_samples: int):
+    data = np.random.rand(num_samples, *input_size)
+    return data.astype(np.float32)
 
 
 def load_segmentation_samples(samples_path: str, samples_limit: int):
@@ -89,17 +95,28 @@ def perform_io_binding_onnx_inference(onnx_session: onnxruntime.InferenceSession
 
 def prepare_onnx_io_binding(onnx_session: onnxruntime.InferenceSession, data: np.ndarray):
     x_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(data, 'cuda', 0)
-    # output has the same resolution, but a different number of channels, since it is a one-hot tensor
-    num_classes = onnx_session.get_outputs()[-1].shape[-1]
-    output_shape = list(data.shape)[:-1] + [num_classes]
+    # output shape can either be the same of input but with different channels (one-hot of classes) or just one-hot of classes,
+    # depending on the type of task addressed (i.e., classification or segmentation)
+    # automatically infer the task and set the right shape from the number of dimensions (discard first, which is batch)
+    out_dims = onnx_session.get_outputs()[-1].shape[1:]
+    num_classes = out_dims[-1]
+    # classification, (batch_size, one-hot of classes)
+    if len(out_dims) == 1:
+        output_shape = [data.shape[0], num_classes]
+    # segmentation, use input shape for setting the resolution and batch size
+    else:
+        output_shape = list(data.shape)[:-1] + [num_classes]
+
     y1_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
     y2_ortvalue = onnxruntime.OrtValue.ortvalue_from_shape_and_type(output_shape, np.float32, 'cuda', 0)
 
     io_binding = onnx_session.io_binding()
-    # input name is fixed, while output names can change based on model structure (but are always two outputs for post-search models)
+    # extract the name of the input layer (always single input in POPNAS)
+    in_name = onnx_session.get_inputs()[0].name
+    # output names can also change based on model structure (but are always two outputs for post-search models)
     out_1_name, out_2_name = [out.name for out in onnx_session.get_outputs()]
 
-    io_binding.bind_input(name='input_1', device_type=x_ortvalue.device_name(), device_id=0, element_type=data.dtype, shape=x_ortvalue.shape(),
+    io_binding.bind_input(name=in_name, device_type=x_ortvalue.device_name(), device_id=0, element_type=data.dtype, shape=x_ortvalue.shape(),
                           buffer_ptr=x_ortvalue.data_ptr())
     io_binding.bind_output(name=out_1_name, device_type=y1_ortvalue.device_name(), device_id=0, element_type=np.float32, shape=y1_ortvalue.shape(),
                            buffer_ptr=y1_ortvalue.data_ptr())
@@ -112,9 +129,11 @@ def prepare_onnx_io_binding(onnx_session: onnxruntime.InferenceSession, data: np
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('-p', metavar='PATH', type=str, help="path to model folder", required=True)
-    parser.add_argument('-d', metavar='DATASET_PATH', type=str, help="path to dataset folder split", required=True)
-    parser.add_argument('-b', metavar='BATCH_SIZE', type=int, help="batch size used for inference", required=False, default=1)
-    parser.add_argument('-n', metavar='NUM_BATCHES', type=int, help="number of batches to process", required=False, default=100)
+    parser.add_argument('-d', metavar='DATASET_PATH', type=str, help="path to dataset folder split")
+    parser.add_argument('-i', metavar='INPUT_SIZE', type=str, help="input size as a tuple string (no batch dim), e.g., '(400, 400, 3)'")
+    parser.add_argument('-b', metavar='BATCH_SIZE', type=int, help="batch size used for inference", default=1)
+    parser.add_argument('-n', metavar='NUM_BATCHES', type=int, help="number of batches to process", default=100)
+    parser.add_argument('--fp16', help='specify TensorRT to enable fp16 execution', action='store_true')
     parser.add_argument('--profile', help='profile ONNX execution', action='store_true')
     parser.add_argument('--onnx_only', help='execute tests only on the ONNX model', action='store_true')
     args = parser.parse_args()
@@ -125,7 +144,13 @@ def main():
     num_batches = args.n + warmup_batches
     num_samples = test_batch_size * num_batches
 
-    samples = load_segmentation_samples(samples_path=args.d, samples_limit=num_samples)
+    if args.d is not None:
+        samples = load_segmentation_samples(samples_path=args.d, samples_limit=num_samples)
+    elif args.i is not None:
+        input_size = literal_eval(args.i)
+        samples = generate_synthetic_samples(input_size, num_samples)
+    else:
+        raise ValueError('Either the dataset or the input size argument must be provided to perform the inference test')
 
     # ONNX model: make sure to install onnxruntime-gpu, otherwise remove CUDA provider
     # produce a json with profiling data, if the related flag is set
@@ -137,16 +162,19 @@ def main():
 
     onnx_providers = [
         ('TensorrtExecutionProvider', {
-            'trt_fp16_enable': True
+            'trt_fp16_enable': args.fp16
         }),
         ('CUDAExecutionProvider', {
             'cudnn_conv_use_max_workspace': '1'
         })
     ]
+    # onnx_providers = ['CUDAExecutionProvider']
 
     sess = onnxruntime.InferenceSession(os.path.join(args.p, 'trained.onnx'), providers=onnx_providers, sess_options=sess_options)
+    # extract the name of the input layer (always single input in POPNAS)
+    sess_input_layer = sess.get_inputs()[0].name
     onnx_times = perform_model_inference(test_batch_size, num_batches, samples,
-                                         predict_f=lambda data, size: sess.run(None, {'input_1': data}))
+                                         predict_f=lambda data, size: sess.run(None, {sess_input_layer: data}))
     print_results(onnx_times[warmup_batches:], 'ONNX')
 
     onnx_times = perform_io_binding_onnx_inference(sess, test_batch_size, num_batches, samples)
