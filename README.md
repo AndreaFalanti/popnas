@@ -1,11 +1,12 @@
 # POPNASv3
+
 Third version of the **Pareto-Optimal Progressive Neural Architecture Search (POPNAS)** algorithm, a neural architecture search method based on 
 [PNAS](https://openaccess.thecvf.com/content_ECCV_2018/papers/Chenxi_Liu_Progressive_Neural_Architecture_ECCV_2018_paper.pdf), and direct extension
 and improvement of the second version.
 
 **POPNASv2** has been developed by Andrea Falanti for his master's thesis at Politecnico di Milano, and the work has also been
 published at the IEEE IJCNN 2022.
-The paper and cite info are available at: https://ieeexplore.ieee.org/abstract/document/9892073.
+The paper is available at: https://ieeexplore.ieee.org/abstract/document/9892073.
 The second version improves the time efficiency of the search algorithm, passing from an average 2x speed-up to
 an average 4x speed-up compared to PNAS on the same experiment configurations.
 The top-accuracy neural network architectures found are competitive with PNAS and other state-of-the-art methods,
@@ -22,6 +23,37 @@ The model selection trains more extensively the top networks found during the se
 The final training finalizes the process by training to convergence the best configuration found during the model selection,
 producing a deployment-ready neural network saved in ONNX format.
 You can read more about the latest version and its experiment results on the preprint available at: https://doi.org/10.48550/arXiv.2212.06735.
+
+Minor version updates performed after version 3 focus on software refactors to make POPNAS extendable to other supervised tasks, designing
+specific class hierarchies to handle each aspect of the process and make them customizable based on the task addressed.
+In particular, it is possible to implement custom behaviors for _DatasetGenerator_, _ModelGenerator_, and _OpAllocators_ to respectively
+load different data formats, use custom macro-architectures for the implemented models, and define possible
+additional operators relevant for the considered task. POPNASv3 main functional updates include the support for semantic segmentation tasks,
+change of the accuracy and time predictor models to GIN and SVR, respectively, support for XLA and mixed precision,
+and direct optimization of the inference time in the Pareto front.
+
+## Citations
+**POPNASv2:**
+```
+@inproceedings{falanti2022popnasv2,
+  title={Popnasv2: An efficient multi-objective neural architecture search technique},
+  author={Falanti, Andrea and Lomurno, Eugenio and Samele, Stefano and Ardagna, Danilo and Matteucci, Matteo},
+  booktitle={2022 International Joint Conference on Neural Networks (IJCNN)},
+  pages={1--8},
+  year={2022},
+  organization={IEEE}
+}
+```
+
+**POPNASv3:**
+```
+@article{falanti2022popnasv3,
+  title={POPNASv3: a Pareto-Optimal Neural Architecture Search Solution for Image and Time Series Classification},
+  author={Falanti, Andrea and Lomurno, Eugenio and Ardagna, Danilo and Matteucci, Matteo},
+  journal={arXiv preprint arXiv:2212.06735},
+  year={2022}
+}
+```
 
 ## Installation
 This section provides information for installing all needed software and packages for properly run POPNASv3 on your system. If you prefer, you can
@@ -58,6 +90,12 @@ To install the dependencies, simply run:
 poetry install
 ```
 Poetry will generate a virtual env based on the active python version and install all the packages there.
+
+If poetry does not automatically select your active python version (or a valid one), use the following command to generate the environment:
+```
+poetry env use /full/path/to/python
+```
+and repeat the `poetry install` command.
 
 You can activate the new environment with command:
 ```
