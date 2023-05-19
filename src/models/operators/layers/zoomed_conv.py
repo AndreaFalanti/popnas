@@ -43,7 +43,7 @@ class BaseZoomedConvolution(Layer, ABC):
             'filters': self.filters,
             'kernel': self.kernel,
             'strides': self.strides,
-            'zoom_factor': self.dilation_rate,
+            'zoom_factor': self.zoom_factor,
             'weight_reg': self.weight_reg,
             'activation_f': self.activation_f
         })
