@@ -69,6 +69,7 @@
         "save_children_models": false,
         "pnas_mode": false,
         "train_strategy": "GPU",
-        "enable_XLA_compilation": false
+        "enable_XLA_compilation": false,
+        "use_mixed_precision": false
     }
 }
