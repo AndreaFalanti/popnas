@@ -296,12 +296,13 @@ Here it is presented a list of the configuration sections and fields, with a bri
   - `enabled`: _true_ for using data augmentation, _false_ otherwise.
 - ...extra parameters depending on dataset type, see next sections.
 
-**Dataset(_image_classification_ only)**:
+**Dataset (_image_classification_ or _image_segmentation_)**:
 - `resize`: an optional object with parameters related to image resizing. Applied only if the object is defined.
+  In _image segmentation_ tasks, the given values represent the size of the random crop applied at training time.
   - `width`: target image width in pixels.
   - `height`: target image height in pixels.
 
-**Dataset(_time_series_classification_ only)**:
+**Dataset (_time_series_classification_ only)**:
 - `rescale`: if _true_ the values will be rescaled with a factor based on 98 percentile of the entire input values.
 - `normalize`: if _true_, sample values will be shifted and scaled into a distribution centered around 0 with standard deviation 1 (z-normalization).
 
