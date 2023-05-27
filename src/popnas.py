@@ -124,7 +124,7 @@ class Popnas:
         return self.time_delta + (timer() - self._start_time)
 
     def generate_and_train_model_from_spec(self, cell_spec: CellSpecification) -> BaseTrainingResults:
-        """ Generate a model from the cell specification and train it to get an estimate of its quality and characteristics. """
+        ''' Generate a model from the cell specification and train it to get an estimate of its quality and characteristics. '''
         cell_spec.pretty_logging(self._logger)
 
         # save model if it's the last training batch (full blocks)
@@ -237,8 +237,11 @@ class Popnas:
         plotter.plot_correlations_with_training_time()
 
         if not self.pnas_mode:
-            plotter.plot_pareto_front_curves(self.blocks, self.pareto_metrics)
-            plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_metrics)
+            if len(self.pareto_metrics) > 3:
+                self._logger.info('Generation of Pareto plots with more of 3 dimensions is not supported, skipping plots...')
+            else:
+                plotter.plot_pareto_front_curves(self.blocks, self.pareto_metrics)
+                plotter.plot_predictions_with_pareto_analysis(self.blocks, self.pareto_metrics)
         if self.multi_output_models:
             plotter.plot_multi_output_boxplot()
 
@@ -251,12 +254,12 @@ class Popnas:
             if model_index < restore_index:
                 continue
 
-            self._logger.info("%s #%d / #%d", 'Exploration model' if exploration else 'Model', model_index + 1, len(cell_specs))
-            self._logger.debug("\t%s", cell_spec)
+            self._logger.info('%s #%d / #%d', 'Exploration model' if exploration else 'Model', model_index + 1, len(cell_specs))
+            self._logger.debug('\t%s', cell_spec)
 
             train_res = self.generate_and_train_model_from_spec(cell_spec)
             train_infos.append(train_res)
-            self._logger.info("Finished %d out of %d %s!", model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
+            self._logger.info('Finished %d out of %d %s!', model_index + 1, len(cell_specs), 'exploration models' if exploration else 'models')
 
             fw.write_training_results_into_csv(train_res, exploration=exploration)
 
