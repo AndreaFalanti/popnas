@@ -129,3 +129,5 @@ The script can be executed with the following command:
 ```
 python scripts/compute_inference_time.py -p {path to folder output of last training script} -d {path to dataset} --onnx_only
 ```
+
+WARNING: `--fp16` flag must be provided if the network was training with mixed precision, otherwise TensorRT will fail the conversion.
