@@ -144,6 +144,9 @@ def main():
     num_batches = args.n + warmup_batches
     num_samples = test_batch_size * num_batches
 
+    if not args.fp16:
+        print('WARNING: FP16 is not enabled. If the network was trained with mixed precision, the ONNX conversion to TensorRT will fail.')
+
     if args.d is not None:
         samples = load_segmentation_samples(samples_path=args.d, samples_limit=num_samples)
     elif args.i is not None:
