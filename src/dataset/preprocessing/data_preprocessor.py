@@ -30,7 +30,7 @@ class DataPreprocessor(ABC):
 
         # convert labels to one-hot encoding
         if self.to_one_hot is not None:
-            ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot)), num_parallel_calls=AUTOTUNE)
+            ds = ds.map(lambda x, y: (x, tf.one_hot(y, self.to_one_hot, dtype=tf.uint8)), num_parallel_calls=AUTOTUNE)
 
         return ds
 
