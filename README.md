@@ -272,8 +272,8 @@ Here it is presented a list of the configuration sections and fields, with a bri
   Can be _null_ if you want to use a supported dataset already present in Keras or TFDS.
 - `classes_count`: classes present in the dataset. If using a Keras dataset, this value can be inferred automatically.
 - `ignore_class`: optional parameter used only in image segmentation problems. Defines the integer value of a class
-  (e.g., background or void class) to ignore during loss and mean IoU computations (accuracy will still consider it,
-  no current support for masking in TF).
+  (e.g., background or void class) to ignore during loss and mean IoU computations (NOTE: accuracy will still consider the ignored class during computation,
+  since the related TF class does not support masking).
 - `batch_size`: defines the batch size used for the training split.
 - `val_test_batch_size`: defines the batch size used for the validation and test splits. If not provided, it will default to _batch_size_.
 - `inference_batch_size`: defines the batch size dimension for benchmarking the inference time of a network. Defaults to 1.

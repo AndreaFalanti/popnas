@@ -220,3 +220,17 @@ Refine and fix some features added with version 3.8.0.
 - Fix serialization of WarmupSchedulerWrapper
 - Update hyperparameters of inference time SVR predictor, since the regularization factors did not work well for the new domain.
 - Fix ZoomedConvolutions for networks with non-fixed input resolutions
+
+### 3.8.2
+Perform small bug fixes, update the README.
+
+This should be my last POPNAS release, since my contract expires today and I will no longer be officially
+related to the AI-SPRINT project.
+I hope people will enjoy trying out POPNAS and to have made the setup and configuration as intuitive as possible
+(even if they are really complex, I know). So long folks, take care of POPNAS for me :)
+
+- Update the inference time script to support all tasks covered by POPNAS.
+- Fix ZoomedConvolution serialization.
+- Disallow the automatic generation of Pareto front with > 3 dimensions.
+- Set labels to tf.uint8 when applying one-hot encoding in the dataset preprocessor.
+- Update README to make it more exhaustive and detailed.
