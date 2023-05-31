@@ -324,6 +324,27 @@ Here it is presented a list of the configuration sections and fields, with a bri
   Also, it makes it possible to increase the batch size due to lower memory consumption.
 
 
+## Supported dataset formats
+POPNAS requires standardized dataset formats to correctly recognize public datasets and custom ones.
+In particular, the dataset formats can be summarized as follows:
+- **by name**: some datasets available in Keras or TFDS can be recognized by just providing their name 'as is' to the `dataset.name`
+  field, and will automatically be downloaded before execution. Set `dataset.path = null` in these cases.
+- **keras folders**: samples structured in specific folder structures for each label, as required by Keras
+  [image_dataset_from_directory](https://www.tensorflow.org/api_docs/python/tf/keras/utils/image_dataset_from_directory?hl=en) function.
+  Each dataset split must use a separate folder, with the following nomenclature: [`keras_training`, `keras_validation`, `keras_test`].
+- **.npz files**: numpy compressed archives, containing an `x` array for samples and an `y` array for the labels.
+  Each dataset split must be provided as a separate file, named after the split (i.e., train.npz, validation.npz, test.npz).
+- **.ts files**: a standardized format for time series, recognizable through the [sktime](https://www.sktime.net/en/latest/) library.
+  Each dataset split must be provided as a separate file, named after the split (i.e., train.ts, validation.ts, test.ts).
+
+The dataset formats vary based on the task, in particular:
+- **image classification**: supports [_by name_, _keras folders_].
+- **time series classification**: supports [_.npz files_, _.ts files_].
+- **image segmentation**: supports [_by name_, _.npz files_].
+
+Check out the DatasetGenerator classes in `dataset.generators` package for the implementation details, if needed.
+
+
 ## Output folder structure
 Each run produces a single output folder, which contains all the files related to the run results.
 Some files are generated only if the related configuration flag is set to true, refer to the JSON configuration file.
