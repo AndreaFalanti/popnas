@@ -47,11 +47,13 @@ and direct optimization of the inference time in the Pareto front.
 
 **POPNASv3:**
 ```
-@article{falanti2022popnasv3,
-  title={POPNASv3: a Pareto-Optimal Neural Architecture Search Solution for Image and Time Series Classification},
+@article{falanti2023popnasv3,
+  title={POPNASv3: A pareto-optimal neural architecture search solution for image and time series classification},
   author={Falanti, Andrea and Lomurno, Eugenio and Ardagna, Danilo and Matteucci, Matteo},
-  journal={arXiv preprint arXiv:2212.06735},
-  year={2022}
+  journal={Applied Soft Computing},
+  pages={110555},
+  year={2023},
+  publisher={Elsevier}
 }
 ```
 
